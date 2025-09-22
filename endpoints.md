@@ -120,7 +120,7 @@ Datastructuur inconsistent: POST gebruikt een lijst, GET/PUT/DELETE verwachten e
 
 ---
 
-## Testtips (curl)
+## Testtips
 
 ```bash
 # Registratie
