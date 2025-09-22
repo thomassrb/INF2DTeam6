@@ -1,6 +1,6 @@
 # API Endpoints
 
-**Base URL:** `http://localhost:8000`  
+**Base URL:** `http://localhost:8000`  (port is niet altijd het zelfde, ligt eraan welke ports beschikbaar zijn op PC)
 **Auth:** via `Authorization` header met session token (uit `/login`)  
 **Content-Type:** JSON waar aangegeven  
 
