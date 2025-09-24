@@ -147,8 +147,8 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _handle_login(self):
         data = self._get_request_data()
         
-        valid, error = self._validate_data(data,
-            required_fields={'username': str, 'password': str}
+        valid, error = self._validate_data(data,\
+            required_fields={'username': str, 'password': str}\
         )
         if not valid:
             self._send_response(400, "application/json", error)
@@ -177,7 +177,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         data = self._get_request_data()
         
         valid, error = self._validate_data(data, 
-            required_fields={'name': str, 'location': str, 'capacity': int, 'hourly_rate': (int, float), 'day_rate': (int, float)}
+            required_fields={'name': str, 'location': str, 'capacity': int, 'hourly_rate': (int, float), 'day_rate': (int, float)}\
         )
         if not valid:
             self._send_response(400, "application/json", error)
@@ -205,7 +205,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         data = self._get_request_data()
         
         valid, error = self._validate_data(data, 
-            required_fields={'licenseplate': str}
+            required_fields={'licenseplate': str}\
         )
         if not valid:
             self._send_response(400, "application/json", error)
@@ -236,7 +236,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         data = self._get_request_data()
         
         valid, error = self._validate_data(data, 
-            required_fields={'licenseplate': str}
+            required_fields={'licenseplate': str}\
         )
         if not valid:
             self._send_response(400, "application/json", error)
@@ -262,7 +262,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         valid, error = self._validate_data(data, 
             required_fields={'licenseplate': str, 'startdate': str, 'enddate': str, 'parkinglot': str},
-            optional_fields={'user': str}
+            optional_fields={'user': str}\
         )
         if not valid:
             self._send_response(400, "application/json", error)
@@ -280,6 +280,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._send_response(400, "application/json", {"error": "Required field missing", "field": "user"})
             else:
                 data["user"] = session_user["username"]
+        else:
+            data["user"] = session_user["username"]
         
         rid = str(len(reservations) + 1)
         reservations[rid] = data
@@ -297,7 +299,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         valid, error = self._validate_data(data, 
             required_fields={'licenseplate': str},
-            optional_fields={'name': str}
+            optional_fields={'name': str}\
         )
         if not valid:
             self._send_response(400, "application/json", error)
@@ -336,7 +338,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         data = self._get_request_data()
         
         valid, error = self._validate_data(data, 
-            required_fields={'transaction': str, 'amount': (int, float)}
+            required_fields={'transaction': str, 'amount': (int, float)}\
         )
         if not valid:
             self._send_response(400, "application/json", error)
@@ -364,14 +366,15 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         data = self._get_request_data()
         
-        valid, error = self._validate_data(data,
-            required_fields={'amount': (int, float)},
-            optional_fields={'transaction': str, 'coupled_to': str}
+        valid, error = self._validate_data(data,\
+            required_fields={'amount': (int, float)},\
+            optional_fields={'transaction': str, 'coupled_to': str}\
         )
         if not valid:
             self._send_response(400, "application/json", error)
             return
         
+        payments = load_payment_data() # Define payments here before using it
         payment = {
             "transaction": data.get("transaction") if data.get("transaction") else sc.generate_payment_hash(session_user["username"], str(datetime.now())),
             "amount": -abs(data['amount']),
@@ -381,7 +384,6 @@ class RequestHandler(BaseHTTPRequestHandler):
             "completed": False,
             "hash": sc.generate_transaction_validation_hash()
         }
-        payments = load_payment_data()
         payments.append(payment)
         save_payment_data(payments)
         self._send_response(201, "application/json", {"status": "Success", "payment": payment})
@@ -392,8 +394,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         data = self._get_request_data()
         
-        valid, error = self._validate_data(data,
-            optional_fields={'name': str, 'password': str}
+        valid, error = self._validate_data(data,\
+            optional_fields={'name': str, 'password': str}\
         )
         if not valid:
             self._send_response(400, "application/json", error)
@@ -422,7 +424,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         valid, error = self._validate_data(data, 
             required_fields={'name': str, 'location': str, 'capacity': int, 'hourly_rate': (int, float), 'day_rate': (int, float)},
-            optional_fields={'reserved': int}
+            optional_fields={'reserved': int}\
         )
         if not valid:
             self._send_response(400, "application/json", error)
@@ -446,7 +448,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         valid, error = self._validate_data(data, 
             required_fields={'licenseplate': str, 'startdate': str, 'enddate': str, 'parkinglot': str},
-            optional_fields={'user': str}
+            optional_fields={'user': str}\
         )
         if not valid:
             self._send_response(400, "application/json", error)
@@ -457,6 +459,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._send_response(400, "application/json", {"error": "Required field missing", "field": "user"})
             else:
                 data["user"] = session_user["username"]
+        else:
+            data["user"] = session_user["username"]
         
         reservations[rid] = data
         save_reservation_data(reservations)
@@ -468,8 +472,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         data = self._get_request_data()
         
-        valid, error = self._validate_data(data,
-            required_fields={'name': str}
+        valid, error = self._validate_data(data,\
+            required_fields={'name': str}\
         )
         if not valid:
             self._send_response(400, "application/json", error)
@@ -509,7 +513,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         data = self._get_request_data()
         
         valid, error = self._validate_data(data, 
-            required_fields={'t_data': dict, 'validation': str}
+            required_fields={'t_data': dict, 'validation': str}\
         )
         if not valid:
             self._send_response(400, "application/json", error)
@@ -617,18 +621,18 @@ class RequestHandler(BaseHTTPRequestHandler):
         if len(user_vehicles) == original_len:
             self._send_response(404, "application/json", {"error": "Vehicle not found"})
             return
-
+        
         vehicles[session_user["username"]] = user_vehicles
         save_data("data/vehicles.json", vehicles)
         self._send_response(200, "application/json", {"status": "Deleted"})
 
     def _handle_index(self):
         self._send_response(200, "text/html; charset=utf-8", 
-                    "<html><head><title>MobyPark API</title></head>"
-                    "<body>"
-                    "<h1>MobyPark API is running</h1>"
-                    "<p>Try endpoints like <code>/parking-lots</code>, <code>/profile</code> (requires Authorization), etc.</p>"
-                    "</body></html>"
+            "<html><head><title>MobyPark API</title></head>"
+            "<body>"
+            "<h1>MobyPark API is running</h1>"
+            "<p>Try endpoints like <code>/parking-lots</code>, <code>/profile</code> (requires Authorization), etc.</p>"
+            "</body></html>"
         )
 
     def _handle_favicon(self):
@@ -642,12 +646,14 @@ class RequestHandler(BaseHTTPRequestHandler):
         session_user = self._authenticate()
         if not session_user: return
         
-        self._send_response(200, "application/json", session_user)
+        # Filter out sensitive information
+        profile_data = {k: v for k, v in session_user.items() if k != "password"}
+        self._send_response(200, "application/json", profile_data)
 
     def _handle_logout(self):
         token = self.headers.get('Authorization')
         if token and get_session(token):
-            # remove_session(token) # This line was removed from imports, so it's removed here.
+            # remove_session(token) # This line was removed from imports, so it\'s removed here.
             self._send_response(200, "application/json", {"message": "User logged out"})
         else:
             self._send_response(400, "application/json", {"error": "Invalid session token"})
