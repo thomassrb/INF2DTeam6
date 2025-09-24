@@ -7,10 +7,16 @@ def load_json(filename):
             return json.load(file)
     except FileNotFoundError:
         return []
+    except json.JSONDecodeError:
+        print(f"Error decoding JSON from {filename}. Returning empty list.")
+        return []
 
 def write_json(filename, data):
-    with open(filename, 'w') as file:
-        json.dump(data, file, default=str)
+    try:
+        with open(filename, 'w') as file:
+            json.dump(data, file, default=str)
+    except IOError as e:
+        print(f"Error writing JSON to {filename}: {e}")
 
 def load_csv(filename):
     try:
@@ -19,12 +25,18 @@ def load_csv(filename):
             return [row for row in reader]
     except FileNotFoundError:
         return []
+    except Exception as e:
+        print(f"Error loading CSV from {filename}: {e}")
+        return []
 
 def write_csv(filename, data):
-    with open(filename, 'w', newline='') as file:
-        writer = csv.writer(file)
-        for row in data:
-            writer.writerow(row)
+    try:
+        with open(filename, 'w', newline='') as file:
+            writer = csv.writer(file)
+            for row in data:
+                writer.writerow(row)
+    except IOError as e:
+        print(f"Error writing CSV to {filename}: {e}")
 
 def load_text(filename):
     try:
@@ -32,11 +44,17 @@ def load_text(filename):
             return file.readlines()
     except FileNotFoundError:
         return []
+    except Exception as e:
+        print(f"Error loading text from {filename}: {e}")
+        return []
 
 def write_text(filename, data):
-    with open(filename, 'w') as file:
-        for line in data:
-            file.write(line + '\n')
+    try:
+        with open(filename, 'w') as file:
+            for line in data:
+                file.write(line + '\n')
+    except IOError as e:
+        print(f"Error writing text to {filename}: {e}")
 
 def save_data(filename, data):
     if filename.endswith('.json'):
