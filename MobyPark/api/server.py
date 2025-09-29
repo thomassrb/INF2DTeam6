@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from storage_utils import load_json, save_data, save_user_data, load_parking_lot_data, save_parking_lot_data, save_reservation_data, load_reservation_data, load_payment_data, save_payment_data
-from session_manager import add_session, get_session
+from session_manager import add_session, get_session, update_session_user
 import session_calculator as sc
 
 class RequestHandler(BaseHTTPRequestHandler):
@@ -29,13 +29,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/payments/': self._handle_update_payment,
             },
             'GET': {
-                '/': self._handle_index,
-                '/index': self._handle_index,
-                '/index.html': self._handle_index,
-                '/favicon.ico': self._handle_favicon,
-                '/parking-lots': self._handle_get_parking_lots,
                 '/profile': self._handle_get_profile,
                 '/logout': self._handle_logout,
+                '/parking-lots': self._handle_get_parking_lots,
                 '/reservations': self._handle_get_reservations,
                 '/payments': self._handle_get_payments,
                 '/billing': self._handle_get_billing,
@@ -48,6 +44,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/vehicles/reservations': self._handle_get_vehicle_reservations,
                 '/vehicles/history': self._handle_get_vehicle_history,
                 '/parking-lots/sessions': self._handle_get_parking_lot_sessions,
+                '/': self._handle_index,
+                '/index': self._handle_index,
+                '/index.html': self._handle_index,
+                '/favicon.ico': self._handle_favicon,
             },
             'DELETE': {
                 '/parking-lots/': self._handle_delete_parking_lot,
@@ -128,7 +128,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         name = data['name']
         
         hashed_password = hashlib.md5(password.encode()).hexdigest()
-        users = load_json('data/users.json')
+        users = load_json('users.json')
         
         if any(user['username'] == username for user in users):
             self._send_response(409, "application/json", {"error": "Username already taken"})
@@ -160,7 +160,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         password = data['password']
         
         hashed_password = hashlib.md5(password.encode()).hexdigest()
-        users = load_json('data/users.json')
+        users = load_json('users.json')
         
         user = next((u for u in users if u.get("username") == username and u.get("password") == hashed_password), None)
         if user:
@@ -213,7 +213,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(400, "application/json", error)
             return
         
-        sessions = load_json(f'data/pdata/p{lid}-sessions.json')
+        sessions = load_json(f'pdata/p{lid}-sessions.json')
         filtered = {key: value for key, value in sessions.items() if value.get("licenseplate") == data['licenseplate'] and not value.get('stopped')}
         
         if len(filtered) > 0:
@@ -244,7 +244,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(400, "application/json", error)
             return
         
-        sessions = load_json(f'data/pdata/p{lid}-sessions.json')
+        sessions = load_json(f'pdata/p{lid}-sessions.json')
         filtered = {key: value for key, value in sessions.items() if value.get("licenseplate") == data['licenseplate'] and not value.get('stopped')}
         
         if len(filtered) == 0:
@@ -307,8 +307,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(400, "application/json", error)
             return
         
-        vehicles = load_json("data/vehicles.json")
-        users = load_json('data/users.json')
+        vehicles = load_json("vehicles.json")
+        users = load_json('users.json')
         current_user = next((u for u in users if u.get('username') == session_user['username']), None)
         
         if not current_user:
@@ -407,7 +407,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         if data.get("password"):
             data["password"] = hashlib.md5(data["password"].encode()).hexdigest()
         
-        users = load_json('data/users.json')
+        users = load_json('users.json')
         for i, user in enumerate(users):
             if user.get("username") == session_user["username"]:
                 if data.get("name"):
@@ -416,6 +416,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                     users[i]["password"] = data["password"]
                 break
         save_user_data(users)
+        # Update the session with the new user data
+        token = self.headers.get('Authorization')
+        update_session_user(token, users[i])
         self._send_response(200, "application/json", {"message": "User updated successfully"})
 
     def _handle_update_parking_lot(self):
@@ -490,7 +493,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(400, "application/json", error)
             return
         
-        vehicles = load_json("data/vehicles.json")
+        vehicles = load_json("vehicles.json")
         
         vid = self.path.replace("/vehicles/", "")
         
@@ -575,7 +578,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         if not self._authorize_admin(session_user): return
         
-        sessions = load_json(f'data/pdata/p{lid}-sessions.json')
+        sessions = load_json(f'pdata/p{lid}-sessions.json')
         sid = self.path.split("/")[-1]
         
         if not sid.isnumeric():
@@ -619,7 +622,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         session_user = self._authenticate()
         if not session_user: return
         
-        vehicles = load_json("data/vehicles.json")
+        vehicles = load_json("vehicles.json")
         user_vehicles = vehicles.get(session_user["username"])
         
         if not user_vehicles:
@@ -690,7 +693,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         session_user = self._authenticate()
         if not session_user: return
         
-        sessions = load_json(f'data/pdata/p{lid}-sessions.json')
+        sessions = load_json(f'pdata/p{lid}-sessions.json')
         rsessions = []
         
         if self.path.endswith('/sessions'):
@@ -769,7 +772,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         data = []
         for pid, parkinglot in load_parking_lot_data().items():
             try:
-                sessions = load_json(f'data/pdata/p{pid}-sessions.json')
+                sessions = load_json(f'pdata/p{pid}-sessions.json')
             except FileNotFoundError:
                 sessions = {}
             for sid, session in sessions.items():
@@ -814,7 +817,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         data = []
         for pid, parkinglot in load_parking_lot_data().items():
             try:
-                sessions = load_json(f'data/pdata/p{pid}-sessions.json')
+                sessions = load_json(f'pdata/p{pid}-sessions.json')
             except FileNotFoundError:
                 sessions = {}
             for sid, session in sessions.items():
@@ -836,7 +839,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         session_user = self._authenticate()
         if not session_user: return
         
-        vehicles = load_json("data/vehicles.json")
+        vehicles = load_json("vehicles.json")
         
         target_user = session_user["username"]
         if self._authorize_admin(session_user) and self.path.startswith("/vehicles/"):
@@ -873,7 +876,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._send_response(400, "application/json", {"error": "Invalid vehicle reservations request"})
                 return
         
-        vehicles = load_json("data/vehicles.json")
+        vehicles = load_json("vehicles.json")
         user_vehicles = vehicles.get(target_user)
         
         if not user_vehicles:
@@ -908,7 +911,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._send_response(400, "application/json", {"error": "Invalid vehicle history request"})
                 return
         
-        vehicles = load_json("data/vehicles.json")
+        vehicles = load_json("vehicles.json")
         user_vehicles = vehicles.get(target_user)
         
         if not user_vehicles:
@@ -923,7 +926,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         all_sessions = []
         for pid, _ in load_parking_lot_data().items():
             try:
-                sessions = load_json(f'data/pdata/p{pid}-sessions.json')
+                sessions = load_json(f'pdata/p{pid}-sessions.json')
                 for _, session in sessions.items():
                     if session.get('licenseplate') == vehicle['license_plate'] and session.get('user') == target_user:
                         all_sessions.append(session)
@@ -937,7 +940,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         if not session_user: return
         
         vid = self.path.replace("/vehicles/", "").replace("/entry", "")
-        vehicles = load_json("data/vehicles.json")
+        vehicles = load_json("vehicles.json")
         
         target_user = session_user["username"]
         if self._authorize_admin(session_user) and self.path.count('/') > 2:
