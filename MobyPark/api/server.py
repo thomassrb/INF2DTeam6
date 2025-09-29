@@ -406,7 +406,16 @@ class RequestHandler(BaseHTTPRequestHandler):
         data["username"] = session_user["username"]
         if data.get("password"):
             data["password"] = hashlib.md5(data["password"].encode()).hexdigest()
-        save_user_data(data)
+        
+        users = load_json('data/users.json')
+        for i, user in enumerate(users):
+            if user.get("username") == session_user["username"]:
+                if data.get("name"):
+                    users[i]["name"] = data["name"]
+                if data.get("password"):
+                    users[i]["password"] = data["password"]
+                break
+        save_user_data(users)
         self._send_response(200, "application/json", {"message": "User updated successfully"})
 
     def _handle_update_parking_lot(self):
