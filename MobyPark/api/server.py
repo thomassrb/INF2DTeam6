@@ -408,17 +408,20 @@ class RequestHandler(BaseHTTPRequestHandler):
             data["password"] = hashlib.md5(data["password"].encode()).hexdigest()
         
         users = load_json('users.json')
+        updated_user = None
         for i, user in enumerate(users):
             if user.get("username") == session_user["username"]:
                 if data.get("name"):
                     users[i]["name"] = data["name"]
                 if data.get("password"):
                     users[i]["password"] = data["password"]
+                updated_user = users[i]
                 break
         save_user_data(users)
         # Update the session with the new user data
         token = self.headers.get('Authorization')
-        update_session_user(token, users[i])
+        if updated_user:
+            update_session_user(token, updated_user)
         self._send_response(200, "application/json", {"message": "User updated successfully"})
 
     def _handle_update_parking_lot(self):
@@ -609,7 +612,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(403, "application/json", {"error": "Access denied"})
             return
         
-        pid = reservations[rid]["parkinglot"]
+        reservation_to_delete = reservations[rid]
+        pid = reservation_to_delete["parkinglot"]
         del reservations[rid]
         parking_lots[pid]["reserved"] -= 1
         save_reservation_data(reservations)
@@ -931,7 +935,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     if session.get('licenseplate') == vehicle['license_plate'] and session.get('user') == target_user:
                         all_sessions.append(session)
             except FileNotFoundError:
-                continue # No sessions for this parking lot
+                continue
         
         self._send_response(200, "application/json", all_sessions)
 
@@ -945,11 +949,11 @@ class RequestHandler(BaseHTTPRequestHandler):
         target_user = session_user["username"]
         if self._authorize_admin(session_user) and self.path.count('/') > 2:
             parts = self.path.split('/')
-            if parts[2] and parts[2] != vid: # Admin requesting details for a specific user's vehicle
+            if parts[2] and parts[2] != vid:
                 target_user = parts[2]
-                vid = parts[3] if len(parts) > 3 else vid # If /vehicles/{user}/{vid}
-            elif parts[2] and parts[2] == vid: # Admin requesting own vehicle details but path might be /vehicles/{vid}
-                pass # Use session_user, vid is already correctly parsed
+                vid = parts[3] if len(parts) > 3 else vid
+            elif parts[2] and parts[2] == vid:
+                pass
             else:
                 self._send_response(400, "application/json", {"error": "Invalid vehicle details request"})
                 return

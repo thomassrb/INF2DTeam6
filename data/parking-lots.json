@@ -1,1 +1,20 @@
-[]
+{
+    "1": {
+        "id": "1",
+        "name": "Test Lot",
+        "location": "Test Location",
+        "capacity": 100,
+        "hourly_rate": 10,
+        "day_rate": 80,
+        "reserved": 0
+    },
+    "2": {
+        "id": "2",
+        "name": "Test Lot",
+        "location": "Test Location",
+        "capacity": 100,
+        "hourly_rate": 10,
+        "day_rate": 80,
+        "reserved": 1
+    }
+}

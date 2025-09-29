@@ -11,10 +11,10 @@ def load_json(filename):
         with open(full_path, 'r') as file:
             return json.load(file)
     except FileNotFoundError:
-        return []
+        return {}
     except json.JSONDecodeError:
-        print(f"Error decoding JSON from {filename}. Returning empty list.")
-        return []
+        print(f"Error decoding JSON from {filename}. Returning empty dictionary.")
+        return {}
 
 def write_json(filename, data):
     full_path = os.path.join(DATA_DIR, filename)

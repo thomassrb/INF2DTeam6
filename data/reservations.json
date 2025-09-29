@@ -1,1 +1,10 @@
-[]
+{
+    "2": {
+        "licenseplate": "TEST123",
+        "startdate": "2025-10-01",
+        "enddate": "2025-10-02",
+        "parkinglot": "2",
+        "user": "testuser",
+        "id": "2"
+    }
+}
