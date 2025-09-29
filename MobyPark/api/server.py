@@ -1,5 +1,6 @@
 import json
 import hashlib
+import re
 import uuid
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -48,6 +49,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/vehicles/reservations': self._handle_get_vehicle_reservations,
                 '/vehicles/history': self._handle_get_vehicle_history,
                 '/parking-lots/sessions': self._handle_get_parking_lot_sessions,
+                re.compile(r"^/parking-lots/([^/]+)/sessions$"): self._handle_get_parking_lot_sessions,
+                re.compile(r"^/parking-lots/([^/]+)/sessions/([^/]+)$"): self._handle_get_parking_lot_sessions,
             },
             'DELETE': {
                 '/parking-lots/': self._handle_delete_parking_lot,
