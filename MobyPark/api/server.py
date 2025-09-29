@@ -127,6 +127,11 @@ class RequestHandler(BaseHTTPRequestHandler):
         password = data['password']
         name = data['name']
         
+        # okey dus makkelijke password check aangemaakt, en als het niet klopt dan error message
+        if not isinstance(password, str) or not password:
+            self._send_response(400, "application/json", {"error": "Invalid password", "field": "password"})
+            return
+        
         hashed_password = hashlib.md5(password.encode()).hexdigest()
         users = load_json('users.json')
         
