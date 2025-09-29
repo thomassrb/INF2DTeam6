@@ -16,5 +16,14 @@
         "hourly_rate": 10,
         "day_rate": 80,
         "reserved": 1
+    },
+    "3": {
+        "id": "3",
+        "name": "Negative Test Lot",
+        "location": "Test Location",
+        "capacity": 50,
+        "hourly_rate": 12,
+        "day_rate": 90,
+        "reserved": 0
     }
 }

@@ -376,7 +376,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(400, "application/json", error)
             return
         
-        payments = load_payment_data() # Define payments here before using it
+        payments = load_payment_data()
         payment = {
             "transaction": data.get("transaction") if data.get("transaction") else sc.generate_payment_hash(session_user["username"], str(datetime.now())),
             "amount": -abs(data['amount']),
@@ -418,7 +418,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 updated_user = users[i]
                 break
         save_user_data(users)
-        # Update the session with the new user data
+
         token = self.headers.get('Authorization')
         if updated_user:
             update_session_user(token, updated_user)
@@ -614,8 +614,14 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         reservation_to_delete = reservations[rid]
         pid = reservation_to_delete["parkinglot"]
+        
+        if parking_lots[pid]["reserved"] > 0:
+            parking_lots[pid]["reserved"] -= 1
+        else:
+            self._send_response(400, "application/json", {"error": "Parking lot reserved count is already zero"})
+            return
+
         del reservations[rid]
-        parking_lots[pid]["reserved"] -= 1
         save_reservation_data(reservations)
         save_parking_lot_data(parking_lots)
         self._send_response(200, "application/json", {"status": "Deleted"})
@@ -664,14 +670,12 @@ class RequestHandler(BaseHTTPRequestHandler):
         session_user = self._authenticate()
         if not session_user: return
         
-        # Filter out sensitive information
         profile_data = {k: v for k, v in session_user.items() if k != "password"}
         self._send_response(200, "application/json", profile_data)
 
     def _handle_logout(self):
         token = self.headers.get('Authorization')
         if token and get_session(token):
-            # remove_session(token) # This line was removed from imports, so it\'s removed here.
             self._send_response(200, "application/json", {"message": "User logged out"})
         else:
             self._send_response(400, "application/json", {"error": "Invalid session token"})
@@ -851,7 +855,6 @@ class RequestHandler(BaseHTTPRequestHandler):
             if len(parts) > 2 and parts[2]:
                 target_user = parts[2]
             else:
-                # If admin accesses /vehicles without a specific user, return all vehicles (optional, based on desired behavior)
                 all_vehicles = []
                 for user_v_list in vehicles.values():
                     all_vehicles.extend(user_v_list)
@@ -873,9 +876,9 @@ class RequestHandler(BaseHTTPRequestHandler):
         target_user = session_user["username"]
         if self._authorize_admin(session_user) and self.path.count('/') > 3:
             parts = self.path.split('/')
-            if parts[2] and parts[2] != vid: # Admin requesting for specific user's vehicle reservations
+            if parts[2] and parts[2] != vid:
                 target_user = parts[2]
-                vid = parts[3] # Expecting /vehicles/{user}/{vid}/reservations
+                vid = parts[3]
             else:
                 self._send_response(400, "application/json", {"error": "Invalid vehicle reservations request"})
                 return
@@ -906,11 +909,11 @@ class RequestHandler(BaseHTTPRequestHandler):
         target_user = session_user["username"]
         if self._authorize_admin(session_user) and self.path.count('/') > 2:
             parts = self.path.split('/')
-            if parts[2] and parts[2] != vid: # Admin requesting for a specific user's vehicle history
+            if parts[2] and parts[2] != vid:
                 target_user = parts[2]
-                vid = parts[3] # Expecting /vehicles/{user}/{vid}/history
-            elif parts[2] and parts[2] == vid: # Admin requesting own vehicle history but path might be /vehicles/{vid}
-                pass # Use session_user, vid is already correctly parsed
+                vid = parts[3]
+            elif parts[2] and parts[2] == vid:
+                pass
             else:
                 self._send_response(400, "application/json", {"error": "Invalid vehicle history request"})
                 return
