@@ -62,7 +62,9 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.send_response(status_code)
         self.send_header("Content-type", content_type)
         self.end_headers()
-        if isinstance(data, dict) or isinstance(data, list):
+        if content_type == "application/json":
+            if not isinstance(data, (dict, list)):
+                data = {"message": data} if isinstance(data, str) else {"value": data}
             self.wfile.write(json.dumps(data, default=str).encode('utf-8'))
         else:
             self.wfile.write(str(data).encode('utf-8'))
