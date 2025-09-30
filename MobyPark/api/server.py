@@ -93,6 +93,23 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif self.path == path_prefix and not path_prefix.endswith('/'):
                 handler()
                 return
+
+        # If no matching route found, check if path exists for other methods
+        allowed_methods = []
+        for m, routes in self.routes.items():
+            for path_prefix in routes:
+                if (self.path.startswith(path_prefix) and path_prefix.endswith('/')) or \
+                   (self.path == path_prefix and not path_prefix.endswith('/')):
+                    allowed_methods.append(m)
+
+        if allowed_methods:
+            self.send_response(405)
+            self.send_header("Content-type", "application/json")
+            self.send_header("Allow", ", ".join(allowed_methods))
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": "Method Not Allowed"}).encode('utf-8'))
+            return
+
         self._send_response(404, "application/json", {"error": "Not Found"})
 
     def _validate_data(self, data, required_fields=None, optional_fields=None):
