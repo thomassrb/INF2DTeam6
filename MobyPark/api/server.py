@@ -1,7 +1,9 @@
 import json
 import hashlib
+import re
+import threading
 import uuid
-from datetime import datetime
+from datetime import datetime, time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from storage_utils import load_json, save_data, save_user_data, load_parking_lot_data, save_parking_lot_data, save_reservation_data, load_reservation_data, load_payment_data, save_payment_data
 from session_manager import add_session, get_session, update_session_user
@@ -9,6 +11,8 @@ import session_calculator as sc
 
 class RequestHandler(BaseHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
+        self.timeout = 600  # 10 minutes
+        self.last_activity = time.time()
         self.routes = {
             'POST': {
                 '/register': self._handle_register,
@@ -48,6 +52,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/index': self._handle_index,
                 '/index.html': self._handle_index,
                 '/favicon.ico': self._handle_favicon,
+                re.compile(r"^/parking-lots/([^/]+)/sessions$"): self._handle_get_parking_lot_sessions,
+                re.compile(r"^/parking-lots/([^/]+)/sessions/([^/]+)$"): self._handle_get_parking_lot_sessions,
+                
             },
             'DELETE': {
                 '/parking-lots/': self._handle_delete_parking_lot,
@@ -530,7 +537,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         vid = self.path.replace("/vehicles/", "")
         
-        user_vehicles = vehicles.get(session_user["username"])
+        user_vehicles = vehicles.get(session_user["username"], [])
         if not user_vehicles:
             self._send_response(404, "application/json", {"error": "User vehicles not found"})
             return
@@ -662,9 +669,9 @@ class RequestHandler(BaseHTTPRequestHandler):
         session_user = self._authenticate()
         if not session_user: return
         
-        vehicles = load_json("vehicles.json")
-        user_vehicles = vehicles.get(session_user["username"])
-        
+        vehicles = load_json("data/vehicles.json")
+        user_vehicles = vehicles.get(session_user["username"], [])
+
         if not user_vehicles:
             self._send_response(404, "application/json", {"error": "User vehicles not found"})
             return
@@ -895,7 +902,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(404, "application/json", {"error": "User or their vehicles not found"})
             return
         
-        self._send_response(200, "application/json", vehicles.get(target_user, {}))
+        self._send_response(200, "application/json", vehicles.get(target_user, []))
 
     def _handle_get_vehicle_reservations(self):
         session_user = self._authenticate()
@@ -913,8 +920,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._send_response(400, "application/json", {"error": "Invalid vehicle reservations request"})
                 return
         
-        vehicles = load_json("vehicles.json")
-        user_vehicles = vehicles.get(target_user)
+        vehicles = load_json("data/vehicles.json")
+        user_vehicles = vehicles.get(target_user, [])
         
         if not user_vehicles:
             self._send_response(404, "application/json", {"error": "User or vehicle not found"})
@@ -948,9 +955,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._send_response(400, "application/json", {"error": "Invalid vehicle history request"})
                 return
         
-        vehicles = load_json("vehicles.json")
-        user_vehicles = vehicles.get(target_user)
-        
+        vehicles = load_json("data/vehicles.json")
+        user_vehicles = vehicles.get(target_user, [])
+
         if not user_vehicles:
             self._send_response(404, "application/json", {"error": "User or vehicle not found"})
             return
@@ -990,8 +997,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             else:
                 self._send_response(400, "application/json", {"error": "Invalid vehicle details request"})
                 return
-        
-        user_vehicles = vehicles.get(target_user)
+
+        user_vehicles = vehicles.get(target_user, [])
         if not user_vehicles:
             self._send_response(404, "application/json", {"error": "User or vehicle not found"})
             return
@@ -1003,6 +1010,18 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
         
         self._send_response(200, "application/json", {"status": "Accepted", "vehicle": vehicle})
+   
+    def update_activity(self):
+        self.last_activity = time.time()
+
+    def session_expiry_maintenance(self):
+        timer = threading.Timer(600, self.session_expiry_maintenance)  # Check every 10 minutes
+        timer.daemon = True  # Ensure the timer thread does not prevent program exit
+        timer.start()
+
+        if time.time() - self.last_activity > self.timeout:
+            self._handle_logout()
+        return
 
 server = HTTPServer(('localhost', 8000), RequestHandler)
 print("Server running on http://localhost:8000")
