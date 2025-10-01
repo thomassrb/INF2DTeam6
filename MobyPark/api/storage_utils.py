@@ -1,26 +1,33 @@
 import json
 import csv
+import os
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(SCRIPT_DIR, '..', '..', 'data')
 
 def load_json(filename):
+    full_path = os.path.join(DATA_DIR, filename)
     try:
-        with open(filename, 'r') as file:
+        with open(full_path, 'r') as file:
             return json.load(file)
     except FileNotFoundError:
-        return []
+        return {}
     except json.JSONDecodeError:
-        print(f"Error decoding JSON from {filename}. Returning empty list.")
-        return []
+        print(f"Error decoding JSON from {filename}. Returning empty dictionary.")
+        return {}
 
 def write_json(filename, data):
+    full_path = os.path.join(DATA_DIR, filename)
     try:
-        with open(filename, 'w') as file:
-            json.dump(data, file, default=str)
+        with open(full_path, 'w') as file:
+            json.dump(data, file, default=str, indent=4)
     except IOError as e:
         print(f"Error writing JSON to {filename}: {e}")
 
 def load_csv(filename):
+    full_path = os.path.join(DATA_DIR, filename)
     try:
-        with open(filename, 'r') as file:
+        with open(full_path, 'r') as file:
             reader = csv.reader(file)
             return [row for row in reader]
     except FileNotFoundError:
@@ -30,8 +37,9 @@ def load_csv(filename):
         return []
 
 def write_csv(filename, data):
+    full_path = os.path.join(DATA_DIR, filename)
     try:
-        with open(filename, 'w', newline='') as file:
+        with open(full_path, 'w', newline='') as file:
             writer = csv.writer(file)
             for row in data:
                 writer.writerow(row)
@@ -39,8 +47,9 @@ def write_csv(filename, data):
         print(f"Error writing CSV to {filename}: {e}")
 
 def load_text(filename):
+    full_path = os.path.join(DATA_DIR, filename)
     try:
-        with open(filename, 'r') as file:
+        with open(full_path, 'r') as file:
             return file.readlines()
     except FileNotFoundError:
         return []
@@ -49,8 +58,9 @@ def load_text(filename):
         return []
 
 def write_text(filename, data):
+    full_path = os.path.join(DATA_DIR, filename)
     try:
-        with open(filename, 'w') as file:
+        with open(full_path, 'w') as file:
             for line in data:
                 file.write(line + '\n')
     except IOError as e:
@@ -77,31 +87,31 @@ def load_data(filename):
         return None
 
 def load_user_data():
-    return load_data('data/users.json')
+    return load_data('users.json')
 
 def save_user_data(data):
-    save_data('data/users.json', data)
+    save_data('users.json', data)
 
 def load_parking_lot_data():
-    return load_data('data/parking-lots.json')
+    return load_data('parking-lots.json')
 
 def save_parking_lot_data(data):
-    save_data('data/parking-lots.json', data)
+    save_data('parking-lots.json', data)
 
 def load_reservation_data():
-    return load_data('data/reservations.json')
+    return load_data('reservations.json')
 
 def save_reservation_data(data):
-    save_data('data/reservations.json', data)
+    save_data('reservations.json', data)
 
 def load_payment_data():
-    return load_data('data/payments.json')
+    return load_data('payments.json')
 
 def save_payment_data(data):
-    save_data('data/payments.json', data)
+    save_data('payments.json', data)
 
 def load_discounts_data():
-    return load_data('data/discounts.csv')
+    return load_data('discounts.csv')
 
 def save_discounts_data(data):
-    save_data('data/discounts.csv', data)
+    save_data('discounts.csv', data)
