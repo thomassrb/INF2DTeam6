@@ -70,9 +70,17 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(str(data).encode('utf-8'))
 
     def _get_request_data(self):
-        content_length = int(self.headers.get("Content-Length", 0))
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+        except (TypeError, ValueError):
+            content_length = 0
         if content_length > 0:
-            return json.loads(self.rfile.read(content_length))
+            try:
+                raw = self.rfile.read(content_length)
+                return json.loads(raw)
+            except Exception:
+                self._send_response(400, "application/json", {"error": "Invalid request body"})
+                return {}
         return {}
 
     def do_POST(self):
