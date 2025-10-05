@@ -1,5 +1,6 @@
 import json
 import hashlib
+import importlib
 import uuid
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -8,6 +9,39 @@ from session_manager import add_session, get_session, update_session_user
 import session_calculator as sc
 
 class RequestHandler(BaseHTTPRequestHandler):
+    def _hash_password(self, password: str) -> str:
+        try:
+            bcrypt = importlib.import_module("bcrypt")
+        except ImportError as exc:
+            raise RuntimeError("bcrypt is not installed. Please install with: pip install bcrypt") from exc
+        salt = bcrypt.gensalt()
+        return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
+
+    def _looks_like_bcrypt(self, hashed: str) -> bool:
+        return isinstance(hashed, str) and hashed.startswith(('$2b$', '$2a$', '$2y$'))
+
+    def _looks_like_md5(self, hashed: str) -> bool:
+        if not isinstance(hashed, str) or len(hashed) != 32:
+            return False
+        try:
+            int(hashed, 16)
+            return True
+        except ValueError:
+            return False
+
+    def _verify_password(self, plain_password: str, stored_hash: str) -> bool:
+        if self._looks_like_bcrypt(stored_hash):
+            try:
+                bcrypt = importlib.import_module("bcrypt")
+            except ImportError as exc:
+                raise RuntimeError("bcrypt is not installed. Please install with: pip install bcrypt") from exc
+            return bcrypt.checkpw(plain_password.encode("utf-8"), stored_hash.encode("utf-8"))
+        if self._looks_like_md5(stored_hash):
+            return hashlib.md5(plain_password.encode()).hexdigest() == stored_hash
+        return False
+
+
+
     def __init__(self, *args, **kwargs):
         self.routes = {
             'POST': {
@@ -127,12 +161,11 @@ class RequestHandler(BaseHTTPRequestHandler):
         password = data['password']
         name = data['name']
         
-        # okey dus makkelijke password check aangemaakt, en als het niet klopt dan error message
         if not isinstance(password, str) or not password:
             self._send_response(400, "application/json", {"error": "Invalid password", "field": "password"})
             return
         
-        hashed_password = hashlib.md5(password.encode()).hexdigest()
+        hashed_password = self._hash_password(password)
         users = load_json('users.json')
         
         if any(user['username'] == username for user in users):
@@ -164,11 +197,17 @@ class RequestHandler(BaseHTTPRequestHandler):
         username = data['username']
         password = data['password']
         
-        hashed_password = hashlib.md5(password.encode()).hexdigest()
         users = load_json('users.json')
-        
-        user = next((u for u in users if u.get("username") == username and u.get("password") == hashed_password), None)
-        if user:
+        user = next((u for u in users if u.get("username") == username), None)
+        if user and self._verify_password(password, user.get("password", "")):
+            if self._looks_like_md5(user.get("password", "")):
+                new_hash = self._hash_password(password)
+                user["password"] = new_hash
+                for i, uu in enumerate(users):
+                    if uu.get("username") == username:
+                        users[i] = user
+                        break
+                save_user_data(users)
             token = str(uuid.uuid4())
             add_session(token, user)
             self._send_response(200, "application/json", {"message": "User logged in", "session_token": token})
@@ -410,7 +449,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 
         data["username"] = session_user["username"]
         if data.get("password"):
-            data["password"] = hashlib.md5(data["password"].encode()).hexdigest()
+            data["password"] = self._hash_password(data["password"])
         
         users = load_json('users.json')
         updated_user = None
@@ -423,7 +462,6 @@ class RequestHandler(BaseHTTPRequestHandler):
                 updated_user = users[i]
                 break
         save_user_data(users)
-
         token = self.headers.get('Authorization')
         if updated_user:
             update_session_user(token, updated_user)

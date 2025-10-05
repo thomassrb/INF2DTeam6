@@ -326,5 +326,13 @@
         "name": "Test User",
         "role": "ADMIN",
         "created_at": "2025-09-29"
+    },
+    {
+        "id": "42",
+        "username": "test1",
+        "password": "$2b$12$8RA28ZurvtpZG8wWPWZDe.16ragJBy0bcqEZ1Ca23bPshyaWGtN9q",
+        "name": "Test User",
+        "role": "USER",
+        "created_at": "2025-10-05"
     }
 ]
