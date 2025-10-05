@@ -1,4 +1,5 @@
 import json
+import re
 import hashlib
 import importlib
 import uuid
@@ -9,6 +10,24 @@ from session_manager import add_session, get_session, update_session_user
 import session_calculator as sc
 
 class RequestHandler(BaseHTTPRequestHandler):
+    _MAX_JSON_BYTES = 64 * 1024
+
+    _FORMAT_REGEX = {
+        'username': re.compile(r'^[A-Za-z0-9_.-]{3,32}$'),
+        'role': re.compile(r'^(USER|ADMIN)$'),
+        'licenseplate': re.compile(r'^[A-Z0-9-]{2,12}$'),
+        'transaction': re.compile(r'^[A-Za-z0-9:_-]{1,128}$'),
+    }
+
+    _FIELD_MAXLEN = {
+        'username': 32,
+        'name': 100,
+        'role': 5,
+        'licenseplate': 16,
+        'transaction': 128,
+        'password': 256,
+    }
+
     def _hash_password(self, password: str) -> str:
         try:
             bcrypt = importlib.import_module("bcrypt")
@@ -105,9 +124,26 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def _get_request_data(self):
         content_length = int(self.headers.get("Content-Length", 0))
-        if content_length > 0:
-            return json.loads(self.rfile.read(content_length))
-        return {}
+        if content_length <= 0:
+            return {}
+        if content_length > self._MAX_JSON_BYTES:
+            _ = self.rfile.read(min(content_length, self._MAX_JSON_BYTES))
+            return {}
+        raw = self.rfile.read(content_length)
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+        if not isinstance(parsed, dict):
+            return {}
+        return parsed
+
+    def _strip_unsafe_string(self, value: str, max_length: int) -> str:
+        cleaned = re.sub(r"[\x00-\x1F\x7F]", "", value)
+        cleaned = cleaned.strip()
+        if len(cleaned) > max_length:
+            cleaned = cleaned[:max_length]
+        return cleaned
 
     def do_POST(self):
         self._dispatch_request('POST')
@@ -131,9 +167,11 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
         self._send_response(404, "application/json", {"error": "Not Found"})
 
-    def _validate_data(self, data, required_fields=None, optional_fields=None):
-        if required_fields is None: required_fields = {}
-        if optional_fields is None: optional_fields = {}
+    def _validate_data(self, data, required_fields=None, optional_fields=None, allow_unknown=False):
+        if required_fields is None:
+            required_fields = {}
+        if optional_fields is None:
+            optional_fields = {}
 
         for field, expected_type in required_fields.items():
             if field not in data:
@@ -144,6 +182,44 @@ class RequestHandler(BaseHTTPRequestHandler):
         for field, expected_type in optional_fields.items():
             if field in data and not isinstance(data[field], expected_type):
                 return False, {"error": f"Invalid type for field {field}", "expected_type": str(expected_type), "received_type": str(type(data[field]))}
+
+        if not allow_unknown:
+            allowed = set(required_fields.keys()) | set(optional_fields.keys())
+            unknown = [k for k in data.keys() if k not in allowed]
+            if unknown:
+                return False, {"error": "Unknown fields present", "fields": unknown}
+
+        for key, val in list(data.items()):
+            if isinstance(val, str):
+                maxlen = self._FIELD_MAXLEN.get(key, 256)
+                data[key] = self._strip_unsafe_string(val, maxlen)
+
+        for fname, regex in self._FORMAT_REGEX.items():
+            if fname in data and isinstance(data[fname], str):
+                if fname == 'licenseplate':
+                    candidate = data[fname].upper()
+                else:
+                    candidate = data[fname]
+                if not regex.match(candidate):
+                    return False, {"error": "Invalid format", "field": fname}
+
+        if 'password' in data and isinstance(data['password'], str):
+            if len(data['password']) < 8:
+                return False, {"error": "Password must be at least 8 characters", "field": "password"}
+
+        for df in ('startdate', 'enddate'):
+            if df in data and isinstance(data[df], str):
+                ok = True
+                try:
+                    datetime.strptime(data[df], "%Y-%m-%d")
+                except ValueError:
+                    try:
+                        datetime.strptime(data[df], "%d-%m-%Y")
+                    except ValueError:
+                        ok = False
+                if not ok:
+                    return False, {"error": "Invalid date format", "field": df}
+
         return True, None
 
     def _handle_register(self):
@@ -271,7 +347,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             "user": session_user["username"]
         }
         sessions[str(len(sessions) + 1)] = session
-        save_data(f'data/pdata/p{lid}-sessions.json', sessions)
+        save_data(f'pdata/p{lid}-sessions.json', sessions)
         self._send_response(200, "application/json", {"message": f"Session started for: {data['licenseplate']}"})
 
     def _handle_stop_session(self):
@@ -297,7 +373,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         sid = next(iter(filtered))
         sessions[sid]["stopped"] = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-        save_data(f'data/pdata/p{lid}-sessions.json', sessions)
+        save_data(f'pdata/p{lid}-sessions.json', sessions)
         self._send_response(200, "application/json", {"message": f"Session stopped for: {data['licenseplate']}"})
 
     def _handle_create_reservation(self):
@@ -351,7 +427,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(400, "application/json", error)
             return
         
-        vehicles = load_json("vehicles.json")
+        vehicles = self._load_vehicles()
         users = load_json('users.json')
         current_user = next((u for u in users if u.get('username') == session_user['username']), None)
         
@@ -360,7 +436,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
         
         user_vehicles = vehicles.get(current_user["username"], [])
-        if any(v for v in user_vehicles if v.get('licenseplate') == data['licenseplate']):
+        if any(v for v in user_vehicles if v.get('license_plate') == data['licenseplate']):
             self._send_response(409, "application/json", {"error": "Vehicle already exists for this user"})
             return
         
@@ -374,7 +450,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         }
         user_vehicles.append(vehicle)
         vehicles[current_user["username"]] = user_vehicles
-        save_data("data/vehicles.json", vehicles)
+        self._save_vehicles(vehicles)
         self._send_response(201, "application/json", {"status": "Success", "vehicle": vehicle})
 
     def _handle_create_payment(self):
@@ -539,7 +615,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(400, "application/json", error)
             return
         
-        vehicles = load_json("vehicles.json")
+        vehicles = self._load_vehicles()
         
         vid = self.path.replace("/vehicles/", "")
         
@@ -561,7 +637,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
         
         vehicles[session_user["username"]] = user_vehicles
-        save_data("data/vehicles.json", vehicles)
+        self._save_vehicles(vehicles)
         self._send_response(200, "application/json", {"status": "Success", "vehicle": next(v for v in user_vehicles if v.get('id') == vid)})
 
     def _handle_update_payment(self):
@@ -636,7 +712,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
         
         del sessions[sid]
-        save_data(f'data/pdata/p{lid}-sessions.json', sessions)
+        save_data(f'pdata/p{lid}-sessions.json', sessions)
         self._send_response(200, "application/json", {"message": "Session deleted"})
 
     def _handle_delete_reservation(self):
@@ -675,7 +751,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         session_user = self._authenticate()
         if not session_user: return
         
-        vehicles = load_json("vehicles.json")
+        vehicles = self._load_vehicles()
         user_vehicles = vehicles.get(session_user["username"])
         
         if not user_vehicles:
@@ -690,7 +766,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
         
         vehicles[session_user["username"]] = user_vehicles
-        save_data("data/vehicles.json", vehicles)
+        save_data("vehicles.json", vehicles)
         self._send_response(200, "application/json", {"status": "Deleted"})
 
     def _handle_index(self):
@@ -858,6 +934,15 @@ class RequestHandler(BaseHTTPRequestHandler):
             return False
         return True
 
+    def _load_vehicles(self):
+        vehicles = load_json("vehicles.json")
+        if isinstance(vehicles, dict):
+            return vehicles
+        return {}
+
+    def _save_vehicles(self, vehicles):
+        save_data("vehicles.json", vehicles)
+
     def _handle_get_user_billing(self):
         session_user = self._authenticate()
         if not session_user: return
@@ -926,7 +1011,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._send_response(400, "application/json", {"error": "Invalid vehicle reservations request"})
                 return
         
-        vehicles = load_json("vehicles.json")
+        vehicles = self._load_vehicles()
         user_vehicles = vehicles.get(target_user)
         
         if not user_vehicles:
@@ -961,7 +1046,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._send_response(400, "application/json", {"error": "Invalid vehicle history request"})
                 return
         
-        vehicles = load_json("vehicles.json")
+        vehicles = self._load_vehicles()
         user_vehicles = vehicles.get(target_user)
         
         if not user_vehicles:
