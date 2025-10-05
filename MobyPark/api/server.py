@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from storage_utils import load_json, save_data, save_user_data, load_parking_lot_data, save_parking_lot_data, save_reservation_data, load_reservation_data, load_payment_data, save_payment_data
-from session_manager import add_session, get_session, update_session_user
+from session_manager import add_session, get_session, update_session_user, remove_session
 import session_calculator as sc
 
 class RequestHandler(BaseHTTPRequestHandler):
@@ -831,11 +831,12 @@ class RequestHandler(BaseHTTPRequestHandler):
         self._send_response(200, "application/json", profile_data)
 
     def _handle_logout(self):
-        token = self.headers.get('Authorization')
-        if token and get_session(token):
-            self._send_response(200, "application/json", {"message": "User logged out"})
-        else:
-            self._send_response(400, "application/json", {"error": "Invalid session token"})
+      token = self.headers.get('Authorization')
+      if token and get_session(token):
+          remove_session(token)
+          self._send_response(200, "application/json", {"message": "User logged out"})
+      else:
+          self._send_response(400, "application/json", {"error": "Invalid session token"})
 
     def _handle_get_parking_lot_details(self):
         lid = self.path.split("/")[2]
