@@ -34,5 +34,23 @@
         "hourly_rate": 2.5,
         "day_rate": 15,
         "reserved": 0
+    },
+    "5": {
+        "id": "5",
+        "name": "Audit Lot",
+        "location": "HQ",
+        "capacity": 50,
+        "hourly_rate": 3,
+        "day_rate": 18,
+        "reserved": 0
+    },
+    "6": {
+        "id": "6",
+        "name": "Audit Lot",
+        "location": "HQ",
+        "capacity": 50,
+        "hourly_rate": 3,
+        "day_rate": 18,
+        "reserved": 0
     }
 }

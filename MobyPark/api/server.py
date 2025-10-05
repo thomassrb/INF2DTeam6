@@ -1,5 +1,6 @@
 import json
 import re
+import os
 import hashlib
 import importlib
 import uuid
@@ -27,6 +28,26 @@ class RequestHandler(BaseHTTPRequestHandler):
         'transaction': 128,
         'password': 256,
     }
+
+    def _audit(self, session_user, action, *, target=None, extra=None, status="SUCCESS"):
+        try:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            data_dir = os.path.join(script_dir, '..', '..', 'data')
+            os.makedirs(data_dir, exist_ok=True)
+            log_path = os.path.join(data_dir, 'audit.log')
+            entry = {
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "user": session_user.get("username") if session_user else None,
+                "role": session_user.get("role") if session_user else None,
+                "action": action,
+                "target": target,
+                "status": status,
+                "extra": extra,
+            }
+            with open(log_path, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        except OSError:
+            pass
 
     def _hash_password(self, password: str) -> str:
         try:
@@ -317,6 +338,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             "reserved": 0
         }
         save_parking_lot_data(parking_lots)
+        self._audit(session_user, action="create_parking_lot", target=new_lid, extra={"name": data['name']})
         self._send_response(201, "application/json", {"message": f"Parking lot saved under ID: {new_lid}"})
 
     def _handle_start_session(self):
@@ -478,6 +500,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         }
         payments.append(payment)
         save_payment_data(payments)
+        self._audit(session_user, action="refund_payment", target=payment["transaction"], extra={"amount": payment["amount"], "coupled_to": payment.get("coupled_to")})
         self._send_response(201, "application/json", {"status": "Success", "payment": payment})
 
     def _handle_refund_payment(self):
@@ -499,6 +522,17 @@ class RequestHandler(BaseHTTPRequestHandler):
         payments = load_payment_data()
         payment = {
             "transaction": data.get("transaction") if data.get("transaction") else sc.generate_payment_hash(session_user["username"], str(datetime.now())),
+            "amount": -abs(data['amount']),
+            "coupled_to": data.get("coupled_to"),
+            "processed_by": session_user["username"],
+            "created_at": datetime.now().strftime("%d-%m-%Y %H:%I:%S"),
+            "completed": False,
+            "hash": sc.generate_transaction_validation_hash()
+        }
+        payments = load_payment_data()
+        refund_txn = data.get("transaction") if data.get("transaction") else str(uuid.uuid4())
+        payment = {
+            "transaction": refund_txn,
             "amount": -abs(data['amount']),
             "coupled_to": data.get("coupled_to"),
             "processed_by": session_user["username"],
@@ -568,6 +602,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         parking_lots[lid] = data
         save_parking_lot_data(parking_lots)
+        self._audit(session_user, action="update_parking_lot", target=lid)
         self._send_response(200, "application/json", {"message": "Parking lot modified"})
 
     def _handle_update_reservation(self):
@@ -685,6 +720,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         del parking_lots[lid]
         save_parking_lot_data(parking_lots)
+        self._audit(session_user, action="delete_parking_lot", target=lid)
         self._send_response(200, "application/json", {"message": "Parking lot deleted"})
 
     def _handle_delete_session(self):
@@ -713,6 +749,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         del sessions[sid]
         save_data(f'pdata/p{lid}-sessions.json', sessions)
+        self._audit(session_user, action="delete_session", target={"parking_lot": lid, "session": sid})
         self._send_response(200, "application/json", {"message": "Session deleted"})
 
     def _handle_delete_reservation(self):
@@ -931,8 +968,10 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def _authorize_admin(self, session_user):
         if not session_user.get('role') == 'ADMIN':
+            self._audit(session_user, action="admin_authorization", target=self.path, status="FAILED")
             self._send_response(403, "application/json", {"error": "Access denied"})
             return False
+        self._audit(session_user, action="admin_authorization", target=self.path, status="SUCCESS")
         return True
 
     def _load_vehicles(self):
