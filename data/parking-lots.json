@@ -25,5 +25,14 @@
         "hourly_rate": 12,
         "day_rate": 90,
         "reserved": 0
+    },
+    "4": {
+        "id": "4",
+        "name": "Lot A",
+        "location": "Center",
+        "capacity": 100,
+        "hourly_rate": 2.5,
+        "day_rate": 15,
+        "reserved": 0
     }
 }

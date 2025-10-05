@@ -789,7 +789,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         session_user = self._authenticate()
         if not session_user: return
         
-        profile_data = {k: v for k, v in session_user.items() if k != "password"}
+        allowed_keys = {"id", "username", "name", "role", "created_at"}
+        profile_data = {k: v for k, v in session_user.items() if k in allowed_keys}
         self._send_response(200, "application/json", profile_data)
 
     def _handle_logout(self):
