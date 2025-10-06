@@ -142,7 +142,6 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/reservations/': self._handle_delete_reservation,
                 re.compile(r"^/reservations/([^/]+)$"): self._handle_delete_reservation,
                 '/vehicles/': self._handle_delete_vehicle,
-                re.compile(r"^/vehicles/([^/]+)$"): self._handle_delete_vehicle,
                 '/parking-lots/sessions/': self._handle_delete_session,
                 re.compile(r"^/parking-lots/([^/]+)/sessions/([^/]+)$"): self._handle_delete_session,
             }
