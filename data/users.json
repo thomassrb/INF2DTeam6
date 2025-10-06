@@ -326,5 +326,37 @@
         "name": "Test User",
         "role": "ADMIN",
         "created_at": "2025-09-29"
+    },
+    {
+        "id": "42",
+        "username": "test1",
+        "password": "$2b$12$8RA28ZurvtpZG8wWPWZDe.16ragJBy0bcqEZ1Ca23bPshyaWGtN9q",
+        "name": "Test User",
+        "role": "USER",
+        "created_at": "2025-10-05"
+    },
+    {
+        "id": "43",
+        "username": "admin1",
+        "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+        "name": "Admin One",
+        "role": "ADMIN",
+        "created_at": "2025-10-05"
+    },
+    {
+        "id": "44",
+        "username": "alice",
+        "password": "$2b$12$XmINHu0oWbUdKZ2Ae6ObzerNwHuJ4nyvk/yf3lXV1rMyWA7DIELbG",
+        "name": "Alice",
+        "role": "USER",
+        "created_at": "2025-10-05"
+    },
+    {
+        "id": "45",
+        "username": "bob",
+        "password": "$2b$12$c8fF18AvH/hjNibaJ3YV1.4umWPJLzn/mix6UC7r15HSNSLjc1UeO",
+        "name": "Bob",
+        "role": "USER",
+        "created_at": "2025-10-06"
     }
 ]
