@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from storage_utils import load_json, save_data, save_user_data, load_parking_lot_data, save_parking_lot_data, save_reservation_data, load_reservation_data, load_payment_data, save_payment_data
-from session_manager import add_session, get_session
+from session_manager import add_session, get_session, update_session_user
 import session_calculator as sc
 
 class RequestHandler(BaseHTTPRequestHandler):
@@ -33,13 +33,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/payments/': self._handle_update_payment,
             },
             'GET': {
-                '/': self._handle_index,
-                '/index': self._handle_index,
-                '/index.html': self._handle_index,
-                '/favicon.ico': self._handle_favicon,
-                '/parking-lots': self._handle_get_parking_lots,
                 '/profile': self._handle_get_profile,
                 '/logout': self._handle_logout,
+                '/parking-lots': self._handle_get_parking_lots,
                 '/reservations': self._handle_get_reservations,
                 '/payments': self._handle_get_payments,
                 '/billing': self._handle_get_billing,
@@ -77,15 +73,25 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.send_response(status_code)
         self.send_header("Content-type", content_type)
         self.end_headers()
-        if isinstance(data, dict) or isinstance(data, list):
+        if content_type == "application/json":
+            if not isinstance(data, (dict, list)):
+                data = {"message": data} if isinstance(data, str) else {"value": data}
             self.wfile.write(json.dumps(data, default=str).encode('utf-8'))
         else:
             self.wfile.write(str(data).encode('utf-8'))
 
     def _get_request_data(self):
-        content_length = int(self.headers.get("Content-Length", 0))
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+        except (TypeError, ValueError):
+            content_length = 0
         if content_length > 0:
-            return json.loads(self.rfile.read(content_length))
+            try:
+                raw = self.rfile.read(content_length)
+                return json.loads(raw)
+            except Exception:
+                self._send_response(400, "application/json", {"error": "Invalid request body"})
+                return {}
         return {}
 
     def do_POST(self):
@@ -108,6 +114,23 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif self.path == path_prefix and not path_prefix.endswith('/'):
                 handler()
                 return
+
+        # If no matching route found, check if path exists for other methods
+        allowed_methods = []
+        for m, routes in self.routes.items():
+            for path_prefix in routes:
+                if (self.path.startswith(path_prefix) and path_prefix.endswith('/')) or \
+                   (self.path == path_prefix and not path_prefix.endswith('/')):
+                    allowed_methods.append(m)
+
+        if allowed_methods:
+            self.send_response(405)
+            self.send_header("Content-type", "application/json")
+            self.send_header("Allow", ", ".join(allowed_methods))
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": "Method Not Allowed"}).encode('utf-8'))
+            return
+
         self._send_response(404, "application/json", {"error": "Not Found"})
 
     def _validate_data(self, data, required_fields=None, optional_fields=None):
@@ -140,8 +163,13 @@ class RequestHandler(BaseHTTPRequestHandler):
         password = data['password']
         name = data['name']
         
+        # okey dus makkelijke password check aangemaakt, en als het niet klopt dan error message
+        if not isinstance(password, str) or not password:
+            self._send_response(400, "application/json", {"error": "Invalid password", "field": "password"})
+            return
+        
         hashed_password = hashlib.md5(password.encode()).hexdigest()
-        users = load_json('data/users.json')
+        users = load_json('users.json')
         
         if any(user['username'] == username for user in users):
             self._send_response(409, "application/json", {"error": "Username already taken"})
@@ -173,7 +201,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         password = data['password']
         
         hashed_password = hashlib.md5(password.encode()).hexdigest()
-        users = load_json('data/users.json')
+        users = load_json('users.json')
         
         user = next((u for u in users if u.get("username") == username and u.get("password") == hashed_password), None)
         if user:
@@ -226,7 +254,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(400, "application/json", error)
             return
         
-        sessions = load_json(f'data/pdata/p{lid}-sessions.json')
+        sessions = load_json(f'pdata/p{lid}-sessions.json')
         filtered = {key: value for key, value in sessions.items() if value.get("licenseplate") == data['licenseplate'] and not value.get('stopped')}
         
         if len(filtered) > 0:
@@ -257,7 +285,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(400, "application/json", error)
             return
         
-        sessions = load_json(f'data/pdata/p{lid}-sessions.json')
+        sessions = load_json(f'pdata/p{lid}-sessions.json')
         filtered = {key: value for key, value in sessions.items() if value.get("licenseplate") == data['licenseplate'] and not value.get('stopped')}
         
         if len(filtered) == 0:
@@ -320,8 +348,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(400, "application/json", error)
             return
         
-        vehicles = load_json("data/vehicles.json")
-        users = load_json('data/users.json')
+        vehicles = load_json("vehicles.json")
+        users = load_json('users.json')
         current_user = next((u for u in users if u.get('username') == session_user['username']), None)
         
         if not current_user:
@@ -389,7 +417,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(400, "application/json", error)
             return
         
-        payments = load_payment_data() # Define payments here before using it
+        payments = load_payment_data()
         payment = {
             "transaction": data.get("transaction") if data.get("transaction") else sc.generate_payment_hash(session_user["username"], str(datetime.now())),
             "amount": -abs(data['amount']),
@@ -419,7 +447,22 @@ class RequestHandler(BaseHTTPRequestHandler):
         data["username"] = session_user["username"]
         if data.get("password"):
             data["password"] = hashlib.md5(data["password"].encode()).hexdigest()
-        save_user_data(data)
+        
+        users = load_json('users.json')
+        updated_user = None
+        for i, user in enumerate(users):
+            if user.get("username") == session_user["username"]:
+                if data.get("name"):
+                    users[i]["name"] = data["name"]
+                if data.get("password"):
+                    users[i]["password"] = data["password"]
+                updated_user = users[i]
+                break
+        save_user_data(users)
+
+        token = self.headers.get('Authorization')
+        if updated_user:
+            update_session_user(token, updated_user)
         self._send_response(200, "application/json", {"message": "User updated successfully"})
 
     def _handle_update_parking_lot(self):
@@ -494,7 +537,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(400, "application/json", error)
             return
         
-        vehicles = load_json("data/vehicles.json")
+        vehicles = load_json("vehicles.json")
         
         vid = self.path.replace("/vehicles/", "")
         
@@ -579,7 +622,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         if not self._authorize_admin(session_user): return
         
-        sessions = load_json(f'data/pdata/p{lid}-sessions.json')
+        sessions = load_json(f'pdata/p{lid}-sessions.json')
         sid = self.path.split("/")[-1]
         
         if not sid.isnumeric():
@@ -610,9 +653,16 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(403, "application/json", {"error": "Access denied"})
             return
         
-        pid = reservations[rid]["parkinglot"]
+        reservation_to_delete = reservations[rid]
+        pid = reservation_to_delete["parkinglot"]
+        
+        if parking_lots[pid]["reserved"] > 0:
+            parking_lots[pid]["reserved"] -= 1
+        else:
+            self._send_response(400, "application/json", {"error": "Parking lot reserved count is already zero"})
+            return
+
         del reservations[rid]
-        parking_lots[pid]["reserved"] -= 1
         save_reservation_data(reservations)
         save_parking_lot_data(parking_lots)
         self._send_response(200, "application/json", {"status": "Deleted"})
@@ -661,14 +711,12 @@ class RequestHandler(BaseHTTPRequestHandler):
         session_user = self._authenticate()
         if not session_user: return
         
-        # Filter out sensitive information
         profile_data = {k: v for k, v in session_user.items() if k != "password"}
         self._send_response(200, "application/json", profile_data)
 
     def _handle_logout(self):
         token = self.headers.get('Authorization')
         if token and get_session(token):
-            # remove_session(token) # This line was removed from imports, so it\'s removed here.
             self._send_response(200, "application/json", {"message": "User logged out"})
         else:
             self._send_response(400, "application/json", {"error": "Invalid session token"})
@@ -694,7 +742,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         session_user = self._authenticate()
         if not session_user: return
         
-        sessions = load_json(f'data/pdata/p{lid}-sessions.json')
+        sessions = load_json(f'pdata/p{lid}-sessions.json')
         rsessions = []
         
         if self.path.endswith('/sessions'):
@@ -773,7 +821,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         data = []
         for pid, parkinglot in load_parking_lot_data().items():
             try:
-                sessions = load_json(f'data/pdata/p{pid}-sessions.json')
+                sessions = load_json(f'pdata/p{pid}-sessions.json')
             except FileNotFoundError:
                 sessions = {}
             for sid, session in sessions.items():
@@ -818,7 +866,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         data = []
         for pid, parkinglot in load_parking_lot_data().items():
             try:
-                sessions = load_json(f'data/pdata/p{pid}-sessions.json')
+                sessions = load_json(f'pdata/p{pid}-sessions.json')
             except FileNotFoundError:
                 sessions = {}
             for sid, session in sessions.items():
@@ -840,7 +888,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         session_user = self._authenticate()
         if not session_user: return
         
-        vehicles = load_json("data/vehicles.json")
+        vehicles = load_json("vehicles.json")
         
         target_user = session_user["username"]
         if self._authorize_admin(session_user) and self.path.startswith("/vehicles/"):
@@ -848,7 +896,6 @@ class RequestHandler(BaseHTTPRequestHandler):
             if len(parts) > 2 and parts[2]:
                 target_user = parts[2]
             else:
-                # If admin accesses /vehicles without a specific user, return all vehicles (optional, based on desired behavior)
                 all_vehicles = []
                 for user_v_list in vehicles.values():
                     all_vehicles.extend(user_v_list)
@@ -870,9 +917,9 @@ class RequestHandler(BaseHTTPRequestHandler):
         target_user = session_user["username"]
         if self._authorize_admin(session_user) and self.path.count('/') > 3:
             parts = self.path.split('/')
-            if parts[2] and parts[2] != vid: # Admin requesting for specific user's vehicle reservations
+            if parts[2] and parts[2] != vid:
                 target_user = parts[2]
-                vid = parts[3] # Expecting /vehicles/{user}/{vid}/reservations
+                vid = parts[3]
             else:
                 self._send_response(400, "application/json", {"error": "Invalid vehicle reservations request"})
                 return
@@ -903,11 +950,11 @@ class RequestHandler(BaseHTTPRequestHandler):
         target_user = session_user["username"]
         if self._authorize_admin(session_user) and self.path.count('/') > 2:
             parts = self.path.split('/')
-            if parts[2] and parts[2] != vid: # Admin requesting for a specific user's vehicle history
+            if parts[2] and parts[2] != vid:
                 target_user = parts[2]
-                vid = parts[3] # Expecting /vehicles/{user}/{vid}/history
-            elif parts[2] and parts[2] == vid: # Admin requesting own vehicle history but path might be /vehicles/{vid}
-                pass # Use session_user, vid is already correctly parsed
+                vid = parts[3]
+            elif parts[2] and parts[2] == vid:
+                pass
             else:
                 self._send_response(400, "application/json", {"error": "Invalid vehicle history request"})
                 return
@@ -927,12 +974,12 @@ class RequestHandler(BaseHTTPRequestHandler):
         all_sessions = []
         for pid, _ in load_parking_lot_data().items():
             try:
-                sessions = load_json(f'data/pdata/p{pid}-sessions.json')
+                sessions = load_json(f'pdata/p{pid}-sessions.json')
                 for _, session in sessions.items():
                     if session.get('licenseplate') == vehicle['license_plate'] and session.get('user') == target_user:
                         all_sessions.append(session)
             except FileNotFoundError:
-                continue # No sessions for this parking lot
+                continue
         
         self._send_response(200, "application/json", all_sessions)
 
@@ -941,16 +988,16 @@ class RequestHandler(BaseHTTPRequestHandler):
         if not session_user: return
         
         vid = self.path.replace("/vehicles/", "").replace("/entry", "")
-        vehicles = load_json("data/vehicles.json")
+        vehicles = load_json("vehicles.json")
         
         target_user = session_user["username"]
         if self._authorize_admin(session_user) and self.path.count('/') > 2:
             parts = self.path.split('/')
-            if parts[2] and parts[2] != vid: # Admin requesting details for a specific user's vehicle
+            if parts[2] and parts[2] != vid:
                 target_user = parts[2]
-                vid = parts[3] if len(parts) > 3 else vid # If /vehicles/{user}/{vid}
-            elif parts[2] and parts[2] == vid: # Admin requesting own vehicle details but path might be /vehicles/{vid}
-                pass # Use session_user, vid is already correctly parsed
+                vid = parts[3] if len(parts) > 3 else vid
+            elif parts[2] and parts[2] == vid:
+                pass
             else:
                 self._send_response(400, "application/json", {"error": "Invalid vehicle details request"})
                 return
