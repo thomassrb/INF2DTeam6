@@ -3,7 +3,8 @@ import hashlib
 import re
 import threading
 import uuid
-from datetime import datetime, time
+from datetime import datetime
+import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from storage_utils import load_json, save_data, save_user_data, load_parking_lot_data, save_parking_lot_data, save_reservation_data, load_reservation_data, load_payment_data, save_payment_data
 from session_manager import add_session, get_session, update_session_user
@@ -1018,13 +1019,15 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.last_activity = time.time()
 
     def session_expiry_maintenance(self):
-        timer = threading.Timer(600, self.session_expiry_maintenance)  # Check every 10 minutes
-        timer.daemon = True  # Ensure the timer thread does not prevent program exit
+        # Run this function every 10 minutes
+        timer = threading.Timer(600, self.
+        session_expiry_maintenance)
+        timer.daemon = True
         timer.start()
-
-        if time.time() - self.last_activity > self.timeout:
+        
+        current_time = time.time()
+        if current_time - self.last_activity > self.timeout:
             self._handle_logout()
-        return
 
 server = HTTPServer(('localhost', 8000), RequestHandler)
 print("Server running on http://localhost:8000")
