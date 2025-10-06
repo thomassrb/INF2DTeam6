@@ -4,6 +4,7 @@ import os
 import hashlib
 import importlib
 import uuid
+import time
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from storage_utils import load_json, save_data, save_user_data, load_parking_lot_data, save_parking_lot_data, save_reservation_data, load_reservation_data, load_payment_data, save_payment_data
@@ -18,6 +19,17 @@ class RequestHandler(BaseHTTPRequestHandler):
     _CORS_ORIGINS = [o.strip() for o in os.environ.get('MOBYPARK_CORS_ORIGINS', '').split(',') if o.strip()]
     _CORS_ALLOW_HEADERS = os.environ.get('MOBYPARK_CORS_ALLOW_HEADERS', 'Authorization, Content-Type')
     _CORS_ALLOW_METHODS = os.environ.get('MOBYPARK_CORS_ALLOW_METHODS', 'GET, POST, PUT, DELETE, OPTIONS')
+
+    _RL_WINDOW_SEC = int(os.environ.get('MOBYPARK_RL_WINDOW_SEC', '60'))
+    _RL_IP_MAX = int(os.environ.get('MOBYPARK_RL_IP_MAX', '20'))
+    _RL_USER_MAX = int(os.environ.get('MOBYPARK_RL_USER_MAX', '10'))
+    _LOCKOUT_AFTER = int(os.environ.get('MOBYPARK_LOCKOUT_AFTER', '5'))
+    _LOCKOUT_SECONDS = int(os.environ.get('MOBYPARK_LOCKOUT_SECONDS', '300'))
+
+    _ip_attempts: dict = {}
+    _user_attempts: dict = {}
+    _ip_lockouts: dict = {}
+    _user_lockouts: dict = {}
 
     _FORMAT_REGEX = {
         'username': re.compile(r'^[A-Za-z0-9_.-]{3,32}$'),
@@ -219,6 +231,65 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
         self._send_response(404, "application/json", {"error": "Not Found"})
 
+    def _now(self):
+        return int(time.time())
+
+    def _client_ip(self):
+        if self._TRUST_PROXY:
+            xff = self.headers.get('X-Forwarded-For')
+            if xff:
+                return xff.split(',')[0].strip()
+        return self.client_address[0] if self.client_address else 'unknown'
+
+    def _prune_old(self, entries):
+        cutoff = self._now() - self._RL_WINDOW_SEC
+        return [t for t in entries if t >= cutoff]
+
+    def _check_rate_limits_and_lockouts(self, username):
+        now = self._now()
+        ip = self._client_ip()
+
+        ip_until = self._ip_lockouts.get(ip)
+        if isinstance(ip_until, int) and ip_until > now:
+            return True, max(1, ip_until - now), {"error": "Too many attempts from IP. Try later."}
+        user_until = self._user_lockouts.get(username)
+        if isinstance(user_until, int) and user_until > now:
+            return True, max(1, user_until - now), {"error": "Account temporarily locked. Try later."}
+
+        ip_entries = self._prune_old(self._ip_attempts.get(ip, []))
+        self._ip_attempts[ip] = ip_entries
+        if len(ip_entries) >= self._RL_IP_MAX:
+            retry_after = max(1, (ip_entries[0] + self._RL_WINDOW_SEC) - now)
+            return True, retry_after, {"error": "Rate limit exceeded for IP."}
+
+        user_entries = self._prune_old(self._user_attempts.get(username, []))
+        self._user_attempts[username] = user_entries
+        if len(user_entries) >= self._RL_USER_MAX:
+            retry_after = max(1, (user_entries[0] + self._RL_WINDOW_SEC) - now)
+            return True, retry_after, {"error": "Rate limit exceeded for user."}
+
+        return False, 0, None
+
+    def _record_login_attempt(self, username, success):
+        now = self._now()
+        ip = self._client_ip()
+        if success:
+            self._user_attempts.pop(username, None)
+            self._ip_attempts[ip] = self._prune_old(self._ip_attempts.get(ip, []))
+            return
+        ip_entries = self._prune_old(self._ip_attempts.get(ip, []))
+        ip_entries.append(now)
+        self._ip_attempts[ip] = ip_entries
+
+        user_entries = self._prune_old(self._user_attempts.get(username, []))
+        user_entries.append(now)
+        self._user_attempts[username] = user_entries
+
+        if self._LOCKOUT_AFTER > 0 and len(user_entries) >= self._LOCKOUT_AFTER:
+            self._user_lockouts[username] = now + self._LOCKOUT_SECONDS
+        if self._LOCKOUT_AFTER > 0 and len(ip_entries) >= self._LOCKOUT_AFTER:
+            self._ip_lockouts[ip] = now + self._LOCKOUT_SECONDS
+
     def _is_origin_allowed(self, origin):
         if not origin:
             return False
@@ -380,6 +451,16 @@ class RequestHandler(BaseHTTPRequestHandler):
             
         username = data['username']
         password = data['password']
+
+        limited, retry_after, err = self._check_rate_limits_and_lockouts(username)
+        if limited:
+            self.send_response(429)
+            self.send_header("Content-type", "application/json")
+            self.send_header("Retry-After", str(retry_after))
+            self._apply_security_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(err).encode('utf-8'))
+            return
         
         users = load_json('users.json')
         user = next((u for u in users if u.get("username") == username), None)
@@ -394,8 +475,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                 save_user_data(users)
             token = str(uuid.uuid4())
             add_session(token, user)
+            self._record_login_attempt(username, True)
             self._send_response(200, "application/json", {"message": "User logged in", "session_token": token})
         else:
+            self._record_login_attempt(username, False)
             self._send_response(401, "application/json", {"error": "Invalid credentials"})
 
     def _handle_create_parking_lot(self):
