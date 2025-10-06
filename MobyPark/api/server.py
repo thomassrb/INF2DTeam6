@@ -62,9 +62,13 @@ class RequestHandler(BaseHTTPRequestHandler):
             },
             'DELETE': {
                 '/parking-lots/': self._handle_delete_parking_lot,
+                re.compile(r"^/parking-lots/([^/]+)$"): self._handle_delete_parking_lot,
                 '/reservations/': self._handle_delete_reservation,
+                re.compile(r"^/reservations/([^/]+)$"): self._handle_delete_reservation,
                 '/vehicles/': self._handle_delete_vehicle,
+                re.compile(r"^/vehicles/([^/]+)$"): self._handle_delete_vehicle,
                 '/parking-lots/sessions/': self._handle_delete_session,
+                re.compile(r"^/parking-lots/([^/]+)/sessions/([^/]+)$"): self._handle_delete_session,
             }
         }
         super().__init__(*args, **kwargs)
