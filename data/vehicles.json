@@ -1,1 +1,11 @@
-[]
+{
+    "admin1": [
+        {
+            "id": "666ea033-c812-4ace-95fa-3397a8f524cd",
+            "user_id": "43",
+            "license_plate": "AB-1234",
+            "name": "My Car",
+            "created_at": "2025-10-05"
+        }
+    ]
+}

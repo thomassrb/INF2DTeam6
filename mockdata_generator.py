@@ -1,5 +1,5 @@
 import json
-import hashlib
+import importlib
 from datetime import datetime
 import random
 import os
@@ -21,7 +21,11 @@ def generate_mock_users(num_users=40):
         username = f"user{i}"
         password = f"password{i}"
         name = f"{random.choice(first_names)} Smith"
-        hashed_password = hashlib.md5(password.encode()).hexdigest()
+        try:
+            bcrypt = importlib.import_module("bcrypt")
+        except ImportError as exc:
+            raise RuntimeError("bcrypt is not installed. Please install with: pip install bcrypt") from exc
+        hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode("utf-8")
         role = "ADMIN" if i % 25 == 0 else "USER"
         created_at = datetime.now().strftime("%Y-%m-%d")
 
