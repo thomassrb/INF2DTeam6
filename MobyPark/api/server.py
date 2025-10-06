@@ -15,6 +15,12 @@ import session_calculator as sc
 class RequestHandler(BaseHTTPRequestHandler):
     _MAX_JSON_BYTES = 64 * 1024
 
+    _FORCE_HTTPS = os.environ.get('MOBYPARK_FORCE_HTTPS', '1') != '0'
+    _TRUST_PROXY = os.environ.get('MOBYPARK_TRUST_PROXY', '1') != '0'
+    _CORS_ORIGINS = [o.strip() for o in os.environ.get('MOBYPARK_CORS_ORIGINS', '').split(',') if o.strip()]
+    _CORS_ALLOW_HEADERS = os.environ.get('MOBYPARK_CORS_ALLOW_HEADERS', 'Authorization, Content-Type')
+    _CORS_ALLOW_METHODS = os.environ.get('MOBYPARK_CORS_ALLOW_METHODS', 'GET, POST, PUT, DELETE, OPTIONS')
+
     _FORMAT_REGEX = {
         'username': re.compile(r'^[A-Za-z0-9_.-]{3,32}$'),
         'role': re.compile(r'^(USER|ADMIN)$'),
@@ -146,6 +152,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _send_response(self, status_code, content_type, data):
         self.send_response(status_code)
         self.send_header("Content-type", content_type)
+        self._apply_security_headers()
         self.end_headers()
         if content_type == "application/json":
             if not isinstance(data, (dict, list)):
@@ -178,16 +185,40 @@ class RequestHandler(BaseHTTPRequestHandler):
         return cleaned
 
     def do_POST(self):
+        if self._enforce_https():
+            return
         self._dispatch_request('POST')
 
     def do_PUT(self):
+        if self._enforce_https():
+            return
         self._dispatch_request('PUT')
 
     def do_DELETE(self):
+        if self._enforce_https():
+            return
         self._dispatch_request('DELETE')
 
     def do_GET(self):
+        if self._enforce_https():
+            return
         self._dispatch_request('GET')
+
+    def do_OPTIONS(self):
+        if self._enforce_https():
+            return
+        self.send_response(204)
+        self._apply_security_headers()
+        origin = self.headers.get('Origin')
+        if self._is_origin_allowed(origin):
+            self.send_header('Access-Control-Allow-Origin', origin)
+            self.send_header('Vary', 'Origin, Access-Control-Request-Method, Access-Control-Request-Headers')
+            self.send_header('Access-Control-Allow-Credentials', 'true')
+            self.send_header('Access-Control-Allow-Methods', self._CORS_ALLOW_METHODS)
+            req_headers = self.headers.get('Access-Control-Request-Headers') or self._CORS_ALLOW_HEADERS
+            self.send_header('Access-Control-Allow-Headers', req_headers)
+            self.send_header('Access-Control-Max-Age', '600')
+        self.end_headers()
 
     def _dispatch_request(self, method):
         for path_prefix, handler in self.routes[method].items():
@@ -215,6 +246,62 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
 
         self._send_response(404, "application/json", {"error": "Not Found"})
+
+    def _is_origin_allowed(self, origin):
+        if not origin:
+            return False
+        if not self._CORS_ORIGINS:
+            return False
+        return origin in self._CORS_ORIGINS
+
+    def _is_secure(self):
+        if self._TRUST_PROXY:
+            xfproto = self.headers.get('X-Forwarded-Proto')
+            if xfproto and 'https' in xfproto.split(',')[0].strip().lower():
+                return True
+            forwarded = self.headers.get('Forwarded')
+            if forwarded and 'proto=https' in forwarded.lower():
+                return True
+        return False
+
+    def _enforce_https(self):
+        if self._FORCE_HTTPS and not self._is_secure():
+            host = self.headers.get('Host', 'localhost')
+            location = f"https://{host}{self.path}"
+            self.send_response(308)
+            self.send_header('Location', location)
+            self.send_header('Content-Length', '0')
+            self._apply_security_headers()
+            self.end_headers()
+            return True
+        return False
+
+    def _apply_security_headers(self):
+        if self._is_secure():
+            self.send_header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('X-Frame-Options', 'DENY')
+        self.send_header('Referrer-Policy', 'no-referrer')
+        self.send_header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+        self.send_header('Cross-Origin-Opener-Policy', 'same-origin')
+        self.send_header('Cross-Origin-Resource-Policy', 'same-site')
+        csp = (
+            "default-src 'none'; "
+            "base-uri 'self'; "
+            "frame-ancestors 'none'; "
+            "img-src 'self' data:; "
+            "style-src 'self'; "
+            "script-src 'self'; "
+            "connect-src 'self' https:; "
+            "object-src 'none'"
+        )
+        self.send_header('Content-Security-Policy', csp)
+
+        origin = self.headers.get('Origin')
+        if self._is_origin_allowed(origin):
+            self.send_header('Access-Control-Allow-Origin', origin)
+            self.send_header('Vary', 'Origin')
+            self.send_header('Access-Control-Allow-Credentials', 'true')
 
     def _validate_data(self, data, required_fields=None, optional_fields=None, allow_unknown=False):
         if required_fields is None:
@@ -859,12 +946,12 @@ class RequestHandler(BaseHTTPRequestHandler):
         self._send_response(200, "application/json", profile_data)
 
     def _handle_logout(self):
-      token = self.headers.get('Authorization')
-      if token and get_session(token):
-          remove_session(token)
-          self._send_response(200, "application/json", {"message": "User logged out"})
-      else:
-          self._send_response(400, "application/json", {"error": "Invalid session token"})
+        token = self.headers.get('Authorization')
+        if token and get_session(token):
+            remove_session(token)
+            self._send_response(200, "application/json", {"message": "User logged out"})
+        else:
+            self._send_response(400, "application/json", {"error": "Invalid session token"})
 
     def _handle_get_parking_lot_details(self):
         lid = self.path.split("/")[2]
