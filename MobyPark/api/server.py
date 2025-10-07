@@ -739,13 +739,13 @@ class RequestHandler(BaseHTTPRequestHandler):
         pid = self.path.replace("/payments/", "")
         payments = load_payment_data()
         
-        payment = next((p for p in payments if p["transaction"] == pid), None)
+        payment = next((p for p in payments if p["initiator"] == pid), None)
         
         if not payment:
             self._send_response(404, "application/json", {"error": "Payment not found!"})
             return
         
-        if not self._authorize_admin(session_user) and not (payment.get("initiator") == session_user["username"] or payment.get("processed_by") == session_user["username"]):
+        if not self._authorize_admin(session_user) and not payment.get("initiator") == session_user["username"]:
             self._send_response(403, "application/json", {"error": "Access denied"})
             return
 
