@@ -984,7 +984,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self._audit(session_user, action="delete_vehicle", target=vid)
         self._send_response(200, "application/json", {"status": "Deleted"})
 
-    @login_required
+    # @login_required
     def _handle_index(self):
         self._send_response(200, "text/html; charset=utf-8", 
             "<html><head><title>MobyPark API</title></head>"
