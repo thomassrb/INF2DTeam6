@@ -87,7 +87,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def _dispatch_request(self, method):
         for path_prefix, handler in self.routes[method].items():
-            if self.path.startswith(path_prefix) and path_prefix.endswith('/'):
+            if len(path_prefix) > 1 and self.path.startswith(path_prefix) and path_prefix.endswith('/'):
                 handler()
                 return
             elif self.path == path_prefix and not path_prefix.endswith('/'):
@@ -739,13 +739,13 @@ class RequestHandler(BaseHTTPRequestHandler):
         pid = self.path.replace("/payments/", "")
         payments = load_payment_data()
         
-        payment = next((p for p in payments if p["transaction"] == pid), None)
+        payment = next((p for p in payments if p["initiator"] == pid), None)
         
         if not payment:
             self._send_response(404, "application/json", {"error": "Payment not found!"})
             return
         
-        if not self._authorize_admin(session_user) and not (payment.get("initiator") == session_user["username"] or payment.get("processed_by") == session_user["username"]):
+        if not self._authorize_admin(session_user) and not payment.get("initiator") == session_user["username"]:
             self._send_response(403, "application/json", {"error": "Access denied"})
             return
 
