@@ -267,7 +267,10 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         # Then check for prefix matches (e.g., /parking-lots/123)
         for path_prefix, handler in self.routes[method].items():
-            if path_prefix.endswith('/') and self.path.startswith(path_prefix):
+            if len(path_prefix) > 1 and self.path.startswith(path_prefix) and path_prefix.endswith('/'):
+                handler()
+                return
+            elif self.path == path_prefix and not path_prefix.endswith('/'):
                 handler()
                 return
 
