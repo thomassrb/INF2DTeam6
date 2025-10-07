@@ -42,7 +42,8 @@ def roles_required(roles):
 class RequestHandler(BaseHTTPRequestHandler):
     _MAX_JSON_BYTES = 64 * 1024
 
-    _FORCE_HTTPS = os.environ.get('MOBYPARK_FORCE_HTTPS', '1') != '0'
+    _FORCE_HTTPS = False
+    # _FORCE_HTTPS = os.environ.get('MOBYPARK_FORCE_HTTPS', '1') != '0'
     _TRUST_PROXY = os.environ.get('MOBYPARK_TRUST_PROXY', '1') != '0'
     _CORS_ORIGINS = [o.strip() for o in os.environ.get('MOBYPARK_CORS_ORIGINS', '').split(',') if o.strip()]
     _CORS_ALLOW_HEADERS = os.environ.get('MOBYPARK_CORS_ALLOW_HEADERS', 'Authorization, Content-Type')
@@ -126,7 +127,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             return hashlib.md5(plain_password.encode()).hexdigest() == stored_hash
         return False
 
-
+    def _authorize_admin(self, session_user):
+        return session_user.get("role") == "ADMIN"
 
     def __init__(self, *args, **kwargs):
         self.timeout = 600  # 10 minutes
@@ -222,23 +224,23 @@ class RequestHandler(BaseHTTPRequestHandler):
         return cleaned
 
     def do_POST(self):
-        if self._enforce_https():
-            return
+        # if self._enforce_https():
+        #     return
         self._dispatch_request('POST')
 
     def do_PUT(self):
-        if self._enforce_https():
-            return
+        # if self._enforce_https():
+        #     return
         self._dispatch_request('PUT')
 
     def do_DELETE(self):
-        if self._enforce_https():
-            return
+        # if self._enforce_https():
+        #     return
         self._dispatch_request('DELETE')
 
     def do_GET(self):
-        if self._enforce_https():
-            return
+        # if self._enforce_https():
+        #     return
         self._dispatch_request('GET')
 
     def do_OPTIONS(self):
@@ -258,11 +260,14 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _dispatch_request(self, method):
+        # Prioritize exact matches
+        if self.path in self.routes[method]:
+            self.routes[method][self.path]()
+            return
+        
+        # Then check for prefix matches (e.g., /parking-lots/123)
         for path_prefix, handler in self.routes[method].items():
-            if self.path.startswith(path_prefix) and path_prefix.endswith('/'):
-                handler()
-                return
-            elif self.path == path_prefix and not path_prefix.endswith('/'):
+            if path_prefix.endswith('/') and self.path.startswith(path_prefix):
                 handler()
                 return
 
@@ -361,6 +366,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         return False
 
     def _enforce_https(self):
+        print(f"DEBUG: _FORCE_HTTPS={self._FORCE_HTTPS}, _is_secure()={self._is_secure()}")
         if self._FORCE_HTTPS and not self._is_secure():
             host = self.headers.get('Host', 'localhost')
             location = f"https://{host}{self.path}"
@@ -647,8 +653,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         if self._authorize_admin(session_user):
             if "user" not in data:
                 self._send_response(400, "application/json", {"error": "Required field missing", "field": "user"})
-            else:
-                data["user"] = session_user["username"]
+                return
         else:
             data["user"] = session_user["username"]
         
@@ -806,8 +811,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         data = self._get_request_data()
         
         valid, error = self._validate_data(data, 
-            required_fields={'name': str, 'location': str, 'capacity': int, 'hourly_rate': (int, float), 'day_rate': (int, float)},
-            optional_fields={'reserved': int}\
+            optional_fields={'name': str, 'location': str, 'capacity': int, 'hourly_rate': (int, float), 'day_rate': (int, float), 'reserved': int}\
         )
         if not valid:
             self._send_response(400, "application/json", error)
@@ -1007,7 +1011,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self._audit(session_user, action="delete_vehicle", target=vid)
         self._send_response(200, "application/json", {"status": "Deleted"})
 
-    @login_required
+    # @login_required
     def _handle_index(self):
         self._send_response(200, "text/html; charset=utf-8", 
             "<html><head><title>MobyPark API</title></head>"
