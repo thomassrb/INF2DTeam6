@@ -158,7 +158,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         password = data['password']
         
         hashed_password = hashlib.md5(password.encode()).hexdigest()
-        users = load_json('MobyPark/api/data/users.json')
+        users = load_json('data/users.json')
         
         user = next((u for u in users if u.get("username") == username and u.get("password") == hashed_password), None)
         if user:
