@@ -415,7 +415,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             if scheme.lower() != 'bearer':
                 return None
             session_data = get_session(token)
-            return session_data.get('user') if session_data else None
+            return session_data if session_data else None
         except ValueError:
             return None
 
