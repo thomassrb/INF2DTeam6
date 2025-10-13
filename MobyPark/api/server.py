@@ -478,7 +478,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         data = self._get_request_data()
         
         valid, error = self._validate_data(data, 
-            required_fields={'username': str, 'password': str, 'name': str},
+            required_fields={'username': str, 'password': str, 'name': str, 'phone': str, 'email': str},
             optional_fields={'role': str}
         )
         if not valid:
@@ -488,6 +488,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         username = data['username']
         password = data['password']
         name = data['name']
+        phone_number = data['phone']
+        email = data['email']
         
         if not isinstance(password, str) or not password:
             self._send_response(400, "application/json", {"error": "Invalid password", "field": "password"})
@@ -506,6 +508,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             'username': username,
             'password': hashed_password,
             'name': name,
+            'phone': phone_number,
+            'email': email,
             'role': data.get('role', 'USER'),
             'created_at': datetime.now().strftime("%Y-%m-%d")
         })
