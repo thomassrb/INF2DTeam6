@@ -486,7 +486,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         data = self._get_request_data()
         
         valid, error = self._validate_data(data, 
-            required_fields={'username': str, 'password': str, 'name': str},
+            required_fields={'username': str, 'password': str, 'name': str, 'phone': str, 'email': str, 'birth_year': str},
             optional_fields={'role': str}
         )
         if not valid:
@@ -496,6 +496,9 @@ class RequestHandler(BaseHTTPRequestHandler):
         username = data['username']
         password = data['password']
         name = data['name']
+        phone_number = data['phone']
+        email = data['email']
+        birth_year = data['birth_year']
         
         if not isinstance(password, str) or not password:
             self._send_response(400, "application/json", {"error": "Invalid password", "field": "password"})
@@ -514,7 +517,11 @@ class RequestHandler(BaseHTTPRequestHandler):
             'username': username,
             'password': hashed_password,
             'name': name,
+            'phone': phone_number,
+            'email': email,
+            'birth_year': birth_year,
             'role': data.get('role', 'USER'),
+            'active': True,
             'created_at': datetime.now().strftime("%Y-%m-%d")
         })
         save_user_data(users)
@@ -1047,7 +1054,11 @@ class RequestHandler(BaseHTTPRequestHandler):
         profile_data = {
         "username": session_user.get("username"),
         "role": session_user.get("role"),
-        "created": session_user.get("created", ""),
+        "name": session_user.get("name"),
+        "email": session_user.get("email"),
+        "phone": session_user.get("phone"),
+        "birth_year": session_user.get("birthyear"),
+        "created_at": session_user.get("created_at")
             }
 
         self._send_response(200, "application/json", profile_data)
