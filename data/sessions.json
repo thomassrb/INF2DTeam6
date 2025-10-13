@@ -22,5 +22,13 @@
     "name": "Alice",
     "role": "USER",
     "created_at": "2025-10-05"
+  },
+  "1c080372-b522-46e5-82f1-ca34ad0a9682": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
   }
 }
