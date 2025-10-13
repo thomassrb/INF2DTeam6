@@ -40,6 +40,19 @@ def roles_required(roles):
 
 
 class RequestHandler(BaseHTTPRequestHandler):
+
+    def _extract_bearer_token(self):
+        auth_header = self.headers.get('Authorization')
+        if not auth_header:
+            return None
+        parts = auth_header.split(' ', 1)
+        if len(parts) != 2:
+            return None
+        scheme, token = parts
+        if scheme.lower() != 'bearer' or not token:
+            return None
+        return token
+
     _MAX_JSON_BYTES = 64 * 1024
 
     _FORCE_HTTPS = False
@@ -407,17 +420,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Credentials', 'true')
 
     def _get_user_from_session(self):
-        auth_header = self.headers.get('Authorization')
-        if not auth_header:
+        token = self._extract_bearer_token()
+        if not token:
             return None
-        try:
-            scheme, token = auth_header.split(' ', 1)
-            if scheme.lower() != 'bearer':
-                return None
-            session_data = get_session(token)
-            return session_data.get('user') if session_data else None
-        except ValueError:
-            return None
+        session_data = get_session(token)
+        return session_data if session_data else None
+
 
     def _validate_data(self, data, required_fields=None, optional_fields=None, allow_unknown=False):
         if required_fields is None:
@@ -478,7 +486,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         data = self._get_request_data()
         
         valid, error = self._validate_data(data, 
-            required_fields={'username': str, 'password': str, 'name': str, 'phone': str, 'email': str},
+            required_fields={'username': str, 'password': str, 'name': str, 'phone': str, 'email': str, 'birth_year': str},
             optional_fields={'role': str}
         )
         if not valid:
@@ -490,6 +498,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         name = data['name']
         phone_number = data['phone']
         email = data['email']
+        birth_year = data['birth_year']
         
         if not isinstance(password, str) or not password:
             self._send_response(400, "application/json", {"error": "Invalid password", "field": "password"})
@@ -510,7 +519,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             'name': name,
             'phone': phone_number,
             'email': email,
+            'birth_year': birth_year,
             'role': data.get('role', 'USER'),
+            'active': True,
             'created_at': datetime.now().strftime("%Y-%m-%d")
         })
         save_user_data(users)
@@ -802,7 +813,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         save_user_data(users)
         token = self.headers.get('Authorization')
         if updated_user:
-            update_session_user(token, updated_user)
+            if updated_user and token:
+                update_session_user(token, updated_user)
         self._send_response(200, "application/json", {"message": "User updated successfully"})
 
     @login_required
@@ -993,7 +1005,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self._send_response(200, "application/json", {"status": "Deleted"})
 
     @login_required
-    def _handle_delete_vehicle(self):
+    def _handle_delete_vehicle(self, session_user):
         vid = self.path.replace("/vehicles/", "")
         
 
@@ -1035,22 +1047,32 @@ class RequestHandler(BaseHTTPRequestHandler):
         parking_lots = load_parking_lot_data()
         self._send_response(200, "application/json", parking_lots)
 
-    @login_required
-    def _handle_get_profile(self):
+    @login_required 
+    def _handle_get_profile(self, session_user):
+        # Return the current logged-in user info
+        if not session_user:
+            self._send_response(401, "application/json", {"error": "Unauthorized"})
+            return
+        profile_data = {
+        "username": session_user.get("username"),
+        "role": session_user.get("role"),
+        "name": session_user.get("name"),
+        "email": session_user.get("email"),
+        "phone": session_user.get("phone"),
+        "birth_year": session_user.get("birthyear"),
+        "created_at": session_user.get("created_at")
+            }
 
-        
-        session_user = self._get_user_from_session()
-        allowed_keys = {"id", "username", "name", "role", "created_at"}
-        profile_data = {k: v for k, v in session_user.items() if k in allowed_keys}
         self._send_response(200, "application/json", profile_data)
 
     def _handle_logout(self):
-        token = self.headers.get('Authorization')
+        token = self._extract_bearer_token()
         if token and get_session(token):
             remove_session(token)
             self._send_response(200, "application/json", {"message": "User logged out"})
         else:
-            self._send_response(400, "application/json", {"error": "Invalid session token"})
+            self._send_response(400, "application/json", {"error": "Invalid or missing Bearer token"})
+
 
     def _handle_get_parking_lot_details(self):
         lid = self.path.split("/")[2]
@@ -1082,7 +1104,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 rsessions = sessions
             else:
                 for session in sessions.values():
-                    if session['user'] == session_user['username']:
+                    if session.get('user') == session_user.get('username'):
                         rsessions.append(session)
             self._send_response(200, "application/json", rsessions)
         else:
@@ -1132,24 +1154,22 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     @login_required
     def _handle_get_payment_details(self):
-
-        
+    # Requires @login_required in original design; if not present, we still read session for auth
+        session_user = self._get_user_from_session()
         pid = self.path.replace("/payments/", "")
         payments = load_payment_data()
-        
-        payment = next((p for p in payments if p["initiator"] == pid), None)
-        
+        payment = next((p for p in payments if p.get("transaction") == pid), None)
         if not payment:
             self._send_response(404, "application/json", {"error": "Payment not found!"})
             return
-        
-        if not self._authorize_admin(session_user) and not payment.get("initiator") == session_user["username"]:
+        if not session_user:
+            self._send_response(401, "application/json", {"error": "Unauthorized"})
+            return
+        if not self._authorize_admin(session_user) and payment.get("initiator") != session_user.get("username"):
             self._send_response(403, "application/json", {"error": "Access denied"})
             return
-
         self._send_response(200, "application/json", payment)
 
-    @login_required
     def _handle_get_billing(self):
         
         session_user = self._get_user_from_session()
