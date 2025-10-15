@@ -585,7 +585,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         data = self._get_request_data()
         
         valid, error = self._validate_data(data, 
-            required_fields={'name': str, 'location': str, 'capacity': int, 'hourly_rate': (int, float), 'day_rate': (int, float)}\
+            required_fields={'name': str, 'location': str, 'capacity': int, 'tariff': (int, float), 'daytariff': (int, float), 'address': str, 'coordinates': list}\
         )
         if not valid:
             self._send_response(400, "application/json", error)
@@ -598,12 +598,14 @@ class RequestHandler(BaseHTTPRequestHandler):
             "name": data['name'],
             "location": data['location'],
             "capacity": data['capacity'],
-            "hourly_rate": data['hourly_rate'],
-            "day_rate": data['day_rate'],
+            "hourly_rate": data['tariff'],
+            "day_rate": data['daytariff'],
+            "address": data['address'],
+            "coordinates": data['coordinates'],
             "reserved": 0
         }
         save_parking_lot_data(parking_lots)
-        self._audit(session_user, action="create_parking_lot", target=new_lid, extra={"name": data['name']})
+        self._audit(session_user, action="create_parking_lot", target=new_lid, extra={"name": data['name'], "address": data['address']})
         self._send_response(201, "application/json", {"message": f"Parking lot saved under ID: {new_lid}"})
 
     @login_required
