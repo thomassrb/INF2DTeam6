@@ -943,17 +943,25 @@ class RequestHandler(BaseHTTPRequestHandler):
     
     @roles_required(['ADMIN'])
     def _handle_delete_parking_lot(self, session_user):
-        lid = self.path.split("/")[2]
-        parking_lots = load_parking_lot_data()
-        
-        if lid not in parking_lots:
-            self._send_response(404, "application/json", {"error": "Parking lot not found"})
-            return
+        lid = None
+        path_parts = self.path.split('/')
+        if len(path_parts) > 2 and path_parts[2]:
+            lid = path_parts[2]
 
-        del parking_lots[lid]
-        save_parking_lot_data(parking_lots)
-        self._audit(session_user, action="delete_parking_lot", target=lid)
-        self._send_response(200, "application/json", {"message": "Parking lot deleted"})
+        parking_lots = load_parking_lot_data()
+
+        if lid:
+            if lid not in parking_lots:
+                self._send_response(404, "application/json", {"error": "Parking lot not found"})
+                return
+            del parking_lots[lid]
+            save_parking_lot_data(parking_lots)
+            self._audit(session_user, action="delete_parking_lot", target=lid)
+            self._send_response(200, "application/json", {"message": f"Parking lot {lid} deleted"})
+        else:
+            save_parking_lot_data({})
+            self._audit(session_user, action="delete_all_parking_lots")
+            self._send_response(200, "application/json", {"message": "All parking lots deleted"})
 
     
     @roles_required(['ADMIN'])
