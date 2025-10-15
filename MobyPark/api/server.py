@@ -76,7 +76,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     _FORMAT_REGEX = {
         'username': re.compile(r'^[A-Za-z0-9_.-]{3,32}$'),
         'role': re.compile(r'^(USER|ADMIN)$'),
-        'licenseplate': re.compile(r'^[A-Z0-9-]{2,12}$'),
+        'licenseplate': re.compile(r'^[A-Z0-9_-]{2,20}$'),
         'transaction': re.compile(r'^[A-Za-z0-9:_-]{1,128}$'),
     }
 
@@ -144,7 +144,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         return session_user.get("role") == "ADMIN"
 
     def __init__(self, *args, **kwargs):
-        self.timeout = 600  # 10 minutes
+        self.timeout = 600  # 10 min
         self.last_activity = time.time()
         self.routes = {
             'POST': {
@@ -273,16 +273,13 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _dispatch_request(self, method):
-        # Prioritize exact matches
         if self.path in self.routes[method]:
             self.routes[method][self.path]()
             return
-        # for regex pattern matches
         for k, handler in self.routes[method].items():
            if isinstance(k, re.Pattern) and k.match(self.path):
                handler()
                return
-        # Then check for prefix matches (e.g., /parking-lots/123)
         for path_prefix, handler in self.routes[method].items():
             if isinstance(path_prefix, str) and path_prefix != '/' and path_prefix.endswith('/') and self.path.startswith(path_prefix):
                 handler()
@@ -291,14 +288,13 @@ class RequestHandler(BaseHTTPRequestHandler):
                 handler()
                 return
 
-        # If no matching route found, check if path exists for other methods
         allowed_methods = []
         for m, routes in self.routes.items():
             for path_prefix in routes:
                 if (self.path.startswith(path_prefix) and path_prefix.endswith('/')) or \
                    (self.path == path_prefix and not path_prefix.endswith('/')):
                     allowed_methods.append(m)
-                else:  # regex
+                else:
                     if path_prefix.match(self.path):
                         allowed_methods.append(m)
 
@@ -479,12 +475,15 @@ class RequestHandler(BaseHTTPRequestHandler):
             if df in data and isinstance(data[df], str):
                 ok = True
                 try:
-                    datetime.strptime(data[df], "%Y-%m-%d")
+                    datetime.strptime(data[df], "%Y-%m-%dT%H:%M:%SZ")
                 except ValueError:
                     try:
-                        datetime.strptime(data[df], "%d-%m-%Y")
+                        datetime.strptime(data[df], "%Y-%m-%d")
                     except ValueError:
-                        ok = False
+                        try:
+                            datetime.strptime(data[df], "%d-%m-%Y")
+                        except ValueError:
+                            ok = False
                 if not ok:
                     return False, {"error": "Invalid date format", "field": df}
 
@@ -664,9 +663,11 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         valid, error = self._validate_data(data, 
             required_fields={'licenseplate': str, 'startdate': str, 'enddate': str, 'parkinglot': str},
-            optional_fields={'user': str}\
+            optional_fields={'user': str},
+            allow_unknown=True
         )
         if not valid:
+            print(f"Validation error: {error}") # heb dit geadd voor debuggen kan evt weg, kan ook voor nu nog even blijven
             self._send_response(400, "application/json", error)
             return
         
@@ -677,13 +678,16 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(404, "application/json", {"error": "Parking lot not found", "field": "parkinglot"})
             return
         
-        if self._authorize_admin(session_user):
+        if not self._authorize_admin(session_user):
             if "user" not in data:
-                self._send_response(400, "application/json", {"error": "Required field missing", "field": "user"})
+                data["user"] = session_user["username"]
+            elif data["user"] != session_user["username"]:
+                self._send_response(403, "application/json", {"error": "Non-admin users cannot create reservations for other users"})
                 return
         else:
-            data["user"] = session_user["username"]
-        
+            if "user" not in data:
+                data["user"] = None
+
         rid = str(len(reservations) + 1)
         reservations[rid] = data
         data["id"] = rid
@@ -1062,7 +1066,6 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     @login_required 
     def _handle_get_profile(self, session_user):
-        # Return the current logged-in user info
         if not session_user:
             self._send_response(401, "application/json", {"error": "Unauthorized"})
             return
@@ -1170,7 +1173,6 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     @login_required
     def _handle_get_payment_details(self):
-    # Requires @login_required in original design; if not present, we still read session for auth
         session_user = self._get_user_from_session()
         pid = self.path.replace("/payments/", "")
         payments = load_payment_data()
