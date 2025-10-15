@@ -166,5 +166,29 @@
     "role": "USER",
     "active": true,
     "created_at": "2025-10-15"
+  },
+  "cc0a1f79-7e09-4b84-a28c-0beb95e89a8b": {
+    "id": "49",
+    "username": "testuser_ab",
+    "password": "$2b$12$q1nR84F8boPfEs.Ha0Jo9.gl6qb/J4GHGU51tpFve5mG9DfqatH1C",
+    "name": "Test User",
+    "phone": "1234567890",
+    "email": "test@example.com",
+    "birth_year": "2000",
+    "role": "USER",
+    "active": true,
+    "created_at": "2025-10-15"
+  },
+  "3f5f9702-fe36-4685-b940-9b24569d8faa": {
+    "id": "50",
+    "username": "adminuser_aa",
+    "password": "$2b$12$U0gx55dvrMGg7svBLWh.YeONoPz72XCTr75.05P1ISI9Ar1tHiClm",
+    "name": "Admin User",
+    "phone": "0987654321",
+    "email": "admin@example.com",
+    "birth_year": "1990",
+    "role": "ADMIN",
+    "active": true,
+    "created_at": "2025-10-15"
   }
 }
