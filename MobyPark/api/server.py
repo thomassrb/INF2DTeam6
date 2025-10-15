@@ -153,8 +153,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/reservations': self._handle_create_reservation,
                 '/vehicles': self._handle_create_vehicle,
                 '/payments': self._handle_create_payment,
-                '/parking-lots/sessions/start': self._handle_start_session,
-                '/parking-lots/sessions/stop': self._handle_stop_session,
+                re.compile(r"^/parking-lots/([^/]+)/sessions/start$"): self._handle_start_session,
+                re.compile(r"^/parking-lots/([^/]+)/sessions/stop$"): self._handle_stop_session,
                 '/payments/refund': self._handle_refund_payment,
             },
             'PUT': {
@@ -608,7 +608,11 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     @login_required
     def _handle_start_session(self, session_user):
-        lid = self.path.split("/")[2]
+        match = re.match(r"^/parking-lots/([^/]+)/sessions/start$", self.path)
+        if not match:
+            self._send_response(400, "application/json", {"error": "Invalid URL format for starting session"})
+            return
+        lid = match.group(1)
         data = self._get_request_data()
         
         valid, error = self._validate_data(data, 
@@ -637,7 +641,11 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     @login_required
     def _handle_stop_session(self, session_user):
-        lid = self.path.split("/")[2]
+        match = re.match(r"^/parking-lots/([^/]+)/sessions/stop$", self.path)
+        if not match:
+            self._send_response(400, "application/json", {"error": "Invalid URL format for stopping session"})
+            return
+        lid = match.group(1)
         data = self._get_request_data()
         
         valid, error = self._validate_data(data, 
