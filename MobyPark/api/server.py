@@ -471,9 +471,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 if not regex.match(candidate):
                     return False, {"error": "Invalid format", "field": fname}
 
-        if 'password' in data and isinstance(data['password'], str):
-            if len(data['password']) < 8:
-                return False, {"error": "Password must be at least 8 characters", "field": "password"}
+        # if 'password' in data and isinstance(data['password'], str):
+        #     if len(data['password']) < 8:
+        #         return False, {"error": "Password must be at least 8 characters", "field": "password"}
 
         for df in ('startdate', 'enddate'):
             if df in data and isinstance(data[df], str):
@@ -495,7 +495,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         valid, error = self._validate_data(data, 
             required_fields={'username': str, 'password': str, 'name': str, 'phone': str, 'email': str, 'birth_year': str},
-            optional_fields={'role': str}
+            optional_fields={'role': str},
+            allow_unknown=True
         )
         if not valid:
             self._send_response(400, "application/json", error)
