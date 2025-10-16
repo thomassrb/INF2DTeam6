@@ -174,11 +174,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/reservations': self._handle_get_reservations,
                 '/payments': self._handle_get_payments,
                 '/billing': self._handle_get_billing,
-                '/vehicles': self._handle_get_vehicles,
+                re.compile(r"^/vehicles/?$"): self._handle_get_vehicles,
                 '/reservations/': self._handle_get_reservation_details,
                 '/payments/': self._handle_get_payment_details,
                 '/billing/': self._handle_get_user_billing,
-                '/vehicles/': self._handle_get_vehicle_details,
+                re.compile(r"^/vehicles/([^/]+)$"): self._handle_get_vehicle_details,
+                re.compile(r"^/vehicles/([^/]+)/([^/]+)$"): self._handle_get_vehicle_details,
                 '/vehicles/reservations': self._handle_get_vehicle_reservations,
                 re.compile(r"^/vehicles/([^/]+)/history$"): self._handle_get_vehicle_history,
                 re.compile(r"^/vehicles/([^/]+)/reservations$"): self._handle_get_vehicle_reservations_by_license_plate,
@@ -1353,26 +1354,20 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     @login_required
     def _handle_get_vehicles(self, session_user):
-        
-        vehicles = load_json("vehicles.json")
-        
-        target_user = session_user["username"]
-        if self._authorize_admin(session_user) and self.path.startswith("/vehicles/"):
-            parts = self.path.split('/')
-            if len(parts) > 2 and parts[2]:
-                target_user = parts[2]
-            else:
-                all_vehicles = []
-                for user_v_list in vehicles.values():
-                    all_vehicles.extend(user_v_list)
-                self._send_response(200, "application/json", all_vehicles)
-                return
-        
-        if target_user not in vehicles:
-            self._send_response(404, "application/json", {"error": "User or their vehicles not found"})
+        vehicles_data = self._load_vehicles()
+
+        if self._authorize_admin(session_user):
+            all_vehicles = []
+            for user_v_list in vehicles_data.values():
+                all_vehicles.extend(user_v_list)
+            self._send_response(200, "application/json", all_vehicles)
             return
-        
-        self._send_response(200, "application/json", vehicles.get(target_user, []))
+        else:
+            user_vehicles = vehicles_data.get(session_user["username"], [])
+            if not user_vehicles:
+                self._send_response(404, "application/json", {"error": "No vehicles found for this user"})
+                return
+            self._send_response(200, "application/json", user_vehicles)
 
     @login_required
     def _handle_get_vehicle_reservations(self, session_user):
@@ -1407,24 +1402,18 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     @login_required
     def _handle_get_vehicle_history(self, session_user):
-        # Extract license_plate from URL
         match = re.match(r"^/vehicles/([^/]+)/history$", self.path)
         if not match:
             self._send_response(400, "application/json", {"error": "Invalid URL format"})
             return
         license_plate = match.group(1)
 
-        # Authorization: Admins can view any vehicle's history, users can only view their own.
         is_admin = self._authorize_admin(session_user)
         target_username = session_user["username"]
 
-        # Load all data
         vehicles_data = load_json("vehicles.json")
         reservations_data = load_json("reservations.json")
-        sessions_data = load_json("sessions.json")
-        users_data = load_json("users.json")
 
-        # Find the vehicle and its owner
         vehicle = None
         vehicle_owner_username = None
         for user_vehicles in vehicles_data.values():
@@ -1440,46 +1429,37 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(404, "application/json", {"error": "Vehicle not found"})
             return
 
-        # Check if the current user is authorized to view this vehicle's history
         if not is_admin and target_username != vehicle_owner_username:
             self._send_response(403, "application/json", {"error": "Access denied. You can only view your own vehicle's history."})
             return
 
-        # Filter reservations and sessions for this vehicle
         history = []
-        for res_id, res_data in reservations_data.items():
+        for res_data in reservations_data.values():
             if res_data.get("license_plate") == license_plate:
                 history.append({"type": "reservation", "data": res_data})
 
-        for sess_id, sess_data in sessions_data.items():
+        for sess_data in sessions_data.values():
             if sess_data.get("license_plate") == license_plate:
                 history.append({"type": "session", "data": sess_data})
         
-        # Sort history by timestamp (assuming 'start_time' or similar for sessions/reservations)
-        history.sort(key=lambda x: x["data"].get("start_time", "")) # Use a suitable timestamp key
+        history.sort(key=lambda x: x["data"].get("start_time", ""))
 
         self._send_response(200, "application/json", history)
 
     @login_required
     def _handle_get_vehicle_reservations_by_license_plate(self, session_user):
-        # Extract license_plate from URL
         match = re.match(r"^/vehicles/([^/]+)/reservations$", self.path)
         if not match:
             self._send_response(400, "application/json", {"error": "Invalid URL format"})
             return
         license_plate = match.group(1)
 
-        # Authorization: Admins can view any vehicle's reservations, users can only view their own.
         is_admin = self._authorize_admin(session_user)
         target_username = session_user["username"]
 
-        # Load all data
         vehicles_data = load_json("vehicles.json")
         reservations_data = load_json("reservations.json")
-        sessions_data = load_json("sessions.json")
-        users_data = load_json("users.json")
 
-        # Find the vehicle and its owner
         vehicle = None
         vehicle_owner_username = None
         for user_vehicles in vehicles_data.values():
@@ -1508,24 +1488,30 @@ class RequestHandler(BaseHTTPRequestHandler):
     @login_required
     def _handle_get_vehicle_details(self, session_user):
         
-        vid = self.path.replace("/vehicles/", "").replace("/entry", "")
-        vehicles = load_json("vehicles.json")
-        
-        target_user = session_user["username"]
-        if self._authorize_admin(session_user) and self.path.count('/') > 2:
-            parts = self.path.split('/')
-            if parts[2] and parts[2] != vid:
-                target_user = parts[2]
-                vid = parts[3] if len(parts) > 3 else vid
-            elif parts[2] and parts[2] == vid:
-                pass
-            else:
-                self._send_response(400, "application/json", {"error": "Invalid vehicle details request"})
-                return
+        match_id_only = re.match(r"^/vehicles/([^/]+)$", self.path)
+        match_user_and_id = re.match(r"^/vehicles/([^/]+)/([^/]+)$", self.path)
 
-        user_vehicles = vehicles.get(target_user, [])
+        vid = None
+        target_username = session_user["username"]
+
+        if match_id_only:
+            vid = match_id_only.group(1)
+        elif match_user_and_id:
+            if self._authorize_admin(session_user):
+                target_username = match_user_and_id.group(1)
+                vid = match_user_and_id.group(2)
+            else:
+                self._send_response(403, "application/json", {"error": "Access denied. Non-admin users cannot specify a username in the path."})
+                return
+        else:
+            self._send_response(400, "application/json", {"error": "Invalid URL format for vehicle details"})
+            return
+
+        vehicles_data = self._load_vehicles()
+        user_vehicles = vehicles_data.get(target_username, [])
+        
         if not user_vehicles:
-            self._send_response(404, "application/json", {"error": "User or vehicle not found"})
+            self._send_response(404, "application/json", {"error": f"No vehicles found for user {target_username}"})
             return
         
         vehicle = next((v for v in user_vehicles if v.get('id') == vid), None)

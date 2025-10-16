@@ -238,5 +238,21 @@
     "name": "Admin One",
     "role": "ADMIN",
     "created_at": "2025-10-05"
+  },
+  "79e1eec9-9b9f-4e3e-b7b6-1e520d1b684c": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
+  },
+  "6a8f242d-5e88-4f40-83bd-f9c2e060b4ad": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
   }
 }
