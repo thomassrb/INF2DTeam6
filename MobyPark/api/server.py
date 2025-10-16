@@ -861,7 +861,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         data = self._get_request_data()
         valid, error = self._validate_data(data,
-            optional_fields={'name': str, 'password': str}
+            optional_fields={'name': str, 'password': str, 'email': str, 'phone': str, 'birth_year': int}
         )
         if not valid:
             self._send_response(400, "application/json", error)
