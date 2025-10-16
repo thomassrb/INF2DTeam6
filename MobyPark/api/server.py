@@ -159,6 +159,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             },
             'PUT': {
                 '/profile': self._handle_update_profile,
+                re.compile(r"^/profile/([^/]+)$"): self._handle_update_profile_by_id,
                 '/parking-lots/': self._handle_update_parking_lot,
                 '/reservations/': self._handle_update_reservation,
                 '/vehicles/': self._handle_update_vehicle,
@@ -166,6 +167,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             },
             'GET': {
                 '/profile': self._handle_get_profile,
+                re.compile(r"^/profile/([^/]+)$"): self._handle_get_profile_by_id,
                 '/logout': self._handle_logout,
                 '/parking-lots': self._handle_get_parking_lots,
                 '/parking-lots/': self._handle_get_parking_lots,
@@ -835,6 +837,43 @@ class RequestHandler(BaseHTTPRequestHandler):
                 update_session_user(token, updated_user)
         self._send_response(200, "application/json", {"message": "User updated successfully"})
 
+    @login_required
+    def _handle_update_profile_by_id(self, session_user):
+        match = re.match(r"^/profile/([^/]+)$", self.path)
+        if not match:
+            self._send_response(400, "application/json", {"error": "Invalid URL format"})
+            return
+        
+        target_user_id = match.group(1)
+        
+        users = load_json('users.json')
+        target_user = next((u for u in users if u.get("id") == target_user_id), None)
+        
+        if not target_user:
+            self._send_response(404, "application/json", {"error": "User not found"})
+            return
+        
+        is_admin = self._authorize_admin(session_user)
+        
+        if not is_admin and session_user.get("id") != target_user_id:
+            self._send_response(403, "application/json", {"error": "Access denied. You can only view your own profile."})
+            return
+        
+        data = self._get_request_data()
+        valid, error = self._validate_data(data,
+            optional_fields={'name': str, 'password': str}
+        )
+        if not valid:
+            self._send_response(400, "application/json", error)
+            return
+
+        if data.get("password"):
+            data["password"] = self._hash_password(data["password"])
+        
+        target_user.update(data)
+        save_user_data(users)
+        self._send_response(200, "application/json", {"message": "User updated successfully"})
+
     
     @roles_required(['ADMIN'])
     def _handle_update_parking_lot(self, session_user):
@@ -1015,7 +1054,6 @@ class RequestHandler(BaseHTTPRequestHandler):
 
         if not rid:
             if self._authorize_admin(session_user):
-                # Admin can delete all reservations
                 for res_id, reservation in list(reservations.items()):
                     pid = reservation["parkinglot"]
                     if parking_lots[pid]["reserved"] > 0:
@@ -1026,7 +1064,6 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._send_response(200, "application/json", {"status": "All reservations deleted by admin"})
                 return
             else:
-                # Regular user can delete all their own reservations
                 user_reservations_to_delete = [res_id for res_id, res in reservations.items() if res.get("user") == session_user["username"]]
                 if not user_reservations_to_delete:
                     self._send_response(404, "application/json", {"error": "No reservations found for this user"})
@@ -1042,7 +1079,6 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._send_response(200, "application/json", {"status": "All user reservations deleted"})
                 return
 
-        # Existing logic for deleting a single reservation by ID
         if rid not in reservations:
             self._send_response(404, "application/json", {"error": "Reservation not found"})
             return
@@ -1123,6 +1159,41 @@ class RequestHandler(BaseHTTPRequestHandler):
         "created_at": session_user.get("created_at")
             }
 
+        self._send_response(200, "application/json", profile_data)
+
+    @login_required
+    def _handle_get_profile_by_id(self, session_user):
+        match = re.match(r"^/profile/([^/]+)$", self.path)
+        if not match:
+            self._send_response(400, "application/json", {"error": "Invalid URL format"})
+            return
+        
+        target_user_id = match.group(1)
+        
+        users = load_json('users.json')
+        target_user = next((u for u in users if u.get("id") == target_user_id), None)
+        
+        if not target_user:
+            self._send_response(404, "application/json", {"error": "User not found"})
+            return
+        
+        is_admin = self._authorize_admin(session_user)
+        
+        if not is_admin and session_user.get("id") != target_user_id:
+            self._send_response(403, "application/json", {"error": "Access denied. You can only view your own profile."})
+            return
+        
+        profile_data = {
+            "id": target_user.get("id"),
+            "username": target_user.get("username"),
+            "role": target_user.get("role"),
+            "name": target_user.get("name"),
+            "email": target_user.get("email"),
+            "phone": target_user.get("phone"),
+            "birth_year": target_user.get("birth_year"),
+            "created_at": target_user.get("created_at")
+        }
+        
         self._send_response(200, "application/json", profile_data)
 
     def _handle_logout(self):
@@ -1336,20 +1407,24 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     @login_required
     def _handle_get_vehicle_history(self, session_user):
+        # Extract license_plate from URL
         match = re.match(r"^/vehicles/([^/]+)/history$", self.path)
         if not match:
             self._send_response(400, "application/json", {"error": "Invalid URL format"})
             return
         license_plate = match.group(1)
 
+        # Authorization: Admins can view any vehicle's history, users can only view their own.
         is_admin = self._authorize_admin(session_user)
         target_username = session_user["username"]
 
+        # Load all data
         vehicles_data = load_json("vehicles.json")
         reservations_data = load_json("reservations.json")
         sessions_data = load_json("sessions.json")
         users_data = load_json("users.json")
 
+        # Find the vehicle and its owner
         vehicle = None
         vehicle_owner_username = None
         for user_vehicles in vehicles_data.values():
@@ -1365,10 +1440,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(404, "application/json", {"error": "Vehicle not found"})
             return
 
+        # Check if the current user is authorized to view this vehicle's history
         if not is_admin and target_username != vehicle_owner_username:
             self._send_response(403, "application/json", {"error": "Access denied. You can only view your own vehicle's history."})
             return
 
+        # Filter reservations and sessions for this vehicle
         history = []
         for res_id, res_data in reservations_data.items():
             if res_data.get("license_plate") == license_plate:
@@ -1378,26 +1455,31 @@ class RequestHandler(BaseHTTPRequestHandler):
             if sess_data.get("license_plate") == license_plate:
                 history.append({"type": "session", "data": sess_data})
         
-        history.sort(key=lambda x: x["data"].get("start_time", ""))
+        # Sort history by timestamp (assuming 'start_time' or similar for sessions/reservations)
+        history.sort(key=lambda x: x["data"].get("start_time", "")) # Use a suitable timestamp key
 
         self._send_response(200, "application/json", history)
 
     @login_required
     def _handle_get_vehicle_reservations_by_license_plate(self, session_user):
+        # Extract license_plate from URL
         match = re.match(r"^/vehicles/([^/]+)/reservations$", self.path)
         if not match:
             self._send_response(400, "application/json", {"error": "Invalid URL format"})
             return
         license_plate = match.group(1)
 
+        # Authorization: Admins can view any vehicle's reservations, users can only view their own.
         is_admin = self._authorize_admin(session_user)
         target_username = session_user["username"]
 
+        # Load all data
         vehicles_data = load_json("vehicles.json")
         reservations_data = load_json("reservations.json")
         sessions_data = load_json("sessions.json")
         users_data = load_json("users.json")
 
+        # Find the vehicle and its owner
         vehicle = None
         vehicle_owner_username = None
         for user_vehicles in vehicles_data.values():
@@ -1413,10 +1495,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(404, "application/json", {"error": "Vehicle not found"})
             return
 
+        # Check if the current user is authorized to view this vehicle's reservations
         if not is_admin and target_username != vehicle_owner_username:
             self._send_response(403, "application/json", {"error": "Access denied. You can only view your own vehicle's reservations."})
             return
 
+        # Filter reservations for this vehicle
         vehicle_reservations = [res for res in reservations_data.values() if res.get('license_plate') == license_plate and res.get('user') == vehicle_owner_username]
         
         self._send_response(200, "application/json", vehicle_reservations)
