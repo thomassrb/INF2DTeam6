@@ -254,5 +254,13 @@
     "name": "Admin One",
     "role": "ADMIN",
     "created_at": "2025-10-05"
+  },
+  "fb19a4e9-b7ff-4e25-a843-a3feebdc9a97": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
   }
 }
