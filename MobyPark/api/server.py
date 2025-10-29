@@ -157,6 +157,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/parking-lots/sessions/start': self._handle_start_session,
                 '/parking-lots/sessions/stop': self._handle_stop_session,
                 '/payments/refund': self._handle_refund_payment,
+                re.compile(r"^/parking-lots/[^/]+/sessions/start$"): self._handle_start_session,
+                re.compile(r"^/parking-lots/[^/]+/sessions/stop$"): self._handle_stop_session,
             },
             'PUT': {
                 '/profile': self._handle_update_profile,
@@ -164,6 +166,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/reservations/': self._handle_update_reservation,
                 '/vehicles/': self._handle_update_vehicle,
                 '/payments/': self._handle_update_payment,
+                re.compile(r"^/profile/[^/]+$"): self._handle_update_profile,
             },
             'GET': {
                 '/profile': self._handle_get_profile,
@@ -187,6 +190,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/favicon.ico': self._handle_favicon,
                 re.compile(r"^/parking-lots/([^/]+)/sessions$"): self._handle_get_parking_lot_sessions,
                 re.compile(r"^/parking-lots/([^/]+)/sessions/([^/]+)$"): self._handle_get_parking_lot_sessions,
+                re.compile(r"^/profile/[^/]+$"): self._handle_get_profile,
+                re.compile(r"^/vehicles/[^/]+/reservations$"): self._handle_get_vehicle_reservations,
                 
             },
             'DELETE': {
@@ -291,10 +296,11 @@ class RequestHandler(BaseHTTPRequestHandler):
         allowed_methods = []
         for m, routes in self.routes.items():
             for path_prefix in routes:
-                if (self.path.startswith(path_prefix) and path_prefix.endswith('/')) or \
-                   (self.path == path_prefix and not path_prefix.endswith('/')):
-                    allowed_methods.append(m)
-                else:
+                if isinstance(path_prefix, str):
+                    if (self.path.startswith(path_prefix) and path_prefix.endswith('/')) or \
+                    (self.path == path_prefix and not path_prefix.endswith('/')):
+                        allowed_methods.append(m)
+                else:  # regex
                     if path_prefix.match(self.path):
                         allowed_methods.append(m)
 
@@ -493,7 +499,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         data = self._get_request_data()
         
         valid, error = self._validate_data(data, 
-            required_fields={'username': str, 'password': str, 'name': str, 'phone': str, 'email': str, 'birth_year': str},
+            required_fields={'username': str, 'password': str, 'name': str, 'phone': str, 'email': str, 'birth_year': (int, str)},
             optional_fields={'role': str},
             allow_unknown=True
         )
@@ -582,6 +588,11 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _handle_create_parking_lot(self, session_user):
         data = self._get_request_data()
         
+        # Map test fields to internal ones
+        if 'tariff' in data and 'hourly_rate' not in data:
+            data['hourly_rate'] = data['tariff']
+        if 'daytariff' in data and 'day_rate' not in data:
+            data['day_rate'] = data['daytariff']
         valid, error = self._validate_data(data, 
             required_fields={'name': str, 'location': str, 'capacity': int, 'hourly_rate': (int, float), 'day_rate': (int, float)}\
         )
@@ -700,6 +711,9 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _handle_create_vehicle(self, session_user):
         data = self._get_request_data()
         
+        # accept 'license_plate' as alias for 'licenseplate'
+        if 'license_plate' in data and 'licenseplate' not in data:
+            data['licenseplate'] = data['license_plate']
         valid, error = self._validate_data(data, 
             required_fields={'licenseplate': str},
             optional_fields={'name': str}\
@@ -1295,7 +1309,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(404, "application/json", {"error": "User or vehicle not found"})
             return
             
-        vehicle = next((v for v in user_vehicles if v.get('id') == vid), None)
+        vehicle = next((v for v in user_vehicles if v.get('id') == vid or v.get('license_plate') == vid), None)
         if not vehicle:
             self._send_response(404, "application/json", {"error": "Vehicle not found"})
             return
