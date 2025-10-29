@@ -1,28 +1,31 @@
 import json
 import csv
 import os
+from tinydb import TinyDB, Query
+import threading
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, '..', '..', 'data')
+os.makedirs(DATA_DIR, exist_ok=True)
+
+_db_cache = {}
+_db_lock = threading.Lock()
+
+def db_init(filename):
+    with _db_lock:
+        if filename not in _db_cache:
+            full_path = os.path.join(DATA_DIR, filename)
+            _db_cache[filename] = TinyDB(full_path)
+        return _db_cache[filename]
 
 def load_json(filename):
-    full_path = os.path.join(DATA_DIR, filename)
-    try:
-        with open(full_path, 'r') as file:
-            return json.load(file)
-    except FileNotFoundError:
-        return {}
-    except json.JSONDecodeError:
-        print(f"Error decoding JSON from {filename}. Returning empty dictionary.")
-        return {}
+    db = db_init(filename)
+    return db.all()
 
 def write_json(filename, data):
-    full_path = os.path.join(DATA_DIR, filename)
-    try:
-        with open(full_path, 'w') as file:
-            json.dump(data, file, indent=4)
-    except IOError as e:
-        print(f"Error writing JSON to {filename}: {e}")
+    db = db_init(filename)
+    db.truncate()
+    db.insert_multiple(data)
 
 def load_csv(filename):
     full_path = os.path.join(DATA_DIR, filename)
@@ -68,7 +71,9 @@ def write_text(filename, data):
 
 def save_data(filename, data):
     if filename.endswith('.json'):
-        write_json(filename, data)
+        db = db_init(filename)
+        db.truncate()
+        db.insert_multiple(data)
     elif filename.endswith('.csv'):
         write_csv(filename, data)
     elif filename.endswith('.txt'):
@@ -78,7 +83,8 @@ def save_data(filename, data):
 
 def load_data(filename):
     if filename.endswith('.json'):
-        return load_json(filename)
+        db = db_init(filename)
+        return db.all()
     elif filename.endswith('.csv'):
         return load_csv(filename)
     elif filename.endswith('.txt'):
@@ -87,31 +93,63 @@ def load_data(filename):
         return None
 
 def load_user_data():
-    return load_data('users.json')
+    db = db_init('users.json')
+    return [dict(item) for item in db.all()]
 
 def save_user_data(data):
-    save_data('users.json', data)
+    db = db_init('users.json')
+    db.truncate()
+    if data:
+        db.insert_multiple(data)
 
 def load_parking_lot_data():
-    return load_data('parking-lots.json')
+    db = db_init('parking-lots.json')
+    return {str(item['id']): item for item in db.all()} if db.all() else {}
 
 def save_parking_lot_data(data):
-    save_data('parking-lots.json', data)
+    db = db_init('parking-lots.json')
+    db.truncate()
+    db.insert_multiple(list(data.values()))
 
 def load_reservation_data():
-    return load_data('reservations.json')
+    db = db_init('reservations.json')
+    return {str(item['id']): item for item in db.all()} if db.all() else {}
 
 def save_reservation_data(data):
-    save_data('reservations.json', data)
+    db = db_init('reservations.json')
+    db.truncate()
+    db.insert_multiple(list(data.values()))
 
 def load_payment_data():
-    return load_data('payments.json')
+    db = db_init('payments.json')
+    return [dict(item) for item in db.all()]
 
 def save_payment_data(data):
-    save_data('payments.json', data)
+    db = db_init('payments.json')
+    db.truncate()
+    if data:
+        db.insert_multiple(data)
 
 def load_discounts_data():
     return load_data('discounts.csv')
 
 def save_discounts_data(data):
     save_data('discounts.csv', data)
+
+def load_vehicles_data():
+    db = db_init('vehicles.json')
+    return db.all()
+
+def save_vehicles_data(data):
+    db = db_init('vehicles.json')
+    db.truncate()
+    db.insert_multiple(data)
+
+def load_parking_lot_sessions(lid: str):
+    db = db_init(f'pdata/p{lid}-sessions.json')
+    return db.all()
+
+def save_parking_lot_sessions(lid: str, data):
+    db = db_init(f'pdata/p{lid}-sessions.json')
+    db.truncate()
+    db.insert_multiple(data)
