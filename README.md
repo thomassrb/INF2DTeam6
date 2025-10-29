@@ -3,7 +3,7 @@ Software construction
 
 ## Project Architecture Update
 
-This project has been refactored to improve scalability and performance. The previous blocking `http.server` implementation has been replaced with a modern asynchronous stack:
+This project has been refactored to improve scalability and performance. The previous blocking `http.server` implementation has been replaced with a modern asynchronous stack: MOET HET NOG WEL TESTEN!
 
 -   **Web Framework**: FastAPI
 -   **ASGI Server**: Uvicorn
