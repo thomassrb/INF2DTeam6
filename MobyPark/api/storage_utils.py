@@ -8,15 +8,38 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, '..', '..', 'data')
 os.makedirs(DATA_DIR, exist_ok=True)
 
-_db_cache = {}
-_db_lock = threading.Lock()
+# _db_cache = {}
+# _db_lock = threading.Lock()
 
 def db_init(filename):
-    with _db_lock:
-        if filename not in _db_cache:
-            full_path = os.path.join(DATA_DIR, filename)
-            _db_cache[filename] = TinyDB(full_path)
-        return _db_cache[filename]
+        full_path = os.path.join(DATA_DIR, filename)
+        print(f"DEBUG: db_init called for {filename}. Full path: {full_path}")
+
+        file_content = None
+        if os.path.exists(full_path) and os.path.getsize(full_path) > 0:
+            with open(full_path, 'r', encoding='utf-8') as f:
+                try:
+                    file_content = json.load(f)
+                    print(f"DEBUG: Initial content of {filename}: type={type(file_content)}, content={file_content}")
+                except json.JSONDecodeError:
+                    print(f"DEBUG: Malformed JSON in {filename}. Treating as empty.")
+                    file_content = None
+        else:
+            print(f"DEBUG: {filename} does not exist or is empty.")
+        
+        if file_content is None or (isinstance(file_content, dict) and not file_content):
+            print(f"DEBUG: Initializing {filename} as empty dict.")
+            with open(full_path, 'w', encoding='utf-8') as f:
+                f.write('{}')
+        elif isinstance(file_content, list):
+            print(f"DEBUG: Converting {filename} from list to dict format.")
+            db_content = {'_default': file_content}
+            with open(full_path, 'w', encoding='utf-8') as f:
+                json.dump(db_content, f, ensure_ascii=False, indent=2)
+        
+        db_instance = TinyDB(full_path)
+        print(f"DEBUG: TinyDB instance created for {filename}. Instance type: {type(db_instance)}")
+        return db_instance
 
 def load_json(filename):
     db = db_init(filename)
@@ -94,7 +117,10 @@ def load_data(filename):
 
 def load_user_data():
     db = db_init('users.json')
-    return [dict(item) for item in db.all()]
+    default_table = db.table('_default')
+    all_items = default_table.all()
+    print(f"DEBUG: In load_user_data, default_table.all() returned: {all_items}")
+    return all_items
 
 def save_user_data(data):
     db = db_init('users.json')
