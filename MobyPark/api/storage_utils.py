@@ -115,3 +115,9 @@ def load_discounts_data():
 
 def save_discounts_data(data):
     save_data('discounts.csv', data)
+
+def load_vehicles_data():
+    return load_data('vehicles.json')
+
+def save_vehicles_data(data):
+    save_data('vehicles.json')
