@@ -16,12 +16,11 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 
 from .storage_utils import load_user_data, save_user_data, db_init, load_json, load_parking_lot_data, save_parking_lot_data, load_reservation_data, save_reservation_data, load_vehicles_data, save_vehicles_data, load_parking_lot_sessions, save_parking_lot_sessions, load_payment_data, save_payment_data
-from session_manager import add_session, get_session, remove_session, update_session_user
-from models import UserRegister, UserLogin, UserProfileUpdate, SessionData, User, ParkingLotCreate, ParkingLotUpdate, VehicleCreate, VehicleUpdate, ReservationCreate, ReservationUpdate, PaymentCreate, PaymentRefund, PaymentUpdate, SessionStart, SessionStop, Session, ParkingLotSession
+from .session_manager import add_session, get_session, remove_session, update_session_user
+from .models import UserRegister, UserLogin, UserProfileUpdate, SessionData, User, ParkingLotCreate, ParkingLotUpdate, VehicleCreate, VehicleUpdate, ReservationCreate, ReservationUpdate, PaymentCreate, PaymentRefund, PaymentUpdate, SessionStart, SessionStop, Session, ParkingLotSession
 from tinydb import Query
 import uuid
-import session_calculator as sc
-
+from . import session_calculator as sc
 
 app = FastAPI()
 

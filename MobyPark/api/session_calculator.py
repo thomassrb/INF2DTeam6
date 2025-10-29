@@ -1,48 +1,47 @@
+import os
 from datetime import datetime
-from storage_utils import load_payment_data
+from .storage_utils import load_payment_data
 from hashlib import md5
 import math
 import uuid
 
-def calculate_price(parkinglot, sid, data):
-    price = 0
-    start = datetime.strptime(data["started"], "%d-%m-%Y %H:%M:%S")
 
-    if data.get("stopped"):
-        end = datetime.strptime(data["stopped"], "%d-%m-%Y %H:%M:%S")
-    else:
-        end = datetime.now()
+_TXN_SECRET = os.environ.get('MOBYPARK_TXN_SECRET', 'super-secret-transaction-key')
 
-    diff = end - start
-    hours = math.ceil(diff.total_seconds() / 3600)
+def calculate_price(parkinglot: dict, session_id: str, session: dict) -> tuple[float, int, int]:
+    start_time_str = session["started"]
+    stop_time_str = session["stopped"]
 
-    if diff.total_seconds() < 180:
-        price = 0
-    elif end.date() > start.date():
-        price = float(parkinglot.get("daytariff", 999)) * (diff.days + 1)
-    else:
-        price = float(parkinglot.get("tariff")) * hours
+    if not stop_time_str:
+        return 0.0, 0, 0
 
-        if price > float(parkinglot.get("daytariff", 999)):
-            price = float(parkinglot.get("daytariff", 999))
+    FMT = "%d-%m-%Y %H:%M:%S"
 
-    return (price, hours, diff.days + 1 if end.date() > start.date() else 0)
+    start_time = datetime.strptime(start_time_str, FMT)
+    stop_time = datetime.strptime(stop_time_str, FMT)
 
+    duration = stop_time - start_time
+    total_hours = duration.total_seconds() / 3600
+    total_days = duration.days
 
+    hourly_rate = parkinglot.get("hourly_rate", parkinglot.get("tariff", 0.0))
+    day_rate = parkinglot.get("day_rate", parkinglot.get("daytariff", 0.0))
 
-def generate_payment_hash(sid, data):
-    return md5(str(sid + data["licenseplate"]).encode("utf-8")).hexdigest()
+    amount = (total_days * day_rate) + ((total_hours % 24) * hourly_rate)
 
+    return round(amount, 2), int(total_hours), total_days
 
-def generate_transaction_validation_hash():
-    return str(uuid.uuid4())
+def generate_payment_hash(session_id: str, session: dict) -> str:
+    hash_str = f"{session_id}-{session['licenseplate']}-{session['started']}-{_TXN_SECRET}"
+    return hashlib.sha256(hash_str.encode()).hexdigest()
 
-def check_payment_amount(hash):
+def generate_transaction_validation_hash() -> str:
+    return hashlib.sha256(os.urandom(64)).hexdigest()
+
+def check_payment_amount(transaction_hash: str) -> float:
     payments = load_payment_data()
-    total = 0
-
+    total_paid = 0.0
     for payment in payments:
-        if payment["transaction"] == hash:
-            total += payment["amount"]
-
-    return total
+        if payment.get("hash") == transaction_hash and payment.get("completed"):
+            total_paid += float(payment.get("amount", 0.0))
+    return total_paid
