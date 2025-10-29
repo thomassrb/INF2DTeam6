@@ -1,1 +1,12 @@
-[]
+[
+    {
+        "transaction": "fac797f7-3bb6-4550-afaa-d65b55028cec",
+        "amount": -50,
+        "coupled_to": null,
+        "processed_by": "admin1",
+        "created_at": "16-10-2025 12:02:28",
+        "completed": false,
+        "completed_at": null,
+        "hash": "71c0b683-668e-41ca-b9a7-e20f2a2d2319"
+    }
+]

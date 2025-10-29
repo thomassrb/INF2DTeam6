@@ -52,5 +52,19 @@
         "hourly_rate": 3,
         "day_rate": 18,
         "reserved": 0
+    },
+    "7": {
+        "id": "7",
+        "name": "Sil Parking",
+        "location": "HR",
+        "capacity": 250,
+        "hourly_rate": 5,
+        "day_rate": 10,
+        "address": "HR Wijnhaven",
+        "coordinates": [
+            1.0112558,
+            2.211102
+        ],
+        "reserved": 0
     }
 }
