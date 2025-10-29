@@ -3,7 +3,7 @@ import csv
 import os
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(SCRIPT_DIR, '..', '..', 'data')
+DATA_DIR = os.path.join(SCRIPT_DIR, 'data')
 
 def load_json(filename):
     full_path = os.path.join(DATA_DIR, filename)
