@@ -76,7 +76,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     _FORMAT_REGEX = {
         'username': re.compile(r'^[A-Za-z0-9_.-]{3,32}$'),
         'role': re.compile(r'^(USER|ADMIN)$'),
-        'licenseplate': re.compile(r'^[A-Z0-9-]{2,12}$'),
+        'licenseplate': re.compile(r'^[A-Z0-9_-]{2,20}$'),
         'transaction': re.compile(r'^[A-Za-z0-9:_-]{1,128}$'),
     }
 
@@ -144,7 +144,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         return session_user.get("role") == "ADMIN"
 
     def __init__(self, *args, **kwargs):
-        self.timeout = 600  # 10 minutes
+        self.timeout = 600  # 10 min
         self.last_activity = time.time()
         self.routes = {
             'POST': {
@@ -273,27 +273,31 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _dispatch_request(self, method):
-        # Prioritize exact matches
         if self.path in self.routes[method]:
             self.routes[method][self.path]()
             return
-        
-        # Then check for prefix matches (e.g., /parking-lots/123)
+        for k, handler in self.routes[method].items():
+           if isinstance(k, re.Pattern) and k.match(self.path):
+               handler()
+               return
         for path_prefix, handler in self.routes[method].items():
-            if len(path_prefix) > 1 and self.path.startswith(path_prefix) and path_prefix.endswith('/'):
+            if isinstance(path_prefix, str) and path_prefix != '/' and path_prefix.endswith('/') and self.path.startswith(path_prefix):
                 handler()
                 return
-            elif self.path == path_prefix and not path_prefix.endswith('/'):
+            elif isinstance(path_prefix, str) and not path_prefix.endswith('/') and self.path == path_prefix:
                 handler()
                 return
 
-        # If no matching route found, check if path exists for other methods
         allowed_methods = []
         for m, routes in self.routes.items():
             for path_prefix in routes:
                 if (self.path.startswith(path_prefix) and path_prefix.endswith('/')) or \
                    (self.path == path_prefix and not path_prefix.endswith('/')):
                     allowed_methods.append(m)
+                else:
+                    if path_prefix.match(self.path):
+                        allowed_methods.append(m)
+
 
         if allowed_methods:
             self.send_response(405)
@@ -463,20 +467,23 @@ class RequestHandler(BaseHTTPRequestHandler):
                 if not regex.match(candidate):
                     return False, {"error": "Invalid format", "field": fname}
 
-        if 'password' in data and isinstance(data['password'], str):
-            if len(data['password']) < 8:
-                return False, {"error": "Password must be at least 8 characters", "field": "password"}
+        # if 'password' in data and isinstance(data['password'], str):
+        #     if len(data['password']) < 8:
+        #         return False, {"error": "Password must be at least 8 characters", "field": "password"}
 
         for df in ('startdate', 'enddate'):
             if df in data and isinstance(data[df], str):
                 ok = True
                 try:
-                    datetime.strptime(data[df], "%Y-%m-%d")
+                    datetime.strptime(data[df], "%Y-%m-%dT%H:%M:%SZ")
                 except ValueError:
                     try:
-                        datetime.strptime(data[df], "%d-%m-%Y")
+                        datetime.strptime(data[df], "%Y-%m-%d")
                     except ValueError:
-                        ok = False
+                        try:
+                            datetime.strptime(data[df], "%d-%m-%Y")
+                        except ValueError:
+                            ok = False
                 if not ok:
                     return False, {"error": "Invalid date format", "field": df}
 
@@ -487,7 +494,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         valid, error = self._validate_data(data, 
             required_fields={'username': str, 'password': str, 'name': str, 'phone': str, 'email': str, 'birth_year': str},
-            optional_fields={'role': str}
+            optional_fields={'role': str},
+            allow_unknown=True
         )
         if not valid:
             self._send_response(400, "application/json", error)
@@ -569,7 +577,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._record_login_attempt(username, False)
             self._send_response(401, "application/json", {"error": "Invalid credentials"})
 
-    @login_required
+    
     @roles_required(['ADMIN'])
     def _handle_create_parking_lot(self, session_user):
         data = self._get_request_data()
@@ -655,9 +663,11 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         valid, error = self._validate_data(data, 
             required_fields={'licenseplate': str, 'startdate': str, 'enddate': str, 'parkinglot': str},
-            optional_fields={'user': str}\
+            optional_fields={'user': str},
+            allow_unknown=True
         )
         if not valid:
+            print(f"Validation error: {error}") # heb dit geadd voor debuggen kan evt weg, kan ook voor nu nog even blijven
             self._send_response(400, "application/json", error)
             return
         
@@ -668,13 +678,16 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(404, "application/json", {"error": "Parking lot not found", "field": "parkinglot"})
             return
         
-        if self._authorize_admin(session_user):
+        if not self._authorize_admin(session_user):
             if "user" not in data:
-                self._send_response(400, "application/json", {"error": "Required field missing", "field": "user"})
+                data["user"] = session_user["username"]
+            elif data["user"] != session_user["username"]:
+                self._send_response(403, "application/json", {"error": "Non-admin users cannot create reservations for other users"})
                 return
         else:
-            data["user"] = session_user["username"]
-        
+            if "user" not in data:
+                data["user"] = None
+
         rid = str(len(reservations) + 1)
         reservations[rid] = data
         data["id"] = rid
@@ -738,16 +751,17 @@ class RequestHandler(BaseHTTPRequestHandler):
             "transaction": data['transaction'],
             "amount": data['amount'],
             "initiator": session_user["username"],
-            "created_at": datetime.now().strftime("%d-%m-%Y %H:%I:%S"),
+            "created_at": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
             "completed": False,
+            "completed_at": None,
             "hash": sc.generate_transaction_validation_hash()
         }
         payments.append(payment)
         save_payment_data(payments)
-        self._audit(session_user, action="refund_payment", target=payment["transaction"], extra={"amount": payment["amount"], "coupled_to": payment.get("coupled_to")})
+        self._audit(session_user, action="create_payment", target=payment["transaction"],extra={"amount": payment["amount"], "coupled_to": payment.get("coupled_to")})
         self._send_response(201, "application/json", {"status": "Success", "payment": payment})
 
-    @login_required
+  
     @roles_required(['ADMIN'])
     def _handle_refund_payment(self, session_user):
         data = self._get_request_data()
@@ -761,24 +775,15 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
         
         payments = load_payment_data()
-        payment = {
-            "transaction": data.get("transaction") if data.get("transaction") else sc.generate_payment_hash(session_user["username"], str(datetime.now())),
-            "amount": -abs(data['amount']),
-            "coupled_to": data.get("coupled_to"),
-            "processed_by": session_user["username"],
-            "created_at": datetime.now().strftime("%d-%m-%Y %H:%I:%S"),
-            "completed": False,
-            "hash": sc.generate_transaction_validation_hash()
-        }
-        payments = load_payment_data()
         refund_txn = data.get("transaction") if data.get("transaction") else str(uuid.uuid4())
         payment = {
             "transaction": refund_txn,
             "amount": -abs(data['amount']),
             "coupled_to": data.get("coupled_to"),
             "processed_by": session_user["username"],
-            "created_at": datetime.now().strftime("%d-%m-%Y %H:%I:%S"),
+            "created_at": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
             "completed": False,
+            "completed_at": None,
             "hash": sc.generate_transaction_validation_hash()
         }
         payments.append(payment)
@@ -817,7 +822,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 update_session_user(token, updated_user)
         self._send_response(200, "application/json", {"message": "User updated successfully"})
 
-    @login_required
+    
     @roles_required(['ADMIN'])
     def _handle_update_parking_lot(self, session_user):
         lid = self.path.split("/")[2]
@@ -837,6 +842,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
         
         parking_lots[lid] = data
+        pl = parking_lots[lid]
+        pl.update(data)
+        pl["id"] = lid
         save_parking_lot_data(parking_lots)
         self._audit(session_user, action="update_parking_lot", target=lid)
         self._send_response(200, "application/json", {"message": "Parking lot modified"})
@@ -861,7 +869,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         if self._authorize_admin(session_user):
             if "user" not in data:
-                self._send_response(400, "application/json", {"error": "Required field missing", "field": "user"})
+                self._send_response(400, "application/json", {"error": "Required field missing", "field": "user"}); return
             else:
                 data["user"] = session_user["username"]
         else:
@@ -928,29 +936,38 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         if payment["hash"] != data['validation']:
             self._send_response(401, "application/json", {"error": "Validation failed", "info": "The validation of the security hash could not be validated for this transaction."})
-            return  
-        
-        payment["completed"] = datetime.now().strftime("%d-%m-%Y %H:%I:%S")
+            return
+
+        payment["completed"] = True
+        payment["completed_at"] = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
         payment["t_data"] = data['t_data']
         save_payment_data(payments)
         self._send_response(200, "application/json", {"status": "Success", "payment": payment})
 
-    @login_required
+    
     @roles_required(['ADMIN'])
     def _handle_delete_parking_lot(self, session_user):
-        lid = self.path.split("/")[2]
+        lid = None
+        path_parts = self.path.split('/')
+        if len(path_parts) > 2 and path_parts[2]:
+            lid = path_parts[2]
+
         parking_lots = load_parking_lot_data()
-        
-        if lid not in parking_lots:
-            self._send_response(404, "application/json", {"error": "Parking lot not found"})
-            return
 
-        del parking_lots[lid]
-        save_parking_lot_data(parking_lots)
-        self._audit(session_user, action="delete_parking_lot", target=lid)
-        self._send_response(200, "application/json", {"message": "Parking lot deleted"})
+        if lid:
+            if lid not in parking_lots:
+                self._send_response(404, "application/json", {"error": "Parking lot not found"})
+                return
+            del parking_lots[lid]
+            save_parking_lot_data(parking_lots)
+            self._audit(session_user, action="delete_parking_lot", target=lid)
+            self._send_response(200, "application/json", {"message": f"Parking lot {lid} deleted"})
+        else:
+            save_parking_lot_data({})
+            self._audit(session_user, action="delete_all_parking_lots")
+            self._send_response(200, "application/json", {"message": "All parking lots deleted"})
 
-    @login_required
+    
     @roles_required(['ADMIN'])
     def _handle_delete_session(self, session_user):
         lid = self.path.split("/")[2]
@@ -1049,7 +1066,6 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     @login_required 
     def _handle_get_profile(self, session_user):
-        # Return the current logged-in user info
         if not session_user:
             self._send_response(401, "application/json", {"error": "Unauthorized"})
             return
@@ -1086,15 +1102,18 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     @login_required
     def _handle_get_parking_lot_sessions(self):
-        lid = self.path.split("/")[2]
         parking_lots = load_parking_lot_data()
+        lid = self.path.split("/")[-1]
+        if not lid.isdigit():
+            self._send_response(400,"application/json",{"error":"Invalid session id"}); return
         
         if lid not in parking_lots:
             self._send_response(404, "application/json", {"error": "Parking lot not found"})
             return
+        if lid not in sessions:
+            self._send_response(404,"application/json",{"error":"Session not found"}); return
         
-
-        
+        self._send_response(200,"application/json", sessions[lid])
         session_user = self._get_user_from_session()
         sessions = load_json(f'pdata/p{lid}-sessions.json')
         rsessions = []
@@ -1154,7 +1173,6 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     @login_required
     def _handle_get_payment_details(self):
-    # Requires @login_required in original design; if not present, we still read session for auth
         session_user = self._get_user_from_session()
         pid = self.path.replace("/payments/", "")
         payments = load_payment_data()
@@ -1203,7 +1221,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _save_vehicles(self, vehicles):
         save_data("vehicles.json", vehicles)
 
-    @login_required
+    
     @roles_required(['ADMIN'])
     def _handle_get_user_billing(self):
         
@@ -1365,14 +1383,10 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.last_activity = time.time()
 
     def session_expiry_maintenance(self):
-        # Run this function every 10 minutes
-        timer = threading.Timer(600, self.
-        session_expiry_maintenance)
+        timer = threading.Timer(600, self.session_expiry_maintenance)
         timer.daemon = True
         timer.start()
-        
-        current_time = time.time()
-        if current_time - self.last_activity > self.timeout:
+        if time.time() - self.last_activity > self.timeout:
             self._handle_logout()
 
 server = HTTPServer(('localhost', 8000), RequestHandler)

@@ -20,7 +20,7 @@ def write_json(filename, data):
     full_path = os.path.join(DATA_DIR, filename)
     try:
         with open(full_path, 'w') as file:
-            json.dump(data, file, default=str, indent=4)
+            json.dump(data, file, indent=4)
     except IOError as e:
         print(f"Error writing JSON to {filename}: {e}")
 
