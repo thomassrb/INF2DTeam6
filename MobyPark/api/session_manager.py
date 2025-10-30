@@ -29,8 +29,8 @@ class _BaseSessionStore:
 
 
 class _FileSessionStore(_BaseSessionStore):
-    """Maakt de data-directory aan indien deze nog niet bestaat en probeert bestaande sessies te laden
-    uit de sessions.json. Als het bestand ontbreekt of niet geldig is  wordt er een empty sessie-dict gebruikt."""
+    # Maakt de data-directory aan indien deze nog niet bestaat en probeert bestaande sessies te laden
+    # uit de sessions.json. Als het bestand ontbreekt of niet geldig is  wordt er een empty sessie-dict gebruikt.
     def __init__(self):
         os.makedirs(_DATA_DIR, exist_ok=True)
         try:
