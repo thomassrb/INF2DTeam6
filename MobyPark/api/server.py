@@ -12,6 +12,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from storage_utils import load_json, save_data, save_user_data, load_parking_lot_data, save_parking_lot_data, save_reservation_data, load_reservation_data, load_payment_data, save_payment_data
 from session_manager import add_session, get_session, update_session_user, remove_session
 import session_calculator as sc
+from Modules import PasswordManager, RateLimiter, HTTPSecurity, DataValidator, AuditLogger
 
 
 def login_required(f):
@@ -54,97 +55,14 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     _MAX_JSON_BYTES = 64 * 1024
 
-    _FORCE_HTTPS = False
-    # _FORCE_HTTPS = os.environ.get('MOBYPARK_FORCE_HTTPS', '1') != '0'
-    _TRUST_PROXY = os.environ.get('MOBYPARK_TRUST_PROXY', '1') != '0'
-    _CORS_ORIGINS = [o.strip() for o in os.environ.get('MOBYPARK_CORS_ORIGINS', '').split(',') if o.strip()]
-    _CORS_ALLOW_HEADERS = os.environ.get('MOBYPARK_CORS_ALLOW_HEADERS', 'Authorization, Content-Type')
-    _CORS_ALLOW_METHODS = os.environ.get('MOBYPARK_CORS_ALLOW_METHODS', 'GET, POST, PUT, DELETE, OPTIONS')
-
-    _RL_WINDOW_SEC = int(os.environ.get('MOBYPARK_RL_WINDOW_SEC', '60'))
-    _RL_IP_MAX = int(os.environ.get('MOBYPARK_RL_IP_MAX', '20'))
-    _RL_USER_MAX = int(os.environ.get('MOBYPARK_RL_USER_MAX', '10'))
-    _LOCKOUT_AFTER = int(os.environ.get('MOBYPARK_LOCKOUT_AFTER', '5'))
-    _LOCKOUT_SECONDS = int(os.environ.get('MOBYPARK_LOCKOUT_SECONDS', '300'))
-
-    _ip_attempts: dict = {}
-    _user_attempts: dict = {}
-    _ip_lockouts: dict = {}
-    _user_lockouts: dict = {}
-
-    _FORMAT_REGEX = {
-        'username': re.compile(r'^[A-Za-z0-9_.-]{3,32}$'),
-        'role': re.compile(r'^(USER|ADMIN)$'),
-        'licenseplate': re.compile(r'^[A-Z0-9_-]{2,20}$'),
-        'transaction': re.compile(r'^[A-Za-z0-9:_-]{1,128}$'),
-    }
-
-    _FIELD_MAXLEN = {
-        'username': 32,
-        'name': 100,
-        'role': 5,
-        'licenseplate': 16,
-        'transaction': 128,
-        'password': 256,
-    }
-
-    def _audit(self, session_user, action, *, target=None, extra=None, status="SUCCESS"):
-        try:
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            data_dir = os.path.join(script_dir, '..', '..', 'data')
-            os.makedirs(data_dir, exist_ok=True)
-            log_path = os.path.join(data_dir, 'audit.log')
-            entry = {
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "user": session_user.get("username") if session_user else None,
-                "role": session_user.get("role") if session_user else None,
-                "action": action,
-                "target": target,
-                "status": status,
-                "extra": extra,
-            }
-            with open(log_path, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-        except OSError:
-            pass
-
-    def _hash_password(self, password: str) -> str:
-        try:
-            bcrypt = importlib.import_module("bcrypt")
-        except ImportError as exc:
-            raise RuntimeError("bcrypt is not installed. Please install with: pip install bcrypt") from exc
-        salt = bcrypt.gensalt()
-        return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
-
-    def _looks_like_bcrypt(self, hashed: str) -> bool:
-        return isinstance(hashed, str) and hashed.startswith(('$2b$', '$2a$', '$2y$'))
-
-    def _looks_like_md5(self, hashed: str) -> bool:
-        if not isinstance(hashed, str) or len(hashed) != 32:
-            return False
-        try:
-            int(hashed, 16)
-            return True
-        except ValueError:
-            return False
-
-    def _verify_password(self, plain_password: str, stored_hash: str) -> bool:
-        if self._looks_like_bcrypt(stored_hash):
-            try:
-                bcrypt = importlib.import_module("bcrypt")
-            except ImportError as exc:
-                raise RuntimeError("bcrypt is not installed. Please install with: pip install bcrypt") from exc
-            return bcrypt.checkpw(plain_password.encode("utf-8"), stored_hash.encode("utf-8"))
-        if self._looks_like_md5(stored_hash):
-            return hashlib.md5(plain_password.encode()).hexdigest() == stored_hash
-        return False
-
-    def _authorize_admin(self, session_user):
-        return session_user.get("role") == "ADMIN"
-
     def __init__(self, *args, **kwargs):
         self.timeout = 600  # 10 min
         self.last_activity = time.time()
+        self.password_manager = PasswordManager()
+        self.rate_limiter = RateLimiter()
+        self.http_security = HTTPSecurity()
+        self.data_validator = DataValidator()
+        self.audit_logger = AuditLogger()
         self.routes = {
             'POST': {
                 '/register': self._handle_register,
@@ -208,7 +126,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _send_response(self, status_code, content_type, data):
         self.send_response(status_code)
         self.send_header("Content-type", content_type)
-        self._apply_security_headers()
+        self.http_security._apply_security_headers(self, self.headers)
         self.end_headers()
         if content_type == "application/json":
             if not isinstance(data, (dict, list)):
@@ -233,45 +151,46 @@ class RequestHandler(BaseHTTPRequestHandler):
             return {}
         return parsed
 
-    def _strip_unsafe_string(self, value: str, max_length: int) -> str:
-        cleaned = re.sub(r"[\x00-\x1F\x7F]", "", value)
-        cleaned = cleaned.strip()
-        if len(cleaned) > max_length:
-            cleaned = cleaned[:max_length]
-        return cleaned
-
     def do_POST(self):
         # if self._enforce_https():
         #     return
+        if self.http_security.enforce_https(self, self.headers, self.path):
+            return
         self._dispatch_request('POST')
 
     def do_PUT(self):
         # if self._enforce_https():
         #     return
+        if self.http_security.enforce_https(self, self.headers, self.path):
+            return
         self._dispatch_request('PUT')
 
     def do_DELETE(self):
         # if self._enforce_https():
         #     return
+        if self.http_security.enforce_https(self, self.headers, self.path):
+            return
         self._dispatch_request('DELETE')
 
     def do_GET(self):
         # if self._enforce_https():
         #     return
+        if self.http_security.enforce_https(self, self.headers, self.path):
+            return
         self._dispatch_request('GET')
 
     def do_OPTIONS(self):
-        if self._enforce_https():
+        if self.http_security.enforce_https(self, self.headers, self.path):
             return
         self.send_response(204)
-        self._apply_security_headers()
+        self.http_security._apply_security_headers(self, self.headers)
         origin = self.headers.get('Origin')
-        if self._is_origin_allowed(origin):
+        if self.http_security._is_origin_allowed(origin):
             self.send_header('Access-Control-Allow-Origin', origin)
             self.send_header('Vary', 'Origin, Access-Control-Request-Method, Access-Control-Request-Headers')
             self.send_header('Access-Control-Allow-Credentials', 'true')
-            self.send_header('Access-Control-Allow-Methods', self._CORS_ALLOW_METHODS)
-            req_headers = self.headers.get('Access-Control-Request-Headers') or self._CORS_ALLOW_HEADERS
+            self.send_header('Access-Control-Allow-Methods', self.http_security._CORS_ALLOW_METHODS)
+            req_headers = self.headers.get('Access-Control-Request-Headers') or self.http_security._CORS_ALLOW_HEADERS
             self.send_header('Access-Control-Allow-Headers', req_headers)
             self.send_header('Access-Control-Max-Age', '600')
         self.end_headers()
@@ -314,120 +233,6 @@ class RequestHandler(BaseHTTPRequestHandler):
 
         self._send_response(404, "application/json", {"error": "Not Found"})
 
-    def _now(self):
-        return int(time.time())
-
-    def _client_ip(self):
-        if self._TRUST_PROXY:
-            xff = self.headers.get('X-Forwarded-For')
-            if xff:
-                return xff.split(',')[0].strip()
-        return self.client_address[0] if self.client_address else 'unknown'
-
-    def _prune_old(self, entries):
-        cutoff = self._now() - self._RL_WINDOW_SEC
-        return [t for t in entries if t >= cutoff]
-
-    def _check_rate_limits_and_lockouts(self, username):
-        now = self._now()
-        ip = self._client_ip()
-
-        ip_until = self._ip_lockouts.get(ip)
-        if isinstance(ip_until, int) and ip_until > now:
-            return True, max(1, ip_until - now), {"error": "Too many attempts from IP. Try later."}
-        user_until = self._user_lockouts.get(username)
-        if isinstance(user_until, int) and user_until > now:
-            return True, max(1, user_until - now), {"error": "Account temporarily locked. Try later."}
-
-        ip_entries = self._prune_old(self._ip_attempts.get(ip, []))
-        self._ip_attempts[ip] = ip_entries
-        if len(ip_entries) >= self._RL_IP_MAX:
-            retry_after = max(1, (ip_entries[0] + self._RL_WINDOW_SEC) - now)
-            return True, retry_after, {"error": "Rate limit exceeded for IP."}
-
-        user_entries = self._prune_old(self._user_attempts.get(username, []))
-        self._user_attempts[username] = user_entries
-        if len(user_entries) >= self._RL_USER_MAX:
-            retry_after = max(1, (user_entries[0] + self._RL_WINDOW_SEC) - now)
-            return True, retry_after, {"error": "Rate limit exceeded for user."}
-
-        return False, 0, None
-
-    def _record_login_attempt(self, username, success):
-        now = self._now()
-        ip = self._client_ip()
-        if success:
-            self._user_attempts.pop(username, None)
-            self._ip_attempts[ip] = self._prune_old(self._ip_attempts.get(ip, []))
-            return
-        ip_entries = self._prune_old(self._ip_attempts.get(ip, []))
-        ip_entries.append(now)
-        self._ip_attempts[ip] = ip_entries
-
-        user_entries = self._prune_old(self._user_attempts.get(username, []))
-        user_entries.append(now)
-        self._user_attempts[username] = user_entries
-
-        if self._LOCKOUT_AFTER > 0 and len(user_entries) >= self._LOCKOUT_AFTER:
-            self._user_lockouts[username] = now + self._LOCKOUT_SECONDS
-        if self._LOCKOUT_AFTER > 0 and len(ip_entries) >= self._LOCKOUT_AFTER:
-            self._ip_lockouts[ip] = now + self._LOCKOUT_SECONDS
-
-    def _is_origin_allowed(self, origin):
-        if not origin:
-            return False
-        if not self._CORS_ORIGINS:
-            return False
-        return origin in self._CORS_ORIGINS
-
-    def _is_secure(self):
-        if self._TRUST_PROXY:
-            xfproto = self.headers.get('X-Forwarded-Proto')
-            if xfproto and 'https' in xfproto.split(',')[0].strip().lower():
-                return True
-            forwarded = self.headers.get('Forwarded')
-            if forwarded and 'proto=https' in forwarded.lower():
-                return True
-        return False
-
-    def _enforce_https(self):
-        print(f"DEBUG: _FORCE_HTTPS={self._FORCE_HTTPS}, _is_secure()={self._is_secure()}")
-        if self._FORCE_HTTPS and not self._is_secure():
-            host = self.headers.get('Host', 'localhost')
-            location = f"https://{host}{self.path}"
-            self.send_response(308)
-            self.send_header('Location', location)
-            self.send_header('Content-Length', '0')
-            self._apply_security_headers()
-            self.end_headers()
-            return True
-        return False
-
-    def _apply_security_headers(self):
-        self.send_header('X-Content-Type-Options', 'nosniff')
-        self.send_header('X-Frame-Options', 'DENY')
-        self.send_header('Referrer-Policy', 'no-referrer')
-        self.send_header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-        self.send_header('Cross-Origin-Opener-Policy', 'same-origin')
-        self.send_header('Cross-Origin-Resource-Policy', 'same-site')
-        csp = (
-            "default-src 'none'; "
-            "base-uri 'self'; "
-            "frame-ancestors 'none'; "
-            "img-src 'self' data:; "
-            "style-src 'self'; "
-            "script-src 'self'; "
-            "connect-src 'self'; "
-            "object-src 'none'"
-        )
-        self.send_header('Content-Security-Policy', csp)
-
-        origin = self.headers.get('Origin')
-        if self._is_origin_allowed(origin):
-            self.send_header('Access-Control-Allow-Origin', origin)
-            self.send_header('Vary', 'Origin')
-            self.send_header('Access-Control-Allow-Credentials', 'true')
-
     def _get_user_from_session(self):
         token = self._extract_bearer_token()
         if not token:
@@ -435,69 +240,10 @@ class RequestHandler(BaseHTTPRequestHandler):
         session_data = get_session(token)
         return session_data if session_data else None
 
-
-    def _validate_data(self, data, required_fields=None, optional_fields=None, allow_unknown=False):
-        if required_fields is None:
-            required_fields = {}
-        if optional_fields is None:
-            optional_fields = {}
-
-        for field, expected_type in required_fields.items():
-            if field not in data:
-                return False, {"error": "Required field missing", "field": field}
-            if not isinstance(data[field], expected_type):
-                return False, {"error": f"Invalid type for field {field}", "expected_type": str(expected_type), "received_type": str(type(data[field]))}
-
-        for field, expected_type in optional_fields.items():
-            if field in data and not isinstance(data[field], expected_type):
-                return False, {"error": f"Invalid type for field {field}", "expected_type": str(expected_type), "received_type": str(type(data[field]))}
-
-        if not allow_unknown:
-            allowed = set(required_fields.keys()) | set(optional_fields.keys())
-            unknown = [k for k in data.keys() if k not in allowed]
-            if unknown:
-                return False, {"error": "Unknown fields present", "fields": unknown}
-
-        for key, val in list(data.items()):
-            if isinstance(val, str):
-                maxlen = self._FIELD_MAXLEN.get(key, 256)
-                data[key] = self._strip_unsafe_string(val, maxlen)
-
-        for fname, regex in self._FORMAT_REGEX.items():
-            if fname in data and isinstance(data[fname], str):
-                if fname == 'licenseplate':
-                    candidate = data[fname].upper()
-                else:
-                    candidate = data[fname]
-                if not regex.match(candidate):
-                    return False, {"error": "Invalid format", "field": fname}
-
-        # if 'password' in data and isinstance(data['password'], str):
-        #     if len(data['password']) < 8:
-        #         return False, {"error": "Password must be at least 8 characters", "field": "password"}
-
-        for df in ('startdate', 'enddate'):
-            if df in data and isinstance(data[df], str):
-                ok = True
-                try:
-                    datetime.strptime(data[df], "%Y-%m-%dT%H:%M:%SZ")
-                except ValueError:
-                    try:
-                        datetime.strptime(data[df], "%Y-%m-%d")
-                    except ValueError:
-                        try:
-                            datetime.strptime(data[df], "%d-%m-%Y")
-                        except ValueError:
-                            ok = False
-                if not ok:
-                    return False, {"error": "Invalid date format", "field": df}
-
-        return True, None
-
     def _handle_register(self):
         data = self._get_request_data()
         
-        valid, error = self._validate_data(data, 
+        valid, error = self.data_validator.validate_data(data, 
             required_fields={'username': str, 'password': str, 'name': str, 'phone': str, 'email': str, 'birth_year': str},
             optional_fields={'role': str},
             allow_unknown=True
@@ -517,7 +263,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(400, "application/json", {"error": "Invalid password", "field": "password"})
             return
         
-        hashed_password = self._hash_password(password)
+        hashed_password = self.password_manager._hash_password(password)
         users = load_json('users.json')
         
         if any(user['username'] == username for user in users):
@@ -538,12 +284,13 @@ class RequestHandler(BaseHTTPRequestHandler):
             'created_at': datetime.now().strftime("%Y-%m-%d")
         })
         save_user_data(users)
+        self.audit_logger.audit(session_user, action="register_user", target=new_id, extra={"username": username})
         self._send_response(201, "application/json", {"message": "User created"})
 
     def _handle_login(self):
         data = self._get_request_data()
         
-        valid, error = self._validate_data(data,\
+        valid, error = self.data_validator.validate_data(data,\
             required_fields={'username': str, 'password': str}\
         )
         if not valid:
@@ -553,33 +300,38 @@ class RequestHandler(BaseHTTPRequestHandler):
         username = data['username']
         password = data['password']
 
-        limited, retry_after, err = self._check_rate_limits_and_lockouts(username)
+        # Dit hieronder allemaal iets beter uitgetpyt zodat het beter leesbaar is
+        ip_address = self.client_address[0] if self.client_address else 'unknown'
+        limited, retry_after, err = self.rate_limiter.check_rate_limits_and_lockouts(ip_address, username)
         if limited:
             self.send_response(429)
             self.send_header("Content-type", "application/json")
             self.send_header("Retry-After", str(retry_after))
-            self._apply_security_headers()
+            self.http_security._apply_security_headers(self, self.headers)
             self.end_headers()
             self.wfile.write(json.dumps(err).encode('utf-8'))
             return
         
         users = load_json('users.json')
-        user = next((u for u in users if u.get("username") == username), None)
-        if user and self._verify_password(password, user.get("password", "")):
-            if self._looks_like_md5(user.get("password", "")):
-                new_hash = self._hash_password(password)
-                user["password"] = new_hash
-                for i, u_data in enumerate(users):
-                    if u_data.get("username") == username:
-                        users[i] = user
-                        break
+        user_to_authenticate = None
+        user_index = -1
+        for i, u in enumerate(users):
+            if u.get("username") == username:
+                user_to_authenticate = u
+                user_index = i
+                break
+
+        if user_to_authenticate and self.password_manager._verify_password(password, user_to_authenticate.get("password", "")):
+            if self.password_manager._looks_like_md5(user_to_authenticate.get("password", "")):
+                new_hash = self.password_manager._hash_password(password)
+                users[user_index]["password"] = new_hash
                 save_user_data(users)
             token = str(uuid.uuid4())
-            add_session(token, user)
-            self._record_login_attempt(username, True)
+            add_session(token, user_to_authenticate)
+            self.rate_limiter.record_login_attempt(ip_address, username, True)
             self._send_response(200, "application/json", {"message": "User logged in", "session_token": token})
         else:
-            self._record_login_attempt(username, False)
+            self.rate_limiter.record_login_attempt(ip_address, username, False)
             self._send_response(401, "application/json", {"error": "Invalid credentials"})
 
     
@@ -587,7 +339,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _handle_create_parking_lot(self, session_user):
         data = self._get_request_data()
         
-        valid, error = self._validate_data(data, 
+        valid, error = self.data_validator.validate_data(data, 
             required_fields={'name': str, 'location': str, 'capacity': int, 'tariff': (int, float), 'daytariff': (int, float), 'address': str, 'coordinates': list}\
         )
         if not valid:
@@ -608,7 +360,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             "reserved": 0
         }
         save_parking_lot_data(parking_lots)
-        self._audit(session_user, action="create_parking_lot", target=new_lid, extra={"name": data['name'], "address": data['address']})
+        self.audit_logger.audit(session_user, action="create_parking_lot", target=new_lid, extra={"name": data['name'], "address": data['address']})
         self._send_response(201, "application/json", {"message": f"Parking lot saved under ID: {new_lid}"})
 
     @login_required
@@ -620,7 +372,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         lid = match.group(1)
         data = self._get_request_data()
         
-        valid, error = self._validate_data(data, 
+        valid, error = self.data_validator.validate_data(data, 
             required_fields={'licenseplate': str}\
         )
         if not valid:
@@ -653,7 +405,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         lid = match.group(1)
         data = self._get_request_data()
         
-        valid, error = self._validate_data(data, 
+        valid, error = self.data_validator.validate_data(data, 
             required_fields={'licenseplate': str}\
         )
         if not valid:
@@ -670,20 +422,19 @@ class RequestHandler(BaseHTTPRequestHandler):
         sid = next(iter(filtered))
         sessions[sid]["stopped"] = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
         save_data(f'pdata/p{lid}-sessions.json', sessions)
-        self._audit(session_user, action="stop_session", target=sid, extra={"licenseplate": data['licenseplate'], "parking_lot": lid})
+        self.audit_logger.audit(session_user, action="stop_session", target=sid, extra={"licenseplate": data['licenseplate'], "parking_lot": lid})
         self._send_response(200, "application/json", {"message": f"Session stopped for: {data['licenseplate']}"})
 
     @login_required
     def _handle_create_reservation(self, session_user):
         data = self._get_request_data()
         
-        valid, error = self._validate_data(data, 
+        valid, error = self.data_validator.validate_data(data, 
             required_fields={'licenseplate': str, 'startdate': str, 'enddate': str, 'parkinglot': str},
             optional_fields={'user': str},
             allow_unknown=True
         )
         if not valid:
-            print(f"Validation error: {error}") # heb dit geadd voor debuggen kan evt weg, kan ook voor nu nog even blijven
             self._send_response(400, "application/json", error)
             return
         
@@ -694,7 +445,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(404, "application/json", {"error": "Parking lot not found", "field": "parkinglot"})
             return
         
-        if not self._authorize_admin(session_user):
+        if not (session_user["role"] == "ADMIN"):
             if "user" not in data:
                 data["user"] = session_user["username"]
             elif data["user"] != session_user["username"]:
@@ -716,7 +467,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _handle_create_vehicle(self, session_user):
         data = self._get_request_data()
         
-        valid, error = self._validate_data(data, 
+        valid, error = self.data_validator.validate_data(data, 
             required_fields={'licenseplate': str},
             optional_fields={'name': str}\
         )
@@ -740,7 +491,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         new_vid = str(uuid.uuid4())
         vehicle = {
             "id": new_vid,
-            "user_id": current_user.get('id'),
+            "user_id": current_user['id'],
             "license_plate": data['licenseplate'],
             "name": data.get("name"),
             "created_at": datetime.now().strftime("%Y-%m-%d")
@@ -748,13 +499,14 @@ class RequestHandler(BaseHTTPRequestHandler):
         user_vehicles.append(vehicle)
         vehicles[current_user["username"]] = user_vehicles
         self._save_vehicles(vehicles)
+        self.audit_logger.audit(session_user, action="create_vehicle", target=new_vid, extra={"license_plate": data['licenseplate']})
         self._send_response(201, "application/json", {"status": "Success", "vehicle": vehicle})
 
     @login_required
     def _handle_create_payment(self, session_user):
         data = self._get_request_data()
         
-        valid, error = self._validate_data(data, 
+        valid, error = self.data_validator.validate_data(data, 
             required_fields={'transaction': str, 'amount': (int, float)}\
         )
         if not valid:
@@ -774,7 +526,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         }
         payments.append(payment)
         save_payment_data(payments)
-        self._audit(session_user, action="create_payment", target=payment["transaction"],extra={"amount": payment["amount"], "coupled_to": payment.get("coupled_to")})
+        self.audit_logger.audit(session_user, action="create_payment", target=payment["transaction"],extra={"amount": payment["amount"], "coupled_to": payment.get("coupled_to")})
         self._send_response(201, "application/json", {"status": "Success", "payment": payment})
 
   
@@ -782,7 +534,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _handle_refund_payment(self, session_user):
         data = self._get_request_data()
         
-        valid, error = self._validate_data(data,\
+        valid, error = self.data_validator.validate_data(data,\
             required_fields={'amount': (int, float)},\
             optional_fields={'transaction': str, 'coupled_to': str}\
         )
@@ -810,7 +562,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _handle_update_profile(self, session_user):
         data = self._get_request_data()
         
-        valid, error = self._validate_data(data,\
+        valid, error = self.data_validator.validate_data(data,\
             optional_fields={'name': str, 'password': str}\
         )
         if not valid:
@@ -819,12 +571,12 @@ class RequestHandler(BaseHTTPRequestHandler):
 
         data["username"] = session_user["username"]
         if data.get("password"):
-            data["password"] = self._hash_password(data["password"])
+            data["password"] = self.password_manager._hash_password(data["password"])
         
         users = load_json('users.json')
         updated_user = None
         for i, user in enumerate(users):
-            if user.get("username") == session_user["username"]:
+            if user["username"] == session_user["username"]:
                 if data.get("name"):
                     users[i]["name"] = data["name"]
                 if data.get("password"):
@@ -836,6 +588,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         if updated_user:
             if updated_user and token:
                 update_session_user(token, updated_user)
+        self.audit_logger.audit(session_user, action="update_profile")
         self._send_response(200, "application/json", {"message": "User updated successfully"})
 
     @login_required
@@ -854,14 +607,14 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(404, "application/json", {"error": "User not found"})
             return
         
-        is_admin = self._authorize_admin(session_user)
+        is_admin = session_user["role"] == "ADMIN"
         
         if not is_admin and session_user.get("id") != target_user_id:
             self._send_response(403, "application/json", {"error": "Access denied. You can only view your own profile."})
             return
         
         data = self._get_request_data()
-        valid, error = self._validate_data(data,
+        valid, error = self.data_validator.validate_data(data,
             optional_fields={'name': str, 'password': str, 'email': str, 'phone': str, 'birth_year': int}
         )
         if not valid:
@@ -869,10 +622,11 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
 
         if data.get("password"):
-            data["password"] = self._hash_password(data["password"])
+            data["password"] = self.password_manager._hash_password(data["password"])
         
         target_user.update(data)
         save_user_data(users)
+        self.audit_logger.audit(session_user, action="update_profile", target=target_user_id)
         self._send_response(200, "application/json", {"message": "User updated successfully"})
 
     
@@ -887,7 +641,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     
         data = self._get_request_data()
         
-        valid, error = self._validate_data(data, 
+        valid, error = self.data_validator.validate_data(data, 
             optional_fields={'name': str, 'location': str, 'capacity': int, 'hourly_rate': (int, float), 'day_rate': (int, float), 'reserved': int}\
         )
         if not valid:
@@ -899,7 +653,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         pl.update(data)
         pl["id"] = lid
         save_parking_lot_data(parking_lots)
-        self._audit(session_user, action="update_parking_lot", target=lid)
+        self.audit_logger.audit(session_user, action="update_parking_lot", target=lid)
         self._send_response(200, "application/json", {"message": "Parking lot modified"})
 
     @login_required
@@ -912,7 +666,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(404, "application/json", {"error": "Reservation not found"})
             return
         
-        valid, error = self._validate_data(data, 
+        valid, error = self.data_validator.validate_data(data, 
             required_fields={'licenseplate': str, 'startdate': str, 'enddate': str, 'parkinglot': str},
             optional_fields={'user': str}\
         )
@@ -920,12 +674,17 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(400, "application/json", error)
             return
         
-        if self._authorize_admin(session_user):
+        # Handle user assignment for the reservation
+        if session_user["role"] == "ADMIN":
+            # Admins can update reservations for other users.
+            # If 'user' is provided in data, use it; otherwise, default to admin's username (for their own)
             if "user" not in data:
-                self._send_response(400, "application/json", {"error": "Required field missing", "field": "user"}); return
-            else:
                 data["user"] = session_user["username"]
         else:
+            # Non-admin users can only update their own reservations
+            if "user" in data and data["user"] != session_user["username"]:
+                self._send_response(403, "application/json", {"error": "Non-admin users cannot update reservations for other users"})
+                return
             data["user"] = session_user["username"]
         
         reservations[rid] = data
@@ -936,7 +695,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _handle_update_vehicle(self, session_user):
         data = self._get_request_data()
         
-        valid, error = self._validate_data(data,\
+        valid, error = self.data_validator.validate_data(data,\
             required_fields={'name': str}\
         )
         if not valid:
@@ -966,6 +725,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         vehicles[session_user["username"]] = user_vehicles
         self._save_vehicles(vehicles)
+        self.audit_logger.audit(session_user, action="update_vehicle", target=vid, extra={"name": data["name"]})
         self._send_response(200, "application/json", {"status": "Success", "vehicle": next(v for v in user_vehicles if v.get('id') == vid)})
 
     @login_required
@@ -974,7 +734,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         payments = load_payment_data()
         data = self._get_request_data()
         
-        valid, error = self._validate_data(data, 
+        valid, error = self.data_validator.validate_data(data, 
             required_fields={'t_data': dict, 'validation': str}\
         )
         if not valid:
@@ -995,7 +755,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         payment["completed_at"] = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
         payment["t_data"] = data['t_data']
         save_payment_data(payments)
-        self._audit(session_user, action="update_payment", target=pid)
+        self.audit_logger.audit(session_user, action="update_payment", target=pid)
         self._send_response(200, "application/json", {"status": "Success", "payment": payment})
 
     
@@ -1014,11 +774,11 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
             del parking_lots[lid]
             save_parking_lot_data(parking_lots)
-            self._audit(session_user, action="delete_parking_lot", target=lid)
+            self.audit_logger.audit(session_user, action="delete_parking_lot", target=lid)
             self._send_response(200, "application/json", {"message": f"Parking lot {lid} deleted"})
         else:
             save_parking_lot_data({})
-            self._audit(session_user, action="delete_all_parking_lots")
+            self.audit_logger.audit(session_user, action="delete_all_parking_lots")
             self._send_response(200, "application/json", {"message": "All parking lots deleted"})
 
     
@@ -1044,7 +804,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         del sessions[sid]
         save_data(f'pdata/p{lid}-sessions.json', sessions)
-        self._audit(session_user, action="delete_session", target={"parking_lot": lid, "session": sid})
+        self.audit_logger.audit(session_user, action="delete_session", target={"parking_lot": lid, "session": sid})
         self._send_response(200, "application/json", {"message": "Session deleted"})
 
     @login_required
@@ -1054,7 +814,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         rid = self.path.replace("/reservations/", "")
 
         if not rid:
-            if self._authorize_admin(session_user):
+            if session_user["role"] == "ADMIN":
                 for res_id, reservation in list(reservations.items()):
                     pid = reservation["parkinglot"]
                     if parking_lots[pid]["reserved"] > 0:
@@ -1062,6 +822,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 reservations.clear()
                 save_reservation_data(reservations)
                 save_parking_lot_data(parking_lots)
+                self.audit_logger.audit(session_user, action="delete_all_reservations_by_admin")
                 self._send_response(200, "application/json", {"status": "All reservations deleted by admin"})
                 return
             else:
@@ -1077,6 +838,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     del reservations[res_id]
                 save_reservation_data(reservations)
                 save_parking_lot_data(parking_lots)
+                self.audit_logger.audit(session_user, action="delete_all_user_reservations")
                 self._send_response(200, "application/json", {"status": "All user reservations deleted"})
                 return
 
@@ -1084,7 +846,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(404, "application/json", {"error": "Reservation not found"})
             return
 
-        if not self._authorize_admin(session_user) and not session_user["username"] == reservations[rid].get("user"):
+        if not (session_user["role"] == "ADMIN") and not session_user["username"] == reservations[rid].get("user"):
             self._send_response(403, "application/json", {"error": "Access denied"})
             return
 
@@ -1106,11 +868,8 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _handle_delete_vehicle(self, session_user):
         vid = self.path.replace("/vehicles/", "")
         
-        if not isinstance(session_user, dict):
-            self._send_response(401, "application/json", {"error": "Authentication required"})
-            return
         vehicles = self._load_vehicles()
-        user_vehicles = vehicles.get(session_user.get("username"))
+        user_vehicles = vehicles.get(session_user["username"])
         
         if not user_vehicles:
             self._send_response(404, "application/json", {"error": "User vehicles not found"})
@@ -1123,9 +882,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(404, "application/json", {"error": "Vehicle not found"})
             return
         
-        vehicles[session_user.get("username")] = user_vehicles
+        vehicles[session_user["username"]] = user_vehicles
         save_data("vehicles.json", vehicles)
-        self._audit(session_user, action="delete_vehicle", target=vid)
+        self.audit_logger.audit(session_user, action="delete_vehicle", target=vid)
         self._send_response(200, "application/json", {"status": "Deleted"})
 
     # @login_required
@@ -1147,16 +906,13 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     @login_required 
     def _handle_get_profile(self, session_user):
-        if not session_user:
-            self._send_response(401, "application/json", {"error": "Unauthorized"})
-            return
         profile_data = {
-        "username": session_user.get("username"),
-        "role": session_user.get("role"),
-        "name": session_user.get("name"),
-        "email": session_user.get("email"),
-        "phone": session_user.get("phone"),
-        "birth_year": session_user.get("birthyear"),
+        "username": session_user["username"],
+        "role": session_user["role"],
+        "name": session_user["name"],
+        "email": session_user["email"],
+        "phone": session_user["phone"],
+        "birth_year": session_user.get("birth_year"),
         "created_at": session_user.get("created_at")
             }
 
@@ -1178,7 +934,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(404, "application/json", {"error": "User not found"})
             return
         
-        is_admin = self._authorize_admin(session_user)
+        is_admin = session_user["role"] == "ADMIN"
         
         if not is_admin and session_user.get("id") != target_user_id:
             self._send_response(403, "application/json", {"error": "Access denied. You can only view your own profile."})
@@ -1231,16 +987,16 @@ class RequestHandler(BaseHTTPRequestHandler):
         rsessions = []
         
         if self.path.endswith('/sessions'):
-            if self._authorize_admin(session_user):
+            if session_user["role"] == "ADMIN":
                 rsessions = sessions
             else:
                 for session in sessions.values():
-                    if session.get('user') == session_user.get('username'):
+                    if session.get('user') == session_user["username"]:
                         rsessions.append(session)
             self._send_response(200, "application/json", rsessions)
         else:
             sid = self.path.split("/")[-1]
-            if not self._authorize_admin(session_user) and not session_user["username"] == sessions[sid].get("user"):
+            if not (session_user["role"] == "ADMIN") and not session_user["username"] == sessions[sid].get("user"):
                 self._send_response(403, "application/json", {"error": "Access denied"})
                 return
             self._send_response(200, "application/json", sessions[sid])
@@ -1248,7 +1004,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     @login_required
     def _handle_get_reservations(self, session_user):
         reservations = load_reservation_data()
-        user_reservations = {rid: res for rid, res in reservations.items() if res.get("user") == session_user["username"] or session_user.get("role") == "ADMIN"}
+        user_reservations = {rid: res for rid, res in reservations.items() if res.get("user") == session_user["username"] or session_user["role"] == "ADMIN"}
         self._send_response(200, "application/json", user_reservations)
 
     @login_required
@@ -1262,7 +1018,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 
 
         
-        if not self._authorize_admin(session_user) and not session_user["username"] == reservations[rid].get("user"):
+        if not (session_user["role"] == "ADMIN") and not session_user["username"] == reservations[rid].get("user"):
             self._send_response(403, "application/json", {"error": "Access denied"})
             return
         
@@ -1272,7 +1028,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _handle_get_payments(self, session_user):
         payments = []
         for payment in load_payment_data():
-            if payment.get("initiator") == session_user["username"] or payment.get("processed_by") == session_user["username"] or session_user.get("role") == "ADMIN":
+            if payment.get("initiator") == session_user["username"] or payment.get("processed_by") == session_user["username"] or session_user["role"] == "ADMIN":
                 payments.append(payment)
         self._send_response(200, "application/json", payments)
 
@@ -1285,10 +1041,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         if not payment:
             self._send_response(404, "application/json", {"error": "Payment not found!"})
             return
-        if not session_user:
-            self._send_response(401, "application/json", {"error": "Unauthorized"})
-            return
-        if not self._authorize_admin(session_user) and payment.get("initiator") != session_user.get("username"):
+        if not (session_user["role"] == "ADMIN") and payment.get("initiator") != session_user["username"]:
             self._send_response(403, "application/json", {"error": "Access denied"})
             return
         self._send_response(200, "application/json", payment)
@@ -1327,8 +1080,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     
     @roles_required(['ADMIN'])
-    def _handle_get_user_billing(self):
-        
+    def _handle_get_user_billing(self, session_user):
         
         user = self.path.replace("/billing/", "")
         data = []
@@ -1338,7 +1090,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             except FileNotFoundError:
                 sessions = {}
             for sid, session in sessions.items():
-                if session["user"] == user:
+                if session["user"] == session_user["username"]:
                     amount, hours, days = sc.calculate_price(parkinglot, sid, session)
                     transaction = sc.generate_payment_hash(sid, session)
                     payed = sc.check_payment_amount(transaction)
@@ -1350,13 +1102,14 @@ class RequestHandler(BaseHTTPRequestHandler):
                         "payed": payed,
                         "balance": amount - payed
                     })
+        self.audit_logger.audit(session_user, action="get_user_billing", target=session_user["username"])
         self._send_response(200, "application/json", data)
 
     @login_required
     def _handle_get_vehicles(self, session_user):
         vehicles_data = self._load_vehicles()
 
-        if self._authorize_admin(session_user):
+        if session_user["role"] == "ADMIN":
             all_vehicles = []
             for user_v_list in vehicles_data.values():
                 all_vehicles.extend(user_v_list)
@@ -1374,7 +1127,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         vid = self.path.split("/")[2]
         
         target_user = session_user["username"]
-        if self._authorize_admin(session_user) and self.path.count('/') > 3:
+        if self.path.count('/') > 3:
             parts = self.path.split('/')
             if parts[2] and parts[2] != vid:
                 target_user = parts[2]
@@ -1408,7 +1161,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
         license_plate = match.group(1)
 
-        is_admin = self._authorize_admin(session_user)
+        is_admin = session_user["role"] == "ADMIN"
         target_username = session_user["username"]
 
         vehicles_data = load_json("vehicles.json")
@@ -1429,7 +1182,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_response(404, "application/json", {"error": "Vehicle not found"})
             return
 
-        if not is_admin and target_username != vehicle_owner_username:
+        if not (session_user["role"] == "ADMIN") and target_username != vehicle_owner_username:
             self._send_response(403, "application/json", {"error": "Access denied. You can only view your own vehicle's history."})
             return
 
@@ -1454,7 +1207,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
         license_plate = match.group(1)
 
-        is_admin = self._authorize_admin(session_user)
+        is_admin = session_user["role"] == "ADMIN"
         target_username = session_user["username"]
 
         vehicles_data = load_json("vehicles.json")
@@ -1476,7 +1229,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
 
         # Check if the current user is authorized to view this vehicle's reservations
-        if not is_admin and target_username != vehicle_owner_username:
+        if not (session_user["role"] == "ADMIN") and target_username != vehicle_owner_username:
             self._send_response(403, "application/json", {"error": "Access denied. You can only view your own vehicle's reservations."})
             return
 
@@ -1497,7 +1250,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         if match_id_only:
             vid = match_id_only.group(1)
         elif match_user_and_id:
-            if self._authorize_admin(session_user):
+            if session_user["role"] == "ADMIN":
                 target_username = match_user_and_id.group(1)
                 vid = match_user_and_id.group(2)
             else:
