@@ -1,42 +1,13 @@
 import json
-import re
-import os
 import hashlib
-import threading
-import importlib
 import uuid
-import time
+import re
 from datetime import datetime
 
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from storage_utils import load_json, save_data, save_user_data, load_parking_lot_data, save_parking_lot_data, save_reservation_data, load_reservation_data, load_payment_data, save_payment_data
-from session_manager import add_session, get_session, update_session_user, remove_session
+from storage_utils import load_json, save_data, save_user_data, load_parking_lot_data, save_parking_lot_data, save_reservation_data, load_reservation_data, load_payment_data, save_payment_data, reset_data_files
+from session_manager import add_session, get_session, clear_sessions
 import session_calculator as sc
-from Modules import PasswordManager, RateLimiter, HTTPSecurity, DataValidator, AuditLogger
-
-
-def login_required(f):
-    def wrapper(self, *args, **kwargs):
-        session_user = self._get_user_from_session()
-        if not session_user:
-            self._send_response(401, "application/json", {"error": "Authentication required"})
-            return
-        return f(self, session_user, *args, **kwargs)
-    return wrapper
-
-def roles_required(roles):
-    def decorator(f):
-        def wrapper(self, *args, **kwargs):
-            session_user = self._get_user_from_session()
-            if not session_user:
-                self._send_response(401, "application/json", {"error": "Authentication required"})
-                return
-            if session_user.get("role") not in roles:
-                self._send_response(403, "application/json", {"error": "Access denied"})
-                return
-            return f(self, session_user, *args, **kwargs)
-        return wrapper
-    return decorator
 
 
 class RequestHandler(BaseHTTPRequestHandler):
@@ -53,16 +24,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             return None
         return token
 
-    _MAX_JSON_BYTES = 64 * 1024
-
     def __init__(self, *args, **kwargs):
-        self.timeout = 600  # 10 min
-        self.last_activity = time.time()
-        self.password_manager = PasswordManager()
-        self.rate_limiter = RateLimiter()
-        self.http_security = HTTPSecurity()
-        self.data_validator = DataValidator()
-        self.audit_logger = AuditLogger()
         self.routes = {
             'POST': {
                 '/register': self._handle_register,
@@ -71,54 +33,44 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/reservations': self._handle_create_reservation,
                 '/vehicles': self._handle_create_vehicle,
                 '/payments': self._handle_create_payment,
-                re.compile(r"^/parking-lots/([^/]+)/sessions/start$"): self._handle_start_session,
-                re.compile(r"^/parking-lots/([^/]+)/sessions/stop$"): self._handle_stop_session,
+                '/parking-lots/sessions/start': self._handle_start_session,
+                '/parking-lots/sessions/stop': self._handle_stop_session,
                 '/payments/refund': self._handle_refund_payment,
+                '/debug/reset': self._handle_debug_reset, # hier nog even naar kijken
             },
             'PUT': {
                 '/profile': self._handle_update_profile,
-                re.compile(r"^/profile/([^/]+)$"): self._handle_update_profile_by_id,
                 '/parking-lots/': self._handle_update_parking_lot,
                 '/reservations/': self._handle_update_reservation,
                 '/vehicles/': self._handle_update_vehicle,
                 '/payments/': self._handle_update_payment,
             },
             'GET': {
-                '/profile': self._handle_get_profile,
-                re.compile(r"^/profile/([^/]+)$"): self._handle_get_profile_by_id,
-                '/logout': self._handle_logout,
-                '/parking-lots': self._handle_get_parking_lots,
-                '/parking-lots/': self._handle_get_parking_lots,
-                '/reservations': self._handle_get_reservations,
-                '/payments': self._handle_get_payments,
-                '/billing': self._handle_get_billing,
-                re.compile(r"^/vehicles/?$"): self._handle_get_vehicles,
-                '/reservations/': self._handle_get_reservation_details,
-                '/payments/': self._handle_get_payment_details,
-                '/billing/': self._handle_get_user_billing,
-                re.compile(r"^/vehicles/([^/]+)$"): self._handle_get_vehicle_details,
-                re.compile(r"^/vehicles/([^/]+)/([^/]+)$"): self._handle_get_vehicle_details,
-                '/vehicles/reservations': self._handle_get_vehicle_reservations,
-                re.compile(r"^/vehicles/([^/]+)/history$"): self._handle_get_vehicle_history,
-                re.compile(r"^/vehicles/([^/]+)/reservations$"): self._handle_get_vehicle_reservations_by_license_plate,
-                '/vehicles/history': self._handle_get_vehicle_history,
-                '/parking-lots/sessions': self._handle_get_parking_lot_sessions,
                 '/': self._handle_index,
                 '/index': self._handle_index,
                 '/index.html': self._handle_index,
                 '/favicon.ico': self._handle_favicon,
-                re.compile(r"^/parking-lots/([^/]+)/sessions$"): self._handle_get_parking_lot_sessions,
-                re.compile(r"^/parking-lots/([^/]+)/sessions/([^/]+)$"): self._handle_get_parking_lot_sessions,
-                
+                '/parking-lots': self._handle_get_parking_lots,
+                '/profile': self._handle_get_profile,
+                '/logout': self._handle_logout,
+                '/reservations': self._handle_get_reservations,
+                '/payments': self._handle_get_payments,
+                '/billing': self._handle_get_billing,
+                '/vehicles': self._handle_get_vehicles,
+                '/parking-lots/': self._handle_get_parking_lot_details,
+                '/reservations/': self._handle_get_reservation_details,
+                '/payments/': self._handle_get_payment_details,
+                '/billing/': self._handle_get_user_billing,
+                '/vehicles/': self._handle_get_vehicle_details,
+                '/vehicles/reservations': self._handle_get_vehicle_reservations,
+                '/vehicles/history': self._handle_get_vehicle_history,
+                '/parking-lots/sessions': self._handle_get_parking_lot_sessions,
             },
             'DELETE': {
                 '/parking-lots/': self._handle_delete_parking_lot,
-                re.compile(r"^/parking-lots/([^/]+)$"): self._handle_delete_parking_lot,
                 '/reservations/': self._handle_delete_reservation,
-                re.compile(r"^/reservations/([^/]+)$"): self._handle_delete_reservation,
                 '/vehicles/': self._handle_delete_vehicle,
                 '/parking-lots/sessions/': self._handle_delete_session,
-                re.compile(r"^/parking-lots/([^/]+)/sessions/([^/]+)$"): self._handle_delete_session,
             }
         }
         super().__init__(*args, **kwargs)
@@ -126,30 +78,17 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _send_response(self, status_code, content_type, data):
         self.send_response(status_code)
         self.send_header("Content-type", content_type)
-        self.http_security._apply_security_headers(self, self.headers)
         self.end_headers()
-        if content_type == "application/json":
-            if not isinstance(data, (dict, list)):
-                data = {"message": data} if isinstance(data, str) else {"value": data}
+        if isinstance(data, dict) or isinstance(data, list):
             self.wfile.write(json.dumps(data, default=str).encode('utf-8'))
         else:
             self.wfile.write(str(data).encode('utf-8'))
 
     def _get_request_data(self):
         content_length = int(self.headers.get("Content-Length", 0))
-        if content_length <= 0:
-            return {}
-        if content_length > self._MAX_JSON_BYTES:
-            _ = self.rfile.read(min(content_length, self._MAX_JSON_BYTES))
-            return {}
-        raw = self.rfile.read(content_length)
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError:
-            return {}
-        if not isinstance(parsed, dict):
-            return {}
-        return parsed
+        if content_length > 0:
+            return json.loads(self.rfile.read(content_length))
+        return {}
 
     def do_POST(self):
         # if self._enforce_https():
@@ -242,34 +181,27 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def _handle_register(self):
         data = self._get_request_data()
-        
-        valid, error = self.data_validator.validate_data(data, 
-            required_fields={'username': str, 'password': str, 'name': str, 'phone': str, 'email': str, 'birth_year': str},
-            optional_fields={'role': str},
-            allow_unknown=True
-        )
-        if not valid:
-            self._send_response(400, "application/json", error)
-            return
-        
+
+        required_fields = ['username', 'password', 'name', 'phone', 'email', 'birth_year']
+        for field in required_fields:
+            if field not in data or not isinstance(data[field], str) or not data[field].strip():
+                self._send_response(400, "application/json", {"error": f"Missing or invalid field: {field}", "field": field})
+                return
+
         username = data['username']
         password = data['password']
         name = data['name']
         phone_number = data['phone']
         email = data['email']
         birth_year = data['birth_year']
-        
-        if not isinstance(password, str) or not password:
-            self._send_response(400, "application/json", {"error": "Invalid password", "field": "password"})
-            return
-        
-        hashed_password = self.password_manager._hash_password(password)
+
+        hashed_password = hashlib.sha256(password.encode('utf-8')).hexdigest()
         users = load_json('users.json')
-        
+
         if any(user['username'] == username for user in users):
             self._send_response(409, "application/json", {"error": "Username already taken"})
             return
-        
+
         new_id = str(max(int(u.get("id", 0)) for u in users) + 1) if users else "1"
         users.append({
             'id': new_id,
@@ -284,68 +216,60 @@ class RequestHandler(BaseHTTPRequestHandler):
             'created_at': datetime.now().strftime("%Y-%m-%d")
         })
         save_user_data(users)
-        self.audit_logger.audit(session_user, action="register_user", target=new_id, extra={"username": username})
         self._send_response(201, "application/json", {"message": "User created"})
 
     def _handle_login(self):
         data = self._get_request_data()
-        
-        valid, error = self.data_validator.validate_data(data,\
-            required_fields={'username': str, 'password': str}\
-        )
-        if not valid:
-            self._send_response(400, "application/json", error)
-            return
-            
+
+        required_fields = ['username', 'password']
+        for field in required_fields:
+            if field not in data or not isinstance(data[field], str) or not data[field].strip():
+                self._send_response(400, "application/json", {"error": f"Missing or invalid field: {field}", "field": field})
+                return
+
         username = data['username']
         password = data['password']
 
-        # Dit hieronder allemaal iets beter uitgetpyt zodat het beter leesbaar is
-        ip_address = self.client_address[0] if self.client_address else 'unknown'
-        limited, retry_after, err = self.rate_limiter.check_rate_limits_and_lockouts(ip_address, username)
-        if limited:
-            self.send_response(429)
-            self.send_header("Content-type", "application/json")
-            self.send_header("Retry-After", str(retry_after))
-            self.http_security._apply_security_headers(self, self.headers)
-            self.end_headers()
-            self.wfile.write(json.dumps(err).encode('utf-8'))
-            return
-        
         users = load_json('users.json')
         user_to_authenticate = None
-        user_index = -1
-        for i, u in enumerate(users):
+        for u in users:
             if u.get("username") == username:
                 user_to_authenticate = u
-                user_index = i
                 break
 
-        if user_to_authenticate and self.password_manager._verify_password(password, user_to_authenticate.get("password", "")):
-            if self.password_manager._looks_like_md5(user_to_authenticate.get("password", "")):
-                new_hash = self.password_manager._hash_password(password)
-                users[user_index]["password"] = new_hash
-                save_user_data(users)
-            token = str(uuid.uuid4())
-            add_session(token, user_to_authenticate)
-            self.rate_limiter.record_login_attempt(ip_address, username, True)
-            self._send_response(200, "application/json", {"message": "User logged in", "session_token": token})
-        else:
-            self.rate_limiter.record_login_attempt(ip_address, username, False)
-            self._send_response(401, "application/json", {"error": "Invalid credentials"})
+        if user_to_authenticate:
+            hashed_password_input = hashlib.sha256(password.encode('utf-8')).hexdigest()
+            if hashed_password_input == user_to_authenticate.get("password", ""):
+                token = str(uuid.uuid4())
+                add_session(token, user_to_authenticate)
+                self._send_response(200, "application/json", {"message": "User logged in", "session_token": token})
+                return
+
+        self._send_response(401, "application/json", {"error": "Invalid credentials"})
 
     
-    @roles_required(['ADMIN'])
-    def _handle_create_parking_lot(self, session_user):
+    def _handle_create_parking_lot(self):
         data = self._get_request_data()
-        
-        valid, error = self.data_validator.validate_data(data, 
-            required_fields={'name': str, 'location': str, 'capacity': int, 'tariff': (int, float), 'daytariff': (int, float), 'address': str, 'coordinates': list}\
-        )
-        if not valid:
-            self._send_response(400, "application/json", error)
+
+        required_fields = ['name', 'location', 'capacity', 'tariff', 'daytariff', 'address', 'coordinates']
+        for field in required_fields:
+            if field not in data or not data[field]:
+                self._send_response(400, "application/json", {"error": f"Missing or invalid field: {field}", "field": field})
+                return
+
+        if not isinstance(data['capacity'], int) or data['capacity'] <= 0:
+            self._send_response(400, "application/json", {"error": "Capacity must be a positive integer", "field": "capacity"})
             return
-        
+        if not isinstance(data['tariff'], (int, float)) or data['tariff'] < 0:
+            self._send_response(400, "application/json", {"error": "Tariff must be a non-negative number", "field": "tariff"})
+            return
+        if not isinstance(data['daytariff'], (int, float)) or data['daytariff'] < 0:
+            self._send_response(400, "application/json", {"error": "Day tariff must be a non-negative number", "field": "daytariff"})
+            return
+        if not isinstance(data['coordinates'], list) or not all(isinstance(coord, (int, float)) for coord in data['coordinates']) or len(data['coordinates']) != 2:
+            self._send_response(400, "application/json", {"error": "Coordinates must be a list of two numbers", "field": "coordinates"})
+            return
+
         parking_lots = load_parking_lot_data()
         new_lid = str(len(parking_lots) + 1)
         parking_lots[new_lid] = {
@@ -360,32 +284,32 @@ class RequestHandler(BaseHTTPRequestHandler):
             "reserved": 0
         }
         save_parking_lot_data(parking_lots)
-        self.audit_logger.audit(session_user, action="create_parking_lot", target=new_lid, extra={"name": data['name'], "address": data['address']})
         self._send_response(201, "application/json", {"message": f"Parking lot saved under ID: {new_lid}"})
 
     @login_required
-    def _handle_start_session(self, session_user):
+    def _handle_start_session(self):
+        session_user = self._get_user_from_session()
+        if not session_user:
+            self._send_response(401, "application/json", {"error": "Unauthorized"})
+            return
         match = re.match(r"^/parking-lots/([^/]+)/sessions/start$", self.path)
         if not match:
             self._send_response(400, "application/json", {"error": "Invalid URL format for starting session"})
             return
         lid = match.group(1)
         data = self._get_request_data()
-        
-        valid, error = self.data_validator.validate_data(data, 
-            required_fields={'licenseplate': str}\
-        )
-        if not valid:
-            self._send_response(400, "application/json", error)
+
+        if 'licenseplate' not in data or not isinstance(data['licenseplate'], str) or not data['licenseplate'].strip():
+            self._send_response(400, "application/json", {"error": "Missing or invalid field: licenseplate", "field": "licenseplate"})
             return
-        
+
         sessions = load_json(f'pdata/p{lid}-sessions.json')
         filtered = {key: value for key, value in sessions.items() if value.get("licenseplate") == data['licenseplate'] and not value.get('stopped')}
-        
+
         if len(filtered) > 0:
             self._send_response(409, "application/json", {"error": "Cannot start a session when another session for this license plate is already started."})
             return 
-        
+
         session = {
             "licenseplate": data['licenseplate'],
             "started": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
@@ -956,10 +880,10 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _handle_logout(self):
         token = self._extract_bearer_token()
         if token and get_session(token):
-            remove_session(token)
-            self._send_response(200, "application/json", {"message": "User logged out"})
+            clear_sessions(token)
+            self._send_response(200, "application/json", {"message": "User logged out successfully"})
         else:
-            self._send_response(400, "application/json", {"error": "Invalid or missing Bearer token"})
+            self._send_response(400, "application/json", {"error": "No active session or invalid token"})
 
 
     def _handle_get_parking_lot_details(self):
