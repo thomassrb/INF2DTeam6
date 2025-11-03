@@ -107,8 +107,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/reservations': self._handle_create_reservation, # FAILED!!!!
                 '/vehicles': self._handle_create_vehicle,
                 '/payments': self._handle_create_payment,
-                '/parking-lots/sessions/start': self._handle_start_session,
-                '/parking-lots/sessions/stop': self._handle_stop_session,
+                re.compile(r'^/parking-lots/([^/]+)/sessions/start$'): self._handle_start_session,
+                re.compile(r'^/parking-lots/([^/]+)/sessions/stop$'): self._handle_stop_session,
                 '/payments/refund': self._handle_refund_payment,
                 '/debug/reset': self._handle_debug_reset, # hier nog even naar kijken
             },
@@ -281,7 +281,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self._send_json_response(201, "application/json", {"message": f"Parking lot saved under ID: {new_lid}"})
 
     @login_required
-    def _handle_start_session(self):
+    def _handle_start_session(self, session_user):
         session_user = authentication.get_user_from_session(self)
         if not session_user:
             self._send_json_response(401, "application/json", {"error": "Unauthorized"})
@@ -1076,8 +1076,23 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         self._send_json_response(200, "application/json", {"status": "Accepted", "vehicle": vehicle})
    
-    def _handle_debug_reset(self):
-        pass
+    @roles_required(['ADMIN'])
+    def _handle_debug_reset(self, session_user):
+        # Cleared de users data
+        save_user_data([])
+        # Cleared parking lots data
+        save_parking_lot_data({})
+        # Cleared reserveringen data
+        save_reservation_data({})
+        # Cleared payment data
+        save_payment_data([])
+        # Cleared de voertuigen data
+        self._save_vehicles({})
+        # Cleared de huidige sessions
+        self.session_manager.active_sessions.clear()
+
+        self.audit_logger.audit(session_user, action="debug_reset", target="all_data")
+        self._send_json_response(200, "application/json", {"message": "All data reset successfully"})
 
     def update_activity(self):
         self.last_activity = time.time()
