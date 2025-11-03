@@ -102,7 +102,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/register': lambda: authentication.handle_register(self), # load_tester CHECK!
                 '/login': lambda: authentication.handle_login(self), # load_tester CHECK!
                 '/parking-lots': self._handle_create_parking_lot, # load_tester CHECK!
-                '/reservations': self._handle_create_reservation,
+                '/reservations': self._handle_create_reservation, # FAILED!!!!
                 '/vehicles': self._handle_create_vehicle,
                 '/payments': self._handle_create_payment,
                 '/parking-lots/sessions/start': self._handle_start_session,
