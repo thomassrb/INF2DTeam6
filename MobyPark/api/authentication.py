@@ -44,12 +44,12 @@ def handle_register(handler):
     hashed_password = hashlib.sha256(password.encode('utf-8')).hexdigest()
     users = load_json('users.json')
 
-    if any(user['username'] == username for user in users):
+    if any(user['username'] == username for user in users.values()):
         handler._send_json_response(409, "application/json", {"error": "Username already taken"})
         return
 
-    new_id = str(max(int(u.get("id", 0)) for u in users) + 1) if users else "1"
-    users.append({
+    new_id = str(max(int(u.get("id", 0)) for u in users.values()) + 1) if users else "1"
+    users[new_id] = {
         'id': new_id,
         'username': username,
         'password': hashed_password,
@@ -60,7 +60,7 @@ def handle_register(handler):
         'role': data.get('role', 'USER'),
         'active': True,
         'created_at': datetime.now().strftime("%Y-%m-%d")
-    })
+    }
     save_user_data(users)
     handler._send_json_response(201, "application/json", {"message": "User created"})
 

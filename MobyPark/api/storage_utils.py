@@ -1,28 +1,38 @@
 import json
 import csv
 import os
+import threading
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, 'data')
 
+# Zeker weten dat de data directory uberhaupt bestaat
+os.makedirs(DATA_DIR, exist_ok=True)
+
+# Een beveiliging die ervoor zorgt dat meerdere threads niet tegelijk hetzelfde JSON-bestand kunnen aanpassen
+# dit vermijdt de mogelijkheid op data verlies in de jsons
+json_file_lock = threading.Lock()
+
 def load_json(filename):
     full_path = os.path.join(DATA_DIR, filename)
-    try:
-        with open(full_path, 'r') as file:
-            return json.load(file)
-    except FileNotFoundError:
-        return {}
-    except json.JSONDecodeError:
-        print(f"Error decoding JSON from {filename}. Returning empty dictionary.")
-        return {}
+    with json_file_lock:
+        try:
+            with open(full_path, 'r') as file:
+                return json.load(file)
+        except FileNotFoundError:
+            return {}
+        except json.JSONDecodeError:
+            print(f"Error decoding JSON from {filename}. Returning empty dictionary.")
+            return {}
 
 def write_json(filename, data):
     full_path = os.path.join(DATA_DIR, filename)
-    try:
-        with open(full_path, 'w') as file:
-            json.dump(data, file, indent=4)
-    except IOError as e:
-        print(f"Error writing JSON to {filename}: {e}")
+    with json_file_lock:
+        try:
+            with open(full_path, 'w') as file:
+                json.dump(data, file, indent=4)
+        except IOError as e:
+            print(f"Error writing JSON to {filename}: {e}")
 
 def load_csv(filename):
     full_path = os.path.join(DATA_DIR, filename)
@@ -74,7 +84,7 @@ def save_data(filename, data):
     elif filename.endswith('.txt'):
         write_text(filename, data)
     else:
-        raise ValueError("Unsupported file format") 
+        raise ValueError("Unsupported file format")
 
 def load_data(filename):
     if filename.endswith('.json'):

@@ -6,6 +6,7 @@ import time
 import threading
 
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import ThreadingMixIn
 from storage_utils import load_json, save_data, save_user_data, load_parking_lot_data, save_parking_lot_data, save_reservation_data, load_reservation_data, load_payment_data, save_payment_data
 import session_calculator as sc
 import authentication
@@ -81,9 +82,9 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.timeout = 300 # 5 mins timeout miss weghalen overbodig?!/
         self.routes = {
             'POST': {
-                '/register': lambda: authentication.handle_register(self),
+                '/register': lambda: authentication.handle_register(self), # load_tester CHECK!
                 '/login': lambda: authentication.handle_login(self),
-                '/parking-lots': self._handle_create_parking_lot,
+                '/parking-lots': self._handle_create_parking_lot, # load_tester CHECK!
                 '/reservations': self._handle_create_reservation,
                 '/vehicles': self._handle_create_vehicle,
                 '/payments': self._handle_create_payment,
@@ -1067,6 +1068,15 @@ class RequestHandler(BaseHTTPRequestHandler):
         if time.time() - self.last_activity > self.timeout:
             authentication.handle_logout(self)
 
-server = HTTPServer(('localhost', 8000), RequestHandler)
+'''Deze aangepaste import functie zorgt voor het volgende:
+De aanpassing in de https zorgt ervoor dat je meerdere request tegelijk kan afhandelen ipv 1
+door de threadingmix in the combineren met de https server krijgt elke request zijn eigen thread
+Dat zorgt er voor dat indien er een nieuw request is, die niet geblokt wordt terwijl er nog een andere bezig is
+
+En daemon_threads = true zorgt er voor dat de threads automatisch stoppen zodra de server stopt'''
+class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
+    daemon_threads = True
+
+server = ThreadingHTTPServer(('localhost', 8000), RequestHandler)
 print("Server running on http://localhost:8000")
 server.serve_forever()
