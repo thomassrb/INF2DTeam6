@@ -144,34 +144,31 @@ class RequestHandler(BaseHTTPRequestHandler):
         if content_length > 0:
             return json.loads(self.rfile.read(content_length))
         return {}
+    
+    # nieuwe functie voor de Responstijd ≤ 300 ms per request,
+    # de reden dat functie naam met _ begint is omdat het niet bij de api hoort, private method ish
+    def _handle_request_with_timing(self, method):
+        start_time = time.time()
+        try:
+            if self.http_security.enforce_https(self, self.headers, self.path):
+                return
+            self.dispatch_request(method)
+        finally:
+            end_time = time.time()
+            response_time = (end_time - start_time) * 1000
+            print(f"{method} {self.path} - Response time: {response_time:.2f} ms")
 
     def do_POST(self):
-        # if self._enforce_https():
-        #     return
-        if self.http_security.enforce_https(self, self.headers, self.path):
-            return
-        self.dispatch_request('POST')
+        self._handle_request_with_timing('POST')
 
     def do_PUT(self):
-        # if self._enforce_https():
-        #     return
-        if self.http_security.enforce_https(self, self.headers, self.path):
-            return
-        self.dispatch_request('PUT')
-
+        self._handle_request_with_timing('PUT')
+   
     def do_DELETE(self):
-        # if self._enforce_https():
-        #     return
-        if self.http_security.enforce_https(self, self.headers, self.path):
-            return
-        self.dispatch_request('DELETE')
+        self._handle_request_with_timing('DELETE')
 
     def do_GET(self):
-        # if self._enforce_https():
-        #     return
-        if self.http_security.enforce_https(self, self.headers, self.path):
-            return
-        self.dispatch_request('GET')
+        self._handle_request_with_timing('GET')
 
     def do_OPTIONS(self):
         if self.http_security.enforce_https(self, self.headers, self.path):
