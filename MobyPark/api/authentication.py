@@ -78,7 +78,7 @@ def handle_login(handler):
 
     users = load_json('users.json')
     user_to_authenticate = None
-    for u in users:
+    for u in users.values():
         if u.get("username") == username:
             user_to_authenticate = u
             break

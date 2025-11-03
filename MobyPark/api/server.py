@@ -4,6 +4,7 @@ from datetime import datetime
 import re
 import time
 import threading
+import hashlib
 
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
@@ -14,7 +15,7 @@ import authentication
 
 class PasswordManager:
     def hash_password(self, password):
-        return password 
+        return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
 class DataValidator:
     def validate_data(self, _data, _required_fields=None, _optional_fields=None, _allow_unknown=False, **kwargs):
@@ -38,14 +39,30 @@ class HTTPSecurity:
         return True 
 
 class SessionManager:
+    ''' Beheert de user session, waarbij session token en bijbehorende gebruiksgegevens worden opgeslagen
+        Zorgt voor veilige gelijktijdige toegang tot de sessiontoken door gebruik te maken van een threading.Lock,
+        zodat er geen fouten ontstaan wanneer meerdere threads tegelijk in de active_sessions-list lezen of schrijven'''
+    def __init__(self):
+        self.active_sessions = {}
+        self.session_lock = threading.Lock()
+
     def add_session(self, token, user):
-        pass
+        with self.session_lock:
+            self.active_sessions[token] = user
+
     def get_session(self, token):
-        return {"username": "testuser", "role": "USER", "id": "1", "name": "Test User", "email": "test@example.com", "phone": "123-456-7890", "birth_year": "2000", "created_at": "2023-01-01"}
+        with self.session_lock:
+            return self.active_sessions.get(token)
+
     def clear_sessions(self, token):
-        pass
-    def update_session_user(self, token, user):
-        pass
+        with self.session_lock:
+            if token in self.active_sessions:
+                del self.active_sessions[token]
+
+    def update_session_user(self, token, user_data):
+        with self.session_lock:
+            if token in self.active_sessions:
+                self.active_sessions[token].update(user_data)
 
 def login_required(func):
     def wrapper(self, *args, **kwargs):
@@ -83,7 +100,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.routes = {
             'POST': {
                 '/register': lambda: authentication.handle_register(self), # load_tester CHECK!
-                '/login': lambda: authentication.handle_login(self),
+                '/login': lambda: authentication.handle_login(self), # load_tester CHECK!
                 '/parking-lots': self._handle_create_parking_lot, # load_tester CHECK!
                 '/reservations': self._handle_create_reservation,
                 '/vehicles': self._handle_create_vehicle,
