@@ -12,6 +12,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from storage_utils import load_json, save_data, save_user_data, load_parking_lot_data, save_parking_lot_data, save_reservation_data, load_reservation_data, load_payment_data, save_payment_data
 from session_manager import add_session, get_session, update_session_user, remove_session
 import session_calculator as sc
+from DBConnection import DBConnection
 
 
 def login_required(f):
@@ -1535,3 +1536,4 @@ class RequestHandler(BaseHTTPRequestHandler):
 server = HTTPServer(('localhost', 8000), RequestHandler)
 print("Server running on http://localhost:8000")
 server.serve_forever()
+DBConnection = DBConnection("data/MobyPark_data.db")
