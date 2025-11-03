@@ -64,6 +64,8 @@ class SessionManager:
             if token in self.active_sessions:
                 self.active_sessions[token].update(user_data)
 
+global_session_manager = SessionManager()
+
 def login_required(func):
     def wrapper(self, *args, **kwargs):
         session_user = authentication.get_user_from_session(self)
@@ -94,7 +96,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.data_validator = DataValidator()
         self.audit_logger = AuditLogger()  
         self.password_manager = PasswordManager()
-        self.session_manager = SessionManager()
+        self.session_manager = global_session_manager
         self.last_activity = time.time()
         self.timeout = 300 # 5 mins timeout miss weghalen overbodig?!/
         self.routes = {
@@ -802,6 +804,8 @@ class RequestHandler(BaseHTTPRequestHandler):
     @login_required
     def _handle_get_reservations(self, session_user):
         reservations = load_reservation_data()
+        print(f"DEBUG: In _handle_get_reservations. Session User: {session_user}")
+        print(f"DEBUG: Raw Reservations Data: {reservations}")
         user_reservations = {rid: res for rid, res in reservations.items() if res.get("user") == session_user["username"] or session_user["role"] == "ADMIN"}
         self._send_json_response(200, "application/json", user_reservations)
 

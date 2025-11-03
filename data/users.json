@@ -418,5 +418,17 @@
         "role": "ADMIN",
         "active": true,
         "created_at": "2025-10-15"
+    },
+    {
+        "id": "51",
+        "username": "adminSil",
+        "password": "$2b$12$ulEQHpmN1l0gPiX8QkOOI.V2BKbu5JGUgTXK5HshDQmS3dm4FnsIK",
+        "name": "New Admin",
+        "phone": "0001112222",
+        "email": "admin_new@gmail.com",
+        "birth_year": "1990",
+        "role": "ADMIN",
+        "active": true,
+        "created_at": "2025-11-03"
     }
 ]

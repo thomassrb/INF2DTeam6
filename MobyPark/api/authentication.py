@@ -2,27 +2,39 @@
 
 import hashlib
 import uuid
+import bcrypt
 from datetime import datetime
 from storage_utils import load_json, save_user_data
 import re
 
 def extract_bearer_token(headers):
+    print(f"DEBUG: Headers in extract_bearer_token: {headers}")
     auth_header = headers.get('Authorization')
     if not auth_header:
+        print("DEBUG: Authorization header not found.")
         return None
     parts = auth_header.split(' ', 1)
     if len(parts) != 2:
+        print(f"DEBUG: Invalid Authorization header format: {auth_header}")
         return None
     scheme, token = parts
     if scheme.lower() != 'bearer' or not token:
+        print(f"DEBUG: Invalid scheme or empty token: Scheme={scheme}, Token={token}")
         return None
+    print(f"DEBUG: Extracted token: {token}")
     return token
 
 def get_user_from_session(handler):
+    print(f"DEBUG: Entering get_user_from_session for path: {handler.path}")
     token = extract_bearer_token(handler.headers)
     if not token:
+        print("DEBUG: No token extracted from headers in get_user_from_session.")
         return None
     session_data = handler.session_manager.get_session(token)
+    if not session_data:
+        print(f"DEBUG: No session found for token: {token}")
+    else:
+        print(f"DEBUG: Session found for token {token}, user: {session_data.get('username')}")
     return session_data if session_data else None
 
 def handle_register(handler):
@@ -41,15 +53,16 @@ def handle_register(handler):
     email = data['email']
     birth_year = data['birth_year']
 
-    hashed_password = hashlib.sha256(password.encode('utf-8')).hexdigest()
+
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     users = load_json('users.json')
 
-    if any(user['username'] == username for user in users.values()):
+    if any(user['username'] == username for user in users):
         handler._send_json_response(409, "application/json", {"error": "Username already taken"})
         return
 
-    new_id = str(max(int(u.get("id", 0)) for u in users.values()) + 1) if users else "1"
-    users[new_id] = {
+    new_id = str(max(int(u.get("id", 0)) for u in users) + 1) if users else "1"
+    new_user = {
         'id': new_id,
         'username': username,
         'password': hashed_password,
@@ -61,6 +74,7 @@ def handle_register(handler):
         'active': True,
         'created_at': datetime.now().strftime("%Y-%m-%d")
     }
+    users.append(new_user)
     save_user_data(users)
     handler._send_json_response(201, "application/json", {"message": "User created"})
 
@@ -78,19 +92,33 @@ def handle_login(handler):
 
     users = load_json('users.json')
     user_to_authenticate = None
-    for u in users.values():
+    print(f"DEBUG: Searching for user '{username}' in users list of type {type(users)}")
+    for u in users:
+        print(f"DEBUG: Checking user: {u.get('username')}")
         if u.get("username") == username:
             user_to_authenticate = u
+            print(f"DEBUG: Found user {username}: {user_to_authenticate}")
             break
 
+    # COMMENTS TOEVOEGEN VOOR ONDERSTAAND STATEMENT
     if user_to_authenticate:
-        hashed_password_input = hashlib.sha256(password.encode('utf-8')).hexdigest()
-        if hashed_password_input == user_to_authenticate.get("password", ""):
-            token = str(uuid.uuid4())
-            handler.session_manager.add_session(token, user_to_authenticate)
-            handler._send_json_response(200, "application/json", {"message": "User logged in", "session_token": token})
-            return
+        if user_to_authenticate.get("password", "").startswith("$2b$"):
+            if bcrypt.checkpw(password.encode('utf-8'), user_to_authenticate["password"].encode('utf-8')):
+                print(f"DEBUG: Bcrypt match for user {username}")
+                token = str(uuid.uuid4())
+                handler.session_manager.add_session(token, user_to_authenticate)
+                handler._send_json_response(200, "application/json", {"message": "User logged in", "session_token": token})
+                return
+        else:
+            hashed_password_input = hashlib.sha256(password.encode('utf-8')).hexdigest()
+            if hashed_password_input == user_to_authenticate.get("password", ""):
+                print(f"DEBUG: SHA256 match for user {username}")
+                token = str(uuid.uuid4())
+                handler.session_manager.add_session(token, user_to_authenticate)
+                handler._send_json_response(200, "application/json", {"message": "User logged in", "session_token": token})
+                return
 
+    print(f"DEBUG: Login failed for username: {username}. Provided password: {password}. Stored user: {user_to_authenticate}")
     handler._send_json_response(401, "application/json", {"error": "Invalid credentials"})
 
 def handle_logout(handler):
