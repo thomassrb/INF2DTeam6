@@ -110,7 +110,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 re.compile(r'^/parking-lots/([^/]+)/sessions/start$'): self._handle_start_session,
                 re.compile(r'^/parking-lots/([^/]+)/sessions/stop$'): self._handle_stop_session,
                 '/payments/refund': self._handle_refund_payment,
-                '/debug/reset': self._handle_debug_reset, # hier nog even naar kijken
+                '/debug/reset': self._handle_debug_reset, # gefixt, werkt nu
             },
             'PUT': {
                 '/profile': lambda: authentication.handle_update_profile(self, self.get_user_from_session()),
