@@ -550,9 +550,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
             data["user"] = session_user["username"]
         
-        reservations[rid] = data
+        reservations[rid].update(data)
         save_reservation_data(reservations)
-        self._send_json_response(200, "application/json", {"status": "Updated", "reservation": data})
+        self._send_json_response(200, "application/json", {"status": "Updated", "reservation": reservations[rid]})
 
     @login_required
     def _handle_update_vehicle(self, session_user):
