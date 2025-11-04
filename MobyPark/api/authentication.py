@@ -139,25 +139,25 @@ def handle_update_profile(handler, session_user):
         handler._send_json_response(400, "application/json", error)
         return
 
-    data["username"] = session_user["username"]
-    if data.get("password"):
-        data["password"] = handler.password_manager.hash_password(data["password"])
-    
+
+    auth_header = handler.headers.get('Authorization')
+    raw_token = extract_bearer_token(handler.headers)
+
     users = load_json('users.json')
     updated_user = None
     for i, user in enumerate(users):
         if user["username"] == session_user["username"]:
-            if data.get("name"):
-                users[i]["name"] = data["name"]
-            if data.get("password"):
-                users[i]["password"] = data["password"]
+            for key, value in data.items():
+                if key == "password":
+                    users[i][key] = bcrypt.hashpw(value.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                elif key != "username":
+                    users[i][key] = value
             updated_user = users[i]
             break
     save_user_data(users)
-    token = handler.headers.get('Authorization')
-    if updated_user:
-        if updated_user and token:
-            handler.session_manager.update_session_user(token, updated_user)
+
+    if updated_user and raw_token:
+        handler.session_manager.update_session_user(raw_token, updated_user)
     handler.audit_logger.audit(session_user, action="update_profile")
     handler._send_json_response(200, "application/json", {"message": "User updated successfully"})
 

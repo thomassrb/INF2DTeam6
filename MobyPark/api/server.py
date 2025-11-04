@@ -113,7 +113,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/debug/reset': self._handle_debug_reset, # gefixt, werkt nu
             },
             'PUT': {
-                '/profile': lambda: authentication.handle_update_profile(self, self.get_user_from_session()),
+                '/profile': lambda: authentication.handle_update_profile(self, authentication.get_user_from_session(self)),
                 '/parking-lots/': self._handle_update_parking_lot,
                 '/reservations/': self._handle_update_reservation,
                 '/vehicles/': self._handle_update_vehicle,
@@ -125,7 +125,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/index.html': self._handle_index,
                 '/favicon.ico': self._handle_favicon,
                 '/parking-lots': self._handle_get_parking_lots,
-                '/profile': lambda: authentication.handle_get_profile(self, self.get_user_from_session()),
+                '/profile': lambda: authentication.handle_get_profile(self, authentication.get_user_from_session(self)),
                 '/logout': lambda: authentication.handle_logout(self),
                 '/reservations': self._handle_get_reservations,
                 '/payments': self._handle_get_payments,
@@ -139,7 +139,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/vehicles/reservations': self._handle_get_vehicle_reservations,
                 '/vehicles/history': self._handle_get_vehicle_history,
                 '/parking-lots/sessions': self._handle_get_parking_lot_sessions,
-                '/profile/': lambda: authentication.handle_get_profile_by_id(self, self.get_user_from_session()),
+                '/profile/': lambda: authentication.handle_get_profile_by_id(self, authentication.get_user_from_session(self)),
             },
             'DELETE': {
                 '/parking-lots/': self._handle_delete_parking_lot,
