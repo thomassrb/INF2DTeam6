@@ -5,15 +5,16 @@ class DBConnection:
     def __init__(self, database_path):
         self.connection = sqlite3.connect(database_path)
         self.cursor = self.connection.cursor()
+        self.create_database_and_tables()
 
 
     def create_database_and_tables(self):
         users_table_query = """
         CREATE TABLE IF NOT EXISTS users(
             id VARCHAR(255) PRIMARY KEY,
-            username VARCHAR(255) NOT NULL UNIQUE,
+            username VARCHAR(255) NOT NULL,
             name VARCHAR(255) NOT NULL,
-            email VARCHAR(255) NOT NULL UNIQUE,
+            email VARCHAR(255) NOT NULL,
             password VARCHAR(255) NOT NULL,
             created_at DATETIME NOT NULL,
             phone VARCHAR(255) NOT NULL,
@@ -115,9 +116,7 @@ class DBConnection:
         """
 
         self.cursor.executescript(users_table_query)
-        print("Table 'users' ensured to exist.")
-
-        
+    
 
     def close_connection(self):
         self.cursor.close()
