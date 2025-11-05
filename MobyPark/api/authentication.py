@@ -43,7 +43,7 @@ def handle_register(handler):
     required_fields = ['username', 'password', 'name', 'phone', 'email', 'birth_year']
     for field in required_fields:
         if field not in data or not isinstance(data[field], str) or not data[field].strip():
-            handler._send_json_response(400, "application/json", {"error": f"Missing or invalid field: {field}", "field": field})
+            handler.send_json_response(400, "application/json", {"error": f"Missing or invalid field: {field}", "field": field})
             return
 
     username = data['username']
@@ -58,7 +58,7 @@ def handle_register(handler):
     users = load_json('users.json')
 
     if any(user['username'] == username for user in users):
-        handler._send_json_response(409, "application/json", {"error": "Username already taken"})
+        handler.send_json_response(409, "application/json", {"error": "Username already taken"})
         return
 
     new_id = str(max(int(u.get("id", 0)) for u in users) + 1) if users else "1"
@@ -76,7 +76,7 @@ def handle_register(handler):
     }
     users.append(new_user)
     save_user_data(users)
-    handler._send_json_response(201, "application/json", {"message": "User created"})
+    handler.send_json_response(201, "application/json", {"message": "User created"})
 
 def handle_login(handler):
     data = handler.get_request_data()
@@ -84,7 +84,7 @@ def handle_login(handler):
     required_fields = ['username', 'password']
     for field in required_fields:
         if field not in data or not isinstance(data[field], str) or not data[field].strip():
-            handler._send_json_response(400, "application/json", {"error": f"Missing or invalid field: {field}", "field": field})
+            handler.send_json_response(400, "application/json", {"error": f"Missing or invalid field: {field}", "field": field})
             return
 
     username = data['username']
@@ -107,7 +107,7 @@ def handle_login(handler):
                 print(f"DEBUG: Bcrypt match for user {username}")
                 token = str(uuid.uuid4())
                 handler.session_manager.add_session(token, user_to_authenticate)
-                handler._send_json_response(200, "application/json", {"message": "User logged in", "session_token": token})
+                handler.send_json_response(200, "application/json", {"message": "User logged in", "session_token": token})
                 return
         else:
             hashed_password_input = hashlib.sha256(password.encode('utf-8')).hexdigest()
@@ -115,19 +115,19 @@ def handle_login(handler):
                 print(f"DEBUG: SHA256 match for user {username}")
                 token = str(uuid.uuid4())
                 handler.session_manager.add_session(token, user_to_authenticate)
-                handler._send_json_response(200, "application/json", {"message": "User logged in", "session_token": token})
+                handler.send_json_response(200, "application/json", {"message": "User logged in", "session_token": token})
                 return
 
     print(f"DEBUG: Login failed for username: {username}. Provided password: {password}. Stored user: {user_to_authenticate}")
-    handler._send_json_response(401, "application/json", {"error": "Invalid credentials"})
+    handler.send_json_response(401, "application/json", {"error": "Invalid credentials"})
 
 def handle_logout(handler):
     token = extract_bearer_token(handler.headers)
     if token and handler.session_manager.get_session(token):
         handler.session_manager.clear_sessions(token)
-        handler._send_json_response(200, "application/json", {"message": "User logged out successfully"})
+        handler.send_json_response(200, "application/json", {"message": "User logged out successfully"})
     else:
-        handler._send_json_response(400, "application/json", {"error": "No active session or invalid token"})
+        handler.send_json_response(400, "application/json", {"error": "No active session or invalid token"})
 
 def handle_update_profile(handler, session_user):
     data = handler.get_request_data()
@@ -136,7 +136,7 @@ def handle_update_profile(handler, session_user):
         optional_fields={'name': str, 'password': str}
     )
     if not valid:
-        handler._send_json_response(400, "application/json", error)
+        handler.send_json_response(400, "application/json", error)
         return
 
 
@@ -159,7 +159,7 @@ def handle_update_profile(handler, session_user):
     if updated_user and raw_token:
         handler.session_manager.update_session_user(raw_token, updated_user)
     handler.audit_logger.audit(session_user, action="update_profile")
-    handler._send_json_response(200, "application/json", {"message": "User updated successfully"})
+    handler.send_json_response(200, "application/json", {"message": "User updated successfully"})
 
 def handle_get_profile(handler, session_user):
     profile_data = {
@@ -172,12 +172,12 @@ def handle_get_profile(handler, session_user):
     "created_at": session_user.get("created_at")
         }
 
-    handler._send_json_response(200, "application/json", profile_data)
+    handler.send_json_response(200, "application/json", profile_data)
 
 def handle_get_profile_by_id(handler, session_user):
     match = re.match(r"^/profile/([^/]+)$", handler.path)
     if not match:
-        handler._send_json_response(400, "application/json", {"error": "Invalid URL format"})
+        handler.send_json_response(400, "application/json", {"error": "Invalid URL format"})
         return
     
     target_user_id = match.group(1)
@@ -186,13 +186,13 @@ def handle_get_profile_by_id(handler, session_user):
     target_user = next((u for u in users if u.get("id") == target_user_id), None)
     
     if not target_user:
-        handler._send_json_response(404, "application/json", {"error": "User not found"})
+        handler.send_json_response(404, "application/json", {"error": "User not found"})
         return
     
     is_admin = session_user["role"] == "ADMIN"
     
     if not is_admin and session_user.get("id") != target_user_id:
-        handler._send_json_response(403, "application/json", {"error": "Access denied. You can only view your own profile."})
+        handler.send_json_response(403, "application/json", {"error": "Access denied. You can only view your own profile."})
         return
     
     profile_data = {
@@ -206,4 +206,4 @@ def handle_get_profile_by_id(handler, session_user):
         "created_at": target_user.get("created_at")
     }
     
-    handler._send_json_response(200, "application/json", profile_data)
+    handler.send_json_response(200, "application/json", profile_data)
