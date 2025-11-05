@@ -30,7 +30,7 @@ def get_user_from_session(handler):
     if not token:
         print("DEBUG: No token extracted from headers in get_user_from_session.")
         return None
-    session_data = handler.session_manager.get_session(token)
+    session_data = session_manager.get_session(token)
     if not session_data:
         print(f"DEBUG: No session found for token: {token}")
     else:
