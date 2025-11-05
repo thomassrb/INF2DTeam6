@@ -82,10 +82,10 @@ def roles_required(roles):
         def wrapper(self, *args, **kwargs):
             session_user = authentication.get_user_from_session(self)
             if not session_user:
-                self._send_json_response(401, "application/json", {"error": "Unauthorized"})
+                self.send_json_response(401, "application/json", {"error": "Unauthorized"})
                 return
             if session_user.get("role") not in roles:
-                self._send_json_response(403, "application/json", {"error": "Access denied"})
+                self.send_json_response(403, "application/json", {"error": "Access denied"})
                 return
             return func(self, session_user, *args, **kwargs)
         return wrapper
@@ -237,9 +237,12 @@ class RequestHandler(BaseHTTPRequestHandler):
 
 
         if allowed_methods:
-            self.send_json_response(405, "application/json", {"error": "Method Not Allowed"})
+            # Verbeterde 405 response
+            super().send_response(405)
+            self.send_header("Content-Type", "application/json")
             self.send_header("Allow", ", ".join(allowed_methods))
             self.end_headers()
+            self.wfile.write(json.dumps({"error": "Method Not Allowed"}).encode("utf-8"))
             return
 
         self.send_json_response(404, "application/json", {"error": "Not Found"})
@@ -280,14 +283,10 @@ class RequestHandler(BaseHTTPRequestHandler):
             "reserved": 0
         }
         save_parking_lot_data(parking_lots)
-        self.send_json_response(201, "application/json", {"message": f"Parking lot saved under ID: {new_lid}"})
-        
+        self.send_json_response(201, "application/json", {"Server message": f"Parking lot saved under ID: {new_lid}"})
+
     @login_required
     def _handle_start_session(self, session_user):
-        session_user = authentication.get_user_from_session(self)
-        if not session_user:
-            self.send_json_response(401, "application/json", {"error": "Unauthorized"})
-            return
         match = re.match(r"^/parking-lots/([^/]+)/sessions/start$", self.path)
         if not match:
             self.send_json_response(400, "application/json", {"error": "Invalid URL format for starting session"})
@@ -295,26 +294,27 @@ class RequestHandler(BaseHTTPRequestHandler):
         lid = match.group(1)
         data = self.get_request_data()
 
-        if 'licenseplate' not in data or not isinstance(data['licenseplate'], str) or not data['licenseplate'].strip():
-            self.send_json_response(400, "application/json", {"error": "Missing or invalid field: licenseplate", "field": "licenseplate"})
+        lp = data.get('license_plate') or data.get('licenseplate')
+        if not isinstance(lp, str) or not lp.strip():
+            self.send_json_response(400, "application/json", {"error": "Missing or invalid field: license_plate", "field": "license_plate"})
             return
 
         sessions = load_json(f'pdata/p{lid}-sessions.json')
-        filtered = {key: value for key, value in sessions.items() if value.get("licenseplate") == data['licenseplate'] and not value.get('stopped')}
+        filtered = {key: value for key, value in sessions.items() if (value.get("license_plate") == lp or value.get("licenseplate") == lp) and not value.get('stopped')}
 
         if len(filtered) > 0:
             self.send_json_response(409, "application/json", {"error": "Cannot start a session when another session for this license plate is already started."})
             return 
 
         session = {
-            "licenseplate": data['licenseplate'],
+            "license_plate": lp,
             "started": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
             "stopped": None,
             "user": session_user["username"]
         }
         sessions[str(len(sessions) + 1)] = session
         save_data(f'pdata/p{lid}-sessions.json', sessions)
-        self.send_json_response(200, "application/json", {"message": f"Session started for: {data['licenseplate']}"})
+        self.send_json_response(200, "application/json", {"Server message": f"Session started for: {lp}"})
 
     @login_required
     def _handle_stop_session(self, session_user):
@@ -331,7 +331,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
         
         sessions = load_json(f'pdata/p{lid}-sessions.json')
-        filtered = {key: value for key, value in sessions.items() if value.get("licenseplate") == data['licenseplate'] and not value.get('stopped')}
+        lp = data.get('license_plate') or data.get('licenseplate')
+        filtered = {key: value for key, value in sessions.items() if (value.get("license_plate") == lp or value.get("licenseplate") == lp) and not value.get('stopped')}
         
         if len(filtered) == 0:
             self.send_json_response(409, "application/json", {"error": "Cannot stop a session when there is no session for this license plate."})
@@ -340,8 +341,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         sid = next(iter(filtered))
         sessions[sid]["stopped"] = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
         save_data(f'pdata/p{lid}-sessions.json', sessions)
-        self.audit_logger.audit(session_user, action="stop_session", target=sid, extra={"licenseplate": data['licenseplate'], "parking_lot": lid})
-        self.send_json_response(200, "application/json", {"message": f"Session stopped for: {data['licenseplate']}"})
+        self.audit_logger.audit(session_user, action="stop_session", target=sid, extra={"license_plate": lp, "parking_lot": lid})
+        self.send_json_response(200, "application/json", {"Server message": f"Session stopped for: {lp}"})
 
     @login_required
     def _handle_create_reservation(self, session_user):
@@ -368,6 +369,10 @@ class RequestHandler(BaseHTTPRequestHandler):
         else:
             if "user" not in data:
                 data["user"] = None
+
+        # toegevoegd, dit zorgt ervoor dat beide mogelijk zijn als data, hij replaced de var licenseplate dan met license_plate 
+        if 'license_plate' not in data and 'licenseplate' in data:
+            data['license_plate'] = data['licenseplate']
 
         rid = str(len(reservations) + 1)
         reservations[rid] = data
@@ -498,7 +503,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         target_user.update(data)
         save_user_data(users)
         self.audit_logger.audit(session_user, action="update_profile", target=target_user_id)
-        self.send_json_response(200, "application/json", {"message": "User updated successfully"})
+        self.send_json_response(200, "application/json", {"Server message": "User updated successfully!"})
 
     
     @roles_required(['ADMIN'])
@@ -523,7 +528,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         pl["id"] = lid
         save_parking_lot_data(parking_lots)
         self.audit_logger.audit(session_user, action="update_parking_lot", target=lid)
-        self.send_json_response(200, "application/json", {"message": "Parking lot modified"})
+        self.send_json_response(200, "application/json", {"Server message": "Parking lot modified!"})
 
     @login_required
     def _handle_update_reservation(self, session_user):
@@ -631,16 +636,16 @@ class RequestHandler(BaseHTTPRequestHandler):
 
         if lid:
             if lid not in parking_lots:
-                self.send_json_response(404, "application/json", {"error": "Parking lot not found"})
+                self.send_json_response(404, "application/json", {"error": "Parking lot not found!"})
                 return
             del parking_lots[lid]
             save_parking_lot_data(parking_lots)
             self.audit_logger.audit(session_user, action="delete_parking_lot", target=lid)
-            self.send_json_response(200, "application/json", {"message": f"Parking lot {lid} deleted"})
+            self.send_json_response(200, "application/json", {"Server message": f"Parking lot {lid} deleted!"})
         else:
             save_parking_lot_data({})
             self.audit_logger.audit(session_user, action="delete_all_parking_lots")
-            self.send_json_response(200, "application/json", {"message": "All parking lots deleted"})
+            self.send_json_response(200, "application/json", {"Server message": "All parking lots deleted!"})
 
     
     @roles_required(['ADMIN'])
@@ -666,7 +671,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         del sessions[sid]
         save_data(f'pdata/p{lid}-sessions.json', sessions)
         self.audit_logger.audit(session_user, action="delete_session", target={"parking_lot": lid, "session": sid})
-        self.send_json_response(200, "application/json", {"message": "Session deleted"})
+        self.send_json_response(200, "application/json", {"Server message": "Session deleted"})
 
     @login_required
     def _handle_delete_reservation(self, session_user):
@@ -894,12 +899,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             except FileNotFoundError:
                 sessions = {}
             for sid, session in sessions.items():
-                if session["user"] == session_user["username"]:
+                if session.get("user") == user:
                     amount, hours, days = sc.calculate_price(parkinglot, sid, session)
                     transaction = sc.generate_payment_hash(sid, session)
                     payed = sc.check_payment_amount(transaction)
                     data.append({
-                        "session": {k: v for k, v in session.items() if k in ["licenseplate", "started", "stopped"]} | {"hours": hours, "days": days},
+                        "session": {k: v for k, v in session.items() if k in ["license_plate", "licenseplate", "started", "stopped"]} | {"hours": hours, "days": days},
                         "parking": {k: v for k, v in parkinglot.items() if k in ["name", "location", "tariff", "daytariff"]},
                         "amount": amount,
                         "thash": transaction,
@@ -953,7 +958,11 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
             
         reservations = load_reservation_data()
-        vehicle_reservations = [res for res in reservations.values() if res.get('licenseplate') == vehicle['license_plate'] and res.get('user') == target_user]
+        vehicle_reservations = [
+            res for res in reservations.values()
+            if (res.get('license_plate') == vehicle['license_plate'] or res.get('licenseplate') == vehicle['license_plate'])
+            and res.get('user') == target_user
+        ]
         
         self.send_json_response(200, "application/json", vehicle_reservations)
 
@@ -993,11 +1002,11 @@ class RequestHandler(BaseHTTPRequestHandler):
 
         history = []
         for res_data in reservations_data.values():
-            if res_data.get("license_plate") == license_plate:
+            if res_data.get("license_plate") == license_plate or res_data.get("licenseplate") == license_plate:
                 history.append({"type": "reservation", "data": res_data})
 
         for sess_data in sessions_data.values():
-            if sess_data.get("license_plate") == license_plate:
+            if sess_data.get("license_plate") == license_plate or sess_data.get("licenseplate") == license_plate:
                 history.append({"type": "session", "data": sess_data})
         
         history.sort(key=lambda x: x["data"].get("start_time", ""))
@@ -1037,7 +1046,11 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_json_response(403, "application/json", {"error": "Access denied. You can only view your own vehicle's reservations."})
             return
 
-        vehicle_reservations = [res for res in reservations_data.values() if res.get('license_plate') == license_plate and res.get('user') == vehicle_owner_username]
+        vehicle_reservations = [
+            res for res in reservations_data.values()
+            if (res.get('license_plate') == license_plate or res.get('licenseplate') == license_plate)
+            and res.get('user') == vehicle_owner_username
+        ]
         
         self.send_json_response(200, "application/json", vehicle_reservations)
 
@@ -1094,7 +1107,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.session_manager.active_sessions.clear()
 
         self.audit_logger.audit(session_user, action="debug_reset", target="all_data")
-        self.send_json_response(200, "application/json", {"message": "All data reset successfully"})
+        self.send_json_response(200, "application/json", {"Server message": "All data reset successfully"})
 
     def update_activity(self):
         self.last_activity = time.time()
