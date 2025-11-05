@@ -6,6 +6,7 @@ import uuid
 import bcrypt
 import re
 from storage_utils import load_json, save_user_data
+import session_manager
 
 def extract_bearer_token(headers):
     print(f"DEBUG: Headers in extract_bearer_token: {headers}")
