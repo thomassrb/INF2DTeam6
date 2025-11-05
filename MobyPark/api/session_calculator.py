@@ -32,6 +32,7 @@ def calculate_price(parkinglot, sid, data):
 
 def generate_payment_hash(sid, data):
     # Hier generated die en md5 hash voor de betaling
+    lp = data.get("license_plate") or data.get("licenseplate") or ""
     return md5(str(sid + data["licenseplate"]).encode("utf-8")).hexdigest()
 
 
