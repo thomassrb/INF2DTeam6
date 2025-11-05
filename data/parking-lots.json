@@ -1,11 +1,13 @@
 {
     "1": {
         "id": "1",
-        "name": "Test Lot",
-        "location": "Test Location",
+        "name": "Central Parking",
+        "location": "City Center",
         "capacity": 100,
-        "hourly_rate": 10,
-        "day_rate": 80,
+        "hourly_rate": 2.5,
+        "day_rate": 20,
+        "address": "123 Main St",
+        "coordinates": [52.370216, 4.895168],
         "reserved": 0
     },
     "2": {
@@ -51,6 +53,20 @@
         "capacity": 50,
         "hourly_rate": 3,
         "day_rate": 18,
+        "reserved": 0
+    },
+    "7": {
+        "id": "7",
+        "name": "Sil Parking",
+        "location": "HR",
+        "capacity": 250,
+        "hourly_rate": 5,
+        "day_rate": 10,
+        "address": "HR Wijnhaven",
+        "coordinates": [
+            1.0112558,
+            2.211102
+        ],
         "reserved": 0
     }
 }

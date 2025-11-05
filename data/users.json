@@ -394,5 +394,53 @@
         "role": "USER",
         "active": true,
         "created_at": "2025-10-15"
+    },
+    {
+        "id": "49",
+        "username": "testuser_ab",
+        "password": "$2b$12$q1nR84F8boPfEs.Ha0Jo9.gl6qb/J4GHGU51tpFve5mG9DfqatH1C",
+        "name": "Test User",
+        "phone": "1234567890",
+        "email": "test@example.com",
+        "birth_year": "2000",
+        "role": "USER",
+        "active": true,
+        "created_at": "2025-10-15"
+    },
+    {
+        "id": "50",
+        "username": "adminuser_aa",
+        "password": "$2b$12$U0gx55dvrMGg7svBLWh.YeONoPz72XCTr75.05P1ISI9Ar1tHiClm",
+        "name": "Admin User",
+        "phone": "0987654321",
+        "email": "admin@example.com",
+        "birth_year": "1990",
+        "role": "ADMIN",
+        "active": true,
+        "created_at": "2025-10-15"
+    },
+    {
+        "id": "51",
+        "username": "adminSil",
+        "password": "$2b$12$ulEQHpmN1l0gPiX8QkOOI.V2BKbu5JGUgTXK5HshDQmS3dm4FnsIK",
+        "name": "New Admin",
+        "phone": "0001112222",
+        "email": "admin_new@gmail.com",
+        "birth_year": "1990",
+        "role": "ADMIN",
+        "active": true,
+        "created_at": "2025-11-03"
+    },
+    {
+        "id": "52",
+        "username": "test",
+        "password": "$2b$12$KaYUyl73fj1kalOTyar42.GBjy74LA/86oay/qqcg589Glxhwgxf.",
+        "name": "Test User",
+        "phone": "0619748451",
+        "email": "test@gmail.com",
+        "birth_year": "2002",
+        "role": "USER",
+        "active": true,
+        "created_at": "2025-11-04"
     }
 ]

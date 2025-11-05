@@ -1,45 +1,38 @@
 import os
 import json
 import threading
-import importlib
 from typing import Optional, Dict, Any
 
-_redis_mod = None
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))    # Geeft het absolute pad van de directory terug  waar het scriptbestand staat
+_DATA_DIR = os.path.join(_SCRIPT_DIR, '..', '..', 'data')   # Bepaalt het pad naar de data-directory
+_SESSIONS_FILE = os.path.join(_DATA_DIR, 'sessions.json')   # Zorgt ervoor het pad naar de sessions.json
 
-def _load_redis_module():
-    global _redis_mod
-    if _redis_mod is None:
-        try:
-            _redis_mod = importlib.import_module('redis')
-        except ImportError:
-            _redis_mod = None
-    return _redis_mod
-
-_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-_DATA_DIR = os.path.join(_SCRIPT_DIR, '..', '..', 'data')
-_SESSIONS_FILE = os.path.join(_DATA_DIR, 'sessions.json')
-
-_LOCK = threading.Lock()
+_LOCK = threading.Lock()                                    # Maakt een lock voor thread sync.
 
 
 class _BaseSessionStore:
+    # Add een user aan de session met de given token
     def add(self, token: str, user: Dict[str, Any]) -> None:
         raise NotImplementedError
 
+    # Verwijderd de session en geeft de token terug aan de user
     def remove(self, token: str) -> Optional[Dict[str, Any]]:
         raise NotImplementedError
 
+    # Geeft de gebruiker terug aan de juiste token, en none als token niet bestaat
     def get(self, token: str) -> Optional[Dict[str, Any]]:
         raise NotImplementedError
 
+    # Werkt de gegevens van de user bij voor de sessie met de token
     def update_user(self, token: str, user_data: Dict[str, Any]) -> None:
         raise NotImplementedError
 
 
 class _FileSessionStore(_BaseSessionStore):
+    # Maakt de data-directory aan indien deze nog niet bestaat en probeert bestaande sessies te laden
+    # uit de sessions.json. Als het bestand ontbreekt of niet geldig is  wordt er een empty sessie-dict gebruikt.
     def __init__(self):
         os.makedirs(_DATA_DIR, exist_ok=True)
-        # Load existing sessions from disk
         try:
             with open(_SESSIONS_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
@@ -53,114 +46,58 @@ class _FileSessionStore(_BaseSessionStore):
             self._sessions = {}
 
     def _flush(self) -> None:
+        # Slaat de huidige sessions op in session.json
         with open(_SESSIONS_FILE, 'w', encoding='utf-8') as f:
             json.dump(self._sessions, f, ensure_ascii=False, indent=2)
 
     def add(self, token: str, user: Dict[str, Any]) -> None:
+        # Voegt een user toe aan de session en slaat changes op
         with _LOCK:
             self._sessions[token] = user
             self._flush()
 
     def remove(self, token: str) -> Optional[Dict[str, Any]]:
+        # Delete een session en returned de bijbehorende user
         with _LOCK:
             user = self._sessions.pop(token, None)
             self._flush()
             return user
 
     def get(self, token: str) -> Optional[Dict[str, Any]]:
+        # Haalt de user op die bij de given token hoort, anders none als token invalid is
         with _LOCK:
             return self._sessions.get(token)
 
     def update_user(self, token: str, user_data: Dict[str, Any]) -> None:
+        # Update de gegevens van de gebruiker en slaat de wijzegingen op
         with _LOCK:
             if token in self._sessions and isinstance(self._sessions[token], dict):
                 self._sessions[token].update(user_data)
                 self._flush()
 
 
-class _RedisSessionStore(_BaseSessionStore):
-    def __init__(self, url: str, ttl_seconds: Optional[int] = None):
-        mod = _load_redis_module()
-        if mod is None:
-            raise RuntimeError("redis package not available")
-        self._client = mod.from_url(url)
-        self._ttl = ttl_seconds
-        self._prefix = 'session:'
-
-    def _key(self, token: str) -> str:
-        return f"{self._prefix}{token}"
-
-    def add(self, token: str, user: Dict[str, Any]) -> None:
-        payload = json.dumps(user, ensure_ascii=False)
-        if self._ttl and self._ttl > 0:
-            self._client.set(self._key(token), payload, ex=self._ttl)
-        else:
-            self._client.set(self._key(token), payload)
-
-    def remove(self, token: str) -> Optional[Dict[str, Any]]:
-        key = self._key(token)
-        data = self._client.get(key)
-        self._client.delete(key)
-        if not data:
-            return None
-        try:
-            return json.loads(data)
-        except (ValueError, TypeError, json.JSONDecodeError):
-            return None
-
-    def get(self, token: str) -> Optional[Dict[str, Any]]:
-        data = self._client.get(self._key(token))
-        if not data:
-            return None
-        try:
-            return json.loads(data)
-        except (ValueError, TypeError, json.JSONDecodeError):
-            return None
-
-    def update_user(self, token: str, user_data: Dict[str, Any]) -> None:
-        key = self._key(token)
-        data = self._client.get(key)
-        if not data:
-            return
-        try:
-            existing = json.loads(data)
-            if isinstance(existing, dict):
-                existing.update(user_data)
-                payload = json.dumps(existing, ensure_ascii=False)
-                if self._ttl and self._ttl > 0:
-                    self._client.set(key, payload, ex=self._ttl)
-                else:
-                    self._client.set(key, payload)
-        except (ValueError, TypeError, json.JSONDecodeError):
-            return
-
-
 def _create_store() -> _BaseSessionStore:
-    redis_url = os.environ.get('MOBYPARK_REDIS_URL') or os.environ.get('REDIS_URL')
-    ttl = os.environ.get('MOBYPARK_SESSION_TTL')
-    ttl_int = int(ttl) if ttl and ttl.isdigit() else None
-    if redis_url and _load_redis_module() is not None:
-        try:
-            return _RedisSessionStore(redis_url, ttl_int)
-        except (RuntimeError, OSError, ValueError):
-            pass
+    # Dit maakt en initialiseert de session opslag
     return _FileSessionStore()
-
 
 _STORE: _BaseSessionStore = _create_store()
 
 
 def add_session(token: str, user: Dict[str, Any]) -> None:
+    # Dit voegt een session toe
     _STORE.add(token, user)
 
 
 def remove_session(token: str) -> Optional[Dict[str, Any]]:
+    # Dit delete een session
     return _STORE.remove(token)
 
 
 def get_session(token: str) -> Optional[Dict[str, Any]]:
+    # Haalt session op op basis van token
     return _STORE.get(token)
 
 
 def update_session_user(token: str, user_data: Dict[str, Any]) -> None:
+    # Werkt de gegevens van een user bij in bestaande session
     _STORE.update_user(token, user_data)
