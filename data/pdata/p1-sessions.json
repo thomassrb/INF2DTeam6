@@ -10,5 +10,17 @@
         "started": "03-11-2025 20:57:32",
         "stopped": "03-11-2025 21:30:35",
         "user": "adminSil"
+    },
+    "3": {
+        "license_plate": "XX-YY-ZZ",
+        "started": "05-11-2025 11:05:25",
+        "stopped": "05-11-2025 11:05:42",
+        "user": "adminSil"
+    },
+    "4": {
+        "license_plate": "XX-YY-ZZ",
+        "started": "05-11-2025 11:08:47",
+        "stopped": null,
+        "user": "adminSil"
     }
 }

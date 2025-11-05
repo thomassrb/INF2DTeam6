@@ -281,7 +281,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             "reserved": 0
         }
         save_parking_lot_data(parking_lots)
-        self.send_json_response(201, "application/json", {"message": f"Parking lot saved under ID: {new_lid}"})
+        self.send_json_response(201, "application/json", {"Server message": f"Parking lot saved under ID: {new_lid}"})
 
     @login_required
     def _handle_start_session(self, session_user):
@@ -312,7 +312,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         }
         sessions[str(len(sessions) + 1)] = session
         save_data(f'pdata/p{lid}-sessions.json', sessions)
-        self.send_json_response(200, "application/json", {"message": f"Session started for: {lp}"})
+        self.send_json_response(200, "application/json", {"Server message": f"Session started for: {lp}"})
 
     @login_required
     def _handle_stop_session(self, session_user):
@@ -340,7 +340,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         sessions[sid]["stopped"] = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
         save_data(f'pdata/p{lid}-sessions.json', sessions)
         self.audit_logger.audit(session_user, action="stop_session", target=sid, extra={"license_plate": lp, "parking_lot": lid})
-        self.send_json_response(200, "application/json", {"message": f"Session stopped for: {lp}"})
+        self.send_json_response(200, "application/json", {"Server message": f"Session stopped for: {lp}"})
 
     @login_required
     def _handle_create_reservation(self, session_user):
@@ -501,7 +501,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         target_user.update(data)
         save_user_data(users)
         self.audit_logger.audit(session_user, action="update_profile", target=target_user_id)
-        self.send_json_response(200, "application/json", {"message": "User updated successfully"})
+        self.send_json_response(200, "application/json", {"Server message": "User updated successfully!"})
 
     
     @roles_required(['ADMIN'])
@@ -526,7 +526,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         pl["id"] = lid
         save_parking_lot_data(parking_lots)
         self.audit_logger.audit(session_user, action="update_parking_lot", target=lid)
-        self.send_json_response(200, "application/json", {"message": "Parking lot modified"})
+        self.send_json_response(200, "application/json", {"Server message": "Parking lot modified!"})
 
     @login_required
     def _handle_update_reservation(self, session_user):
@@ -634,16 +634,16 @@ class RequestHandler(BaseHTTPRequestHandler):
 
         if lid:
             if lid not in parking_lots:
-                self.send_json_response(404, "application/json", {"error": "Parking lot not found"})
+                self.send_json_response(404, "application/json", {"error": "Parking lot not found!"})
                 return
             del parking_lots[lid]
             save_parking_lot_data(parking_lots)
             self.audit_logger.audit(session_user, action="delete_parking_lot", target=lid)
-            self.send_json_response(200, "application/json", {"message": f"Parking lot {lid} deleted"})
+            self.send_json_response(200, "application/json", {"Server message": f"Parking lot {lid} deleted!"})
         else:
             save_parking_lot_data({})
             self.audit_logger.audit(session_user, action="delete_all_parking_lots")
-            self.send_json_response(200, "application/json", {"message": "All parking lots deleted"})
+            self.send_json_response(200, "application/json", {"Server message": "All parking lots deleted!"})
 
     
     @roles_required(['ADMIN'])
@@ -669,7 +669,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         del sessions[sid]
         save_data(f'pdata/p{lid}-sessions.json', sessions)
         self.audit_logger.audit(session_user, action="delete_session", target={"parking_lot": lid, "session": sid})
-        self.send_json_response(200, "application/json", {"message": "Session deleted"})
+        self.send_json_response(200, "application/json", {"Server message": "Session deleted"})
 
     @login_required
     def _handle_delete_reservation(self, session_user):
@@ -1105,7 +1105,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.session_manager.active_sessions.clear()
 
         self.audit_logger.audit(session_user, action="debug_reset", target="all_data")
-        self.send_json_response(200, "application/json", {"message": "All data reset successfully"})
+        self.send_json_response(200, "application/json", {"Server message": "All data reset successfully"})
 
     def update_activity(self):
         self.last_activity = time.time()
