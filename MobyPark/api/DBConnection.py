@@ -12,9 +12,9 @@ class DBConnection:
         users_table_query = """
         CREATE TABLE IF NOT EXISTS users(
             id VARCHAR(255) PRIMARY KEY,
-            username VARCHAR(255) NOT NULL,
+            username VARCHAR(255) NOT NULL UNIQUE,
             name VARCHAR(255) NOT NULL,
-            email VARCHAR(255) NOT NULL,
+            email VARCHAR(255) NOT NULL UNIQUE,
             password VARCHAR(255) NOT NULL,
             created_at DATETIME NOT NULL,
             phone VARCHAR(255) NOT NULL,
@@ -26,8 +26,8 @@ class DBConnection:
         CREATE TABLE IF NOT EXISTS parking_lots(
             id VARCHAR(255) PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
-            location VARCHAR(255) NOT NULL,
-            address VARCHAR(255) NOT NULL,
+            location VARCHAR(255) NOT NULL UNIQUE,
+            address VARCHAR(255) NOT NULL UNIQUE,
             capacity INT NOT NULL,
             reserved INT NOT NULL,
             tariff DECIMAL(10,2) NOT NULL,
@@ -45,7 +45,7 @@ class DBConnection:
         CREATE TABLE IF NOT EXISTS vehicles(
             id VARCHAR(255) PRIMARY KEY,
             user_id VARCHAR(255) NOT NULL,
-            license_plate VARCHAR(255) NOT NULL,
+            license_plate VARCHAR(255) NOT NULL UNIQUE,
             make VARCHAR(255) NOT NULL,
             model VARCHAR(255) NOT NULL,
             color VARCHAR(255) NOT NULL,
