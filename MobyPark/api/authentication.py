@@ -5,6 +5,7 @@ import uuid
 import bcrypt
 from datetime import datetime
 from storage_utils import load_json, save_user_data
+import session_manager
 import re
 
 def extract_bearer_token(headers):
@@ -30,7 +31,7 @@ def get_user_from_session(handler):
     if not token:
         print("DEBUG: No token extracted from headers in get_user_from_session.")
         return None
-    session_data = handler.session_manager.get_session(token)
+    session_data = session_manager.get_session(token)
     if not session_data:
         print(f"DEBUG: No session found for token: {token}")
     else:
@@ -106,7 +107,7 @@ def handle_login(handler):
             if bcrypt.checkpw(password.encode('utf-8'), user_to_authenticate["password"].encode('utf-8')):
                 print(f"DEBUG: Bcrypt match for user {username}")
                 token = str(uuid.uuid4())
-                handler.session_manager.add_session(token, user_to_authenticate)
+                session_manager.add_session(token, user_to_authenticate)
                 handler._send_json_response(200, "application/json", {"message": "User logged in", "session_token": token})
                 return
         else:
@@ -114,7 +115,7 @@ def handle_login(handler):
             if hashed_password_input == user_to_authenticate.get("password", ""):
                 print(f"DEBUG: SHA256 match for user {username}")
                 token = str(uuid.uuid4())
-                handler.session_manager.add_session(token, user_to_authenticate)
+                session_manager.add_session(token, user_to_authenticate)
                 handler._send_json_response(200, "application/json", {"message": "User logged in", "session_token": token})
                 return
 
@@ -123,8 +124,8 @@ def handle_login(handler):
 
 def handle_logout(handler):
     token = extract_bearer_token(handler.headers)
-    if token and handler.session_manager.get_session(token):
-        handler.session_manager.clear_sessions(token)
+    if token and session_manager.get_session(token):
+        session_manager.clear_sessions(token)
         handler._send_json_response(200, "application/json", {"message": "User logged out successfully"})
     else:
         handler._send_json_response(400, "application/json", {"error": "No active session or invalid token"})
