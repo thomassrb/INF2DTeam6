@@ -4,6 +4,17 @@ import bcrypt
 from datetime import datetime
 from storage_utils import load_json, save_user_data, load_parking_lot_data, save_parking_lot_data
 
+# POST (post_routes.py)
+# - handle_register(self)
+# - handle_login(self)
+# - _handle_create_parking_lot
+# - _handle_create_reservation
+# - _handle_create_vehicle
+# - _handle_create_payment
+# - _handle_start_session
+# - _handle_stop_session
+# - _handle_refund_payment
+# - _handle_debug_reset
 
 def handle_register(handler):
     data = handler.get_request_data()
@@ -88,6 +99,9 @@ def handle_login(handler):
 
     print(f"DEBUG: Login failed for username: {username}. Provided password: {password}. Stored user: {user_to_authenticate}")
     handler.send_json_response(401, "application/json", {"error": "Invalid credentials"})
+
+
+# deze functie werkt nog niet helemaal lekker
 
 # def _handle_create_parking_lot(self):
 #     data = self.get_request_data()

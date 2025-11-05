@@ -12,7 +12,7 @@ from storage_utils import load_json, save_data, save_user_data, load_parking_lot
 import session_calculator as sc
 import authentication
 
-import routes.post_routes
+import routes.post_routes, routes.put_routes, routes.get_routes
 
 
 class PasswordManager:
@@ -105,7 +105,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             'POST': {
                 '/register': lambda: routes.post_routes.handle_register(self), # load_tester CHECK!
                 '/login': lambda: routes.post_routes.handle_login(self), # load_tester CHECK!
-                '/parking-lots': self._handle_create_parking_lot(self), # load_tester CHECK!
+                '/parking-lots': self._handle_create_parking_lot, # load_tester CHECK!
                 '/reservations': self._handle_create_reservation, # FAILED!!!!
                 '/vehicles': self._handle_create_vehicle,
                 '/payments': self._handle_create_payment,
@@ -115,7 +115,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/debug/reset': self._handle_debug_reset, # gefixt, werkt nu
             },
             'PUT': {
-                '/profile': lambda: authentication.handle_update_profile(self, authentication.get_user_from_session(self)),
+                '/profile': lambda: routes.put_routes.handle_update_profile(self, authentication.get_user_from_session(self)),
                 '/parking-lots/': self._handle_update_parking_lot,
                 '/reservations/': self._handle_update_reservation,
                 '/vehicles/': self._handle_update_vehicle,
@@ -127,8 +127,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/index.html': self._handle_index,
                 '/favicon.ico': self._handle_favicon,
                 '/parking-lots': self._handle_get_parking_lots,
-                '/profile': lambda: authentication.handle_get_profile(self, authentication.get_user_from_session(self)),
-                '/logout': lambda: authentication.handle_logout(self),
+                '/profile': lambda: routes.get_routes.handle_get_profile(self, authentication.get_user_from_session(self)),
+                '/logout': lambda: routes.get_routes.handle_logout(self),
                 '/reservations': self._handle_get_reservations,
                 '/payments': self._handle_get_payments,
                 '/billing': self._handle_get_billing,
@@ -141,7 +141,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/vehicles/reservations': self._handle_get_vehicle_reservations,
                 '/vehicles/history': self._handle_get_vehicle_history,
                 '/parking-lots/sessions': self._handle_get_parking_lot_sessions,
-                '/profile/': lambda: authentication.handle_get_profile_by_id(self, authentication.get_user_from_session(self)),
+                '/profile/': lambda: routes.get_routes.handle_get_profile_by_id(self, authentication.get_user_from_session(self)),
             },
             'DELETE': {
                 '/parking-lots/': self._handle_delete_parking_lot,
