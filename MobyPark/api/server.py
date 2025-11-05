@@ -114,8 +114,11 @@ class RequestHandler(BaseHTTPRequestHandler):
             },
             'PUT': {
                 '/profile': lambda: authentication.handle_update_profile(self, self.get_user_from_session()),
+                re.compile(r'^/profile/([^/]+)$'): lambda: self._handle_update_profile_by_id,
                 '/parking-lots/': self._handle_update_parking_lot,
+                re.compile(r'^/parking-lots/([^/]+)$'): self._handle_update_parking_lot_by_id,
                 '/reservations/': self._handle_update_reservation,
+                re.compile(r'^/reservations/([^/]+)$'): self._handle_update_reservation,
                 '/vehicles/': self._handle_update_vehicle,
                 '/payments/': self._handle_update_payment,
             },
@@ -126,6 +129,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/favicon.ico': self._handle_favicon,
                 '/parking-lots': self._handle_get_parking_lots,
                 '/profile': lambda: authentication.handle_get_profile(self, self.get_user_from_session()),
+                re.compile(r'^/profile/([^/]+)$'): lambda: authentication.handle_get_profile_by_id(self, self.get_user_from_session()),
                 '/logout': lambda: authentication.handle_logout(self),
                 '/reservations': self._handle_get_reservations,
                 '/payments': self._handle_get_payments,
@@ -522,6 +526,33 @@ class RequestHandler(BaseHTTPRequestHandler):
         save_parking_lot_data(parking_lots)
         self.audit_logger.audit(session_user, action="update_parking_lot", target=lid)
         self._send_json_response(200, "application/json", {"message": "Parking lot modified"})
+        
+
+    @roles_required(['ADMIN'])
+    def _handle_update_parking_lot_by_id(self, session_user):
+        lid = self.path.split("/")[2]
+        parking_lots = load_parking_lot_data()
+        
+        if lid not in parking_lots:
+            self._send_json_response(404, "application/json", {"error": "Parking lot not found"})
+            return
+        parts = [p for p in self.path.split('/') if p]
+        if len(parts) < 2: return self._send_json_response(400, "application/json", {"error": "id missing"})
+        lid = str(parts[1])
+        data = self.get_request_data()
+        
+        valid, error = self.data_validator.validate_data(data)
+        if not valid:
+            self._send_json_response(400, "application/json", error)
+            return
+        
+        parking_lots[lid] = data
+        pl = parking_lots[lid]
+        pl.update(data)
+        pl["id"] = lid
+        save_parking_lot_data(parking_lots)
+        self.audit_logger.audit(session_user, action="update_parking_lot", target=lid)
+        self._send_json_response(200, "application/json", {"message": "Parking lot modified"})
 
     @login_required
     def _handle_update_reservation(self, session_user):
@@ -554,6 +585,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         save_reservation_data(reservations)
         self._send_json_response(200, "application/json", {"status": "Updated", "reservation": data})
 
+    
     @login_required
     def _handle_update_vehicle(self, session_user):
         data = self.get_request_data()
