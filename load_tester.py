@@ -34,9 +34,9 @@ def send_request(thread_id, results):
         end_time_reservation = start_time_reservation + timedelta(hours=2)
 
         reservation_data = {
-            "parkinglot": "1", # Assuming parking lot ID 1 exists
+            "parkinglot": "1",
             "user": username,
-            "licenseplate": f"ABC{thread_id:03d}", # Unique license plate
+            "licenseplate": f"ABC{thread_id:03d}",
             "start_time": start_time_reservation.strftime("%Y-%m-%d %H:%M:%S"),
             "end_time": end_time_reservation.strftime("%Y-%m-%d %H:%M:%S")
         }
@@ -51,7 +51,7 @@ def send_request(thread_id, results):
         if response.status_code == 201:
             results.append((True, duration))
             print(f"Thread {thread_id}: Success (Reservation Created, Status: {response.status_code}, Time: {duration:.2f} ms)")
-        elif response.status_code in [400, 403, 404, 409]: # Consider these as handled errors
+        elif response.status_code in [400, 403, 404, 409]:
             results.append((True, duration))
             print(f"Thread {thread_id}: Success (Reservation Failed - Status: {response.status_code}, Time: {duration:.2f} ms)")
         else:
