@@ -7,9 +7,32 @@ import uuid
 
 def calculate_price(parkinglot, sid, data):
     # Deze functie berekent de prijs op basis van je start en end tijd.
+    start_str = data.get("started") or data.get("start_time")
+    stop_str = data.get("stopped") or data.get("end_time")
 
-    start_time = datetime.strptime(data["started"], "%d-%m-%Y %H:%M:%S")
-    end_time = datetime.strptime(data["stopped"], "%d-%m-%Y %H:%M:%S") if data.get("stopped") else datetime.now()
+    if not start_str:
+        # Onbekende/legacy sessie zonder starttijd: geen prijs berekenen
+        return 0.0, 0, 0
+
+    def _parse_dt(s: str):
+        fmts = [
+            "%d-%m-%Y %H:%M:%S",      # Ons huidige format
+            "%Y-%m-%d %H:%M:%S",      # alt classic format
+            "%Y-%m-%dT%H:%M:%SZ",     # ISO Zulu format
+            "%Y-%m-%dT%H:%M:%S",      # ISO no Z format
+        ]
+        for f in fmts:
+            try:
+                return datetime.strptime(s, f)
+            except ValueError:
+                continue
+        return None
+
+    start_time = _parse_dt(start_str)
+    if not start_time:
+        return 0.0, 0, 0
+    end_time = _parse_dt(stop_str) if stop_str else None
+    end_time = end_time or datetime.now()
 
     duration = end_time - start_time
     total_hours = math.ceil(duration.total_seconds() / 3600)
@@ -33,7 +56,7 @@ def calculate_price(parkinglot, sid, data):
 def generate_payment_hash(sid, data):
     # Hier generated die en md5 hash voor de betaling
     lp = data.get("license_plate") or data.get("licenseplate") or ""
-    return md5(str(sid + data["licenseplate"]).encode("utf-8")).hexdigest()
+    return md5(str(sid + lp).encode("utf-8")).hexdigest()
 
 
 def generate_transaction_validation_hash():

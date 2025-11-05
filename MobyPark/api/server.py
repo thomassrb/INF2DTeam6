@@ -250,8 +250,13 @@ class RequestHandler(BaseHTTPRequestHandler):
 
         required_fields = ['name', 'location', 'capacity', 'tariff', 'daytariff', 'address', 'coordinates']
         for field in required_fields:
-            if field not in data or not isinstance(data[field], str) or not data[field].strip():
+            if field not in data:
                 self.send_json_response(400, "application/json", {"error": f"Missing or invalid field: {field}", "field": field})
+                return
+
+        for sf in ['name', 'location', 'address']:
+            if not isinstance(data.get(sf), str) or not data.get(sf, '').strip():
+                self.send_json_response(400, "application/json", {"error": f"Missing or invalid field: {sf}", "field": sf})
                 return
 
         if not isinstance(data['capacity'], int) or data['capacity'] <= 0:
