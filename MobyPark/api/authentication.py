@@ -1,11 +1,11 @@
 # Kleine aantek; deze file komen alle authenticatie gerelateerde code snippets van de server.py
 
-# from datetime import datetime
-# import hashlib
-# import uuid
-# import bcrypt
-# import re
-# from storage_utils import load_json, save_user_data
+from datetime import datetime
+import hashlib
+import uuid
+import bcrypt
+import re
+from storage_utils import load_json, save_user_data
 
 def extract_bearer_token(headers):
     print(f"DEBUG: Headers in extract_bearer_token: {headers}")
