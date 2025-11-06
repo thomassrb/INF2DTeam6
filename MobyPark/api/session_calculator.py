@@ -16,10 +16,10 @@ def calculate_price(parkinglot, sid, data):
 
     def _parse_dt(s: str):
         fmts = [
-            "%d-%m-%Y %H:%M:%S",      # Ons huidige format
-            "%Y-%m-%d %H:%M:%S",      # alt classic format
-            "%Y-%m-%dT%H:%M:%SZ",     # ISO Zulu format
-            "%Y-%m-%dT%H:%M:%S",      # ISO no Z format
+            "%d-%m-%Y %H:%M:%S",      # current format
+            "%Y-%m-%d %H:%M:%S",      # alt classic
+            "%Y-%m-%dT%H:%M:%SZ",     # ISO Zulu
+            "%Y-%m-%dT%H:%M:%S",      # ISO no Z
         ]
         for f in fmts:
             try:
@@ -35,8 +35,9 @@ def calculate_price(parkinglot, sid, data):
     end_time = end_time or datetime.now()
 
     duration = end_time - start_time
-    total_hours = math.ceil(duration.total_seconds() / 3600)
-    total_days = math.ceil(duration.total_seconds() / 86400)
+    seconds = duration.total_seconds()
+    total_hours = math.ceil(seconds / 3600)
+    total_days = math.floor(seconds / 86400)
 
     hourly_rate = float(parkinglot.get("tariff", 0))
     daily_rate = float(parkinglot.get("daytariff", 999))

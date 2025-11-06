@@ -125,7 +125,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/index.html': self._handle_index,
                 '/favicon.ico': self._handle_favicon,
                 '/parking-lots': self._handle_get_parking_lots,
-                '/profile': lambda: authentication.handle_get_profile(self, authentication.get_user_from_session(self)),
+                '/profile': self._handle_profile,
                 '/logout': lambda: authentication.handle_logout(self),
                 '/reservations': self._handle_get_reservations,
                 '/payments': self._handle_get_payments,
@@ -139,7 +139,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/vehicles/reservations': self._handle_get_vehicle_reservations,
                 '/vehicles/history': self._handle_get_vehicle_history,
                 '/parking-lots/sessions': self._handle_get_parking_lot_sessions,
-                '/profile/': lambda: authentication.handle_get_profile_by_id(self, authentication.get_user_from_session(self)),
+                '/profile/': self._handle_profile_by_id,
             },
             'DELETE': {
                 '/parking-lots/': self._handle_delete_parking_lot,
@@ -158,6 +158,14 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(data, default=str).encode('utf-8'))
         else:
             self.wfile.write(str(data).encode('utf-8'))
+    
+    @login_required
+    def _handle_profile(self, session_user):
+        authentication.handle_get_profile(self, session_user)
+
+    @login_required
+    def _handle_profile_by_id(self, session_user):
+        authentication.handle_get_profile_by_id(self, session_user)
 
     def get_request_data(self):
         content_length = int(self.headers.get("Content-Length", 0))
