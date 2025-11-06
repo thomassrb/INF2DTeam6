@@ -208,3 +208,7 @@ def handle_get_profile_by_id(handler, session_user):
     }
     
     handler._send_json_response(200, "application/json", profile_data)
+
+class PasswordManager:
+    def hash_password(self, password):
+        return hashlib.sha256(password.encode('utf-8')).hexdigest()
