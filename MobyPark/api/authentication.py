@@ -8,6 +8,30 @@ from storage_utils import load_json, save_user_data
 import session_manager
 import re
 
+def login_required(func):
+    def wrapper(self, *args, **kwargs):
+        session_user = get_user_from_session(self)
+        if not session_user:
+            self._send_json_response(401, "application/json", {"error": "Unauthorized"})
+            return
+        return func(self, session_user, *args, **kwargs)
+    return wrapper
+
+def roles_required(roles):
+    def decorator(func):
+        def wrapper(self, *args, **kwargs):
+            session_user = get_user_from_session(self)
+            if not session_user:
+                self._send_json_response(401, "application/json", {"error": "Unauthorized"})
+                return
+            if session_user.get("role") not in roles:
+                self._send_json_response(403, "application/json", {"error": "Access denied"})
+                return
+            return func(self, session_user, *args, **kwargs)
+        return wrapper
+    return decorator
+
+
 def extract_bearer_token(headers):
     print(f"DEBUG: Headers in extract_bearer_token: {headers}")
     auth_header = headers.get('Authorization')
