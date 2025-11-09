@@ -1,4 +1,5 @@
 from DBConnection import DBConnection
+import os
 from datetime import datetime
 import sqlite3
 from storage_utils import load_json, write_json
@@ -6,7 +7,16 @@ from storage_utils import load_json, write_json
 connection = DBConnection("MobyPark/api/data/MobyParkData.db")
 
 def logger(file, data, error):
-    ...
+    file_directory = os.path.dirname(os.path.abspath(__file__))
+    data_directory = os.path.join(file_directory, 'data')
+    file_path = os.path.join(data_directory, file)
+
+    try:
+        with open(file=file_path, mode='a') as file:
+            file.write(f"{str(data)} ERROR: {error}\n")
+    except FileNotFoundError:
+        print("ERROR: file not found")
+        quit()
 
 
 def migrate_users():
@@ -23,21 +33,25 @@ VALUES
     for user in users:
         if set(user.keys()) != user_keys:
             falsive_data.append(user)
+            logger(file="falsive_user_logs.txt", data=user, error="missing key")
         elif "" in user.values():
             falsive_data.append(user)
+            logger(file="falsive_user_logs.txt", data=user, error="missing value")
         else:
-            user["created_at"] = datetime.strptime(user["created_at"], "%Y-%m-%d")
+            final_user = user.copy()
+            final_user["created_at"] = datetime.strptime(final_user["created_at"], "%Y-%m-%d")
             try:
-                connection.cursor.execute(datadump_query, user)
-            except sqlite3.OperationalError as e:
+                connection.cursor.execute(datadump_query, final_user)
+            except sqlite3.IntegrityError as e:
                 falsive_data.append(user)
-                print(e)
-                input()
+                logger(file="falsive_user_logs.txt", data=user, error=e)
+
 
     connection.connection.commit()
     connection.close_connection()
     write_json(filename="falsive_users.json", data=falsive_data)
     
+
 def migrate_parking_lots():
     parking_lots = load_json("parking.json")
     falsive_data = dict()
