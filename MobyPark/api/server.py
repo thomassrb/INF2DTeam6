@@ -12,6 +12,8 @@ import time
 import threading
 import hashlib
 from .routes.put_routes import put_routes
+from routes.delete_routes import delete_routes
+
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from storage_utils import load_json, save_data, save_user_data, load_parking_lot_data, save_parking_lot_data, save_reservation_data, load_reservation_data, load_payment_data, save_payment_data
@@ -154,10 +156,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/profile/': lambda: routes.get_routes.handle_get_profile_by_id(self, authentication.get_user_from_session(self)),
             },
             'DELETE': {
-                '/parking-lots/': lambda: routes.delete_routes._handle_delete_parking_lot(self, authentication.get_user_from_session(self)),
-                '/reservations/': lambda: routes.delete_routes._handle_delete_reservation(self, authentication.get_user_from_session(self)),
-                '/vehicles/': lambda: routes.delete_routes._handle_delete_vehicle(self, authentication.get_user_from_session(self)),
-                '/parking-lots/sessions/': lambda: routes.delete_routes._handle_delete_session(self, authentication.get_user_from_session(self)),
+                '/parking-lots/': lambda: delete_routes._handle_delete_parking_lot(self, authentication.get_user_from_session(self)),
+                '/reservations/': lambda: delete_routes._handle_delete_reservation(self, authentication.get_user_from_session(self)),
+                '/vehicles/': lambda: delete_routes._handle_delete_vehicle(self, authentication.get_user_from_session(self)),
+                '/parking-lots/sessions/': lambda: delete_routes._handle_delete_session(self, authentication.get_user_from_session(self)),
             }
         }
         super().__init__(*args, **kwargs)

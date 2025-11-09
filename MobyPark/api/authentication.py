@@ -61,3 +61,8 @@ def get_user_from_session(handler):
     else:
         print(f"DEBUG: Session found for token {token}, user: {session_data.get('username')}")
     return session_data if session_data else None
+
+
+class PasswordManager:
+    def hash_password(self, password):
+        return hashlib.sha256(password.encode('utf-8')).hexdigest()
