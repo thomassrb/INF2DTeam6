@@ -5,7 +5,7 @@ from MobyPark.api.authentication import PasswordManager
 from datetime import datetime
 password_manager = PasswordManager()
 
-class put_Routes: 
+class put_Routes:
     @roles_required(['ADMIN'])
     def _handle_update_parking_lot(self, session_user):
         lid = self.path.split("/")[2]
