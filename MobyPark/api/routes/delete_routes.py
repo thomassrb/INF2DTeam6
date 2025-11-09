@@ -1,6 +1,6 @@
 
 from storage_utils import load_json, save_data, save_parking_lot_data, load_parking_lot_data, save_reservation_data, load_reservation_data
-from MobyPark.api.server import login_required, roles_required
+from authentication import login_required, roles_required
 
 
 class delete_routes:

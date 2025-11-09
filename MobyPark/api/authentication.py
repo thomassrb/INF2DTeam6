@@ -1,12 +1,12 @@
 # Kleine aantek; deze file komen alle authenticatie gerelateerde code snippets van de server.py
 
-from datetime import datetime
 import hashlib
 import uuid
 import bcrypt
-import re
+from datetime import datetime
 from storage_utils import load_json, save_user_data
 import session_manager
+import re
 
 def login_required(func):
     def wrapper(self, *args, **kwargs):
@@ -61,6 +61,38 @@ def get_user_from_session(handler):
     else:
         print(f"DEBUG: Session found for token {token}, user: {session_data.get('username')}")
     return session_data if session_data else None
+
+def handle_update_profile(handler, session_user):
+    data = handler.get_request_data()
+    
+    valid, error = handler.data_validator.validate_data(data,
+        optional_fields={'name': str, 'password': str}
+    )
+    if not valid:
+        handler._send_json_response(400, "application/json", error)
+        return
+
+    data["username"] = session_user["username"]
+    if data.get("password"):
+        data["password"] = handler.password_manager.hash_password(data["password"])
+    
+    users = load_json('users.json')
+    updated_user = None
+    for i, user in enumerate(users):
+        if user["username"] == session_user["username"]:
+            if data.get("name"):
+                users[i]["name"] = data["name"]
+            if data.get("password"):
+                users[i]["password"] = data["password"]
+            updated_user = users[i]
+            break
+    save_user_data(users)
+    token = handler.headers.get('Authorization')
+    if updated_user:
+        if updated_user and token:
+            handler.session_manager.update_session_user(token, updated_user)
+    handler.audit_logger.audit(session_user, action="update_profile")
+    handler._send_json_response(200, "application/json", {"message": "User updated successfully"})
 
 
 class PasswordManager:
