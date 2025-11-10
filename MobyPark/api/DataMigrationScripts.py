@@ -19,20 +19,20 @@ def logger(file, data, error):
         quit()
 
 
-def migrate_data(falsive_data, log_file, query, data, final_data):
+def migrate_data(corrupt_data, log_file, query, data, final_data):
     try:
         connection.cursor.execute(query, final_data)
     except sqlite3.IntegrityError as e:
-        falsive_data.append(data)
+        corrupt_data.append(data)
         logger(file=log_file, data=data, error=e)
     except sqlite3.OperationalError as e:
-        falsive_data.append(data)
+        corrupt_data.append(data)
         logger(file=log_file, data=data, error=e)
 
 
 def migrate_users():
     users = load_json("users.json")
-    falsive_data = list()
+    corrupt_data = list()
     datadump_query = """
 INSERT INTO users
 (id, username, name, email, password, created_at, phone, birth_year, role, active)
@@ -43,16 +43,16 @@ VALUES
     for user in users:
         final_user = user.copy()
         final_user["created_at"] = datetime.strptime(final_user["created_at"], "%Y-%m-%d")
-        migrate_data(falsive_data=falsive_data, log_file="falsive_user_logs.txt", data=user, final_data=final_user, query=datadump_query)
+        migrate_data(corrupt_data=corrupt_data, log_file="corrupt_user_logs.txt", data=user, final_data=final_user, query=datadump_query)
 
     connection.connection.commit()
     connection.close_connection()
-    write_json(filename="falsive_users.json", data=falsive_data)
+    write_json(filename="corrupt_users.json", data=corrupt_data)
     
 
 def migrate_parking_lots():
     parking_lots = load_json("parking-lots.json")
-    falsive_data = list()
+    corrupt_data = list()
     datadump_query = """
 INSERT INTO parking_lots
 (id, name, location, address, capacity, created_at, reserved, tariff, daytariff)
@@ -69,17 +69,39 @@ VALUES
     for parking_lot in parking_lots.values():
         final_parking_lot = parking_lot.copy()
         final_parking_lot["created_at"] = datetime.strptime(final_parking_lot["created_at"], "%Y-%m-%d")
-        migrate_data(log_file="falsive_parking_lot_logs.txt", falsive_data=falsive_data, query=datadump_query, data=parking_lot, final_data=final_parking_lot)
+        migrate_data(log_file="corrupt_parking_lot_logs.txt", corrupt_data=corrupt_data, query=datadump_query, data=parking_lot, final_data=final_parking_lot)
 
         coordinates = parking_lot["coordinates"].copy()
         coordinates["id"] = parking_lot["id"]
-        migrate_data(log_file="falsive_parking_lot_logs.txt", falsive_data=falsive_data, query=coordinatesdump_query, data=parking_lot, final_data=coordinates)
+        migrate_data(log_file="corrupt_parking_lot_logs.txt", corrupt_data=corrupt_data, query=coordinatesdump_query, data=parking_lot, final_data=coordinates)
 
     connection.connection.commit()
     connection.close_connection()
-    write_json(filename="falsive_parking_lots.json", data=falsive_data)
+    if len(corrupt_data) > 0:
+        write_json(filename="corrupt_parking_lots.json", data=corrupt_data)
+
+
+def migrate_vehicles():
+    vehicles = load_json("vehicles.json")
+    corrupt_data = list()
+    query = """
+INSERT INTO vehicles
+(id, user_id, license_plate, make, model, color, year, created_at)
+VALUES
+(:id, :user_id, :license_plate, :make, :model, :color, :year, :created_at)
+"""
+
+    for vehicle in vehicles:
+        final_vehicle = vehicle.copy()
+        final_vehicle["created_at"] = datetime.strptime(final_vehicle["created_at"], "%Y-%m-%d")
+        migrate_data(corrupt_data=corrupt_data, log_file="corrupt_vehicle_logs.txt", query=query, data=vehicle, final_data=final_vehicle)
+    
+    connection.connection.commit()
+    connection.close_connection()
+    if len(corrupt_data) > 0:
+        write_json(filename="corrupt_vehicles.json", data=corrupt_data)
 
 
 if "__main__" ==  __name__:
 
-    migrate_parking_lots()
+    migrate_vehicles()
