@@ -62,7 +62,7 @@ class get_routes:
             handler.send_json_response(400, "application/json", {"error": "No active session or invalid token"})
 
     def _handle_index(self):
-        self._send_json_response(200, "text/html; charset=utf-8", 
+        self.send_json_response(200, "text/html; charset=utf-8", 
             "<html><head><title>MobyPark API</title></head>"
             "<body>"
             "<h1>MobyPark API is running</h1>"
