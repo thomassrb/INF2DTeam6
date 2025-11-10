@@ -4,6 +4,7 @@ if __name__ == "__main__" and __package__ is None:
     sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
     __package__ = "api"
 """-----------------------------------------------------------------"""
+
 import json
 import uuid
 from datetime import datetime
@@ -139,9 +140,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/index.html': lambda: get_routes._handle_index(self),
                 '/favicon.ico': lambda: get_routes._handle_favicon(self),
                 '/parking-lots': lambda: get_routes._handle_get_parking_lots(self),
-                '/profile': lambda: authentication.handle_get_profile(self, authentication.get_user_from_session(self)),
-                re.compile(r'^/profile/([^/]+)$'): lambda: authentication.handle_get_profile_by_id(self,  authentication.get_user_from_session(self)),
-                '/logout': lambda: authentication.handle_logout(self),
+                '/profile': lambda: get_routes.handle_get_profile(self, authentication.get_user_from_session(self)),
+                re.compile(r'^/profile/([^/]+)$'): lambda: get_routes.handle_get_profile_by_id(self,  authentication.get_user_from_session(self)),
+                '/logout': lambda: get_routes.handle_logout(self),
                 '/reservations': lambda: get_routes._handle_get_reservations(self),
                 '/payments':lambda: get_routes._handle_get_payments(self),
                 '/billing':lambda: get_routes._handle_get_billing(self),

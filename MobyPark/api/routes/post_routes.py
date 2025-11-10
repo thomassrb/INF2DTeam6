@@ -81,7 +81,7 @@ class post_routes:
                     print(f"DEBUG: Bcrypt match for user {username}")
                     token = str(uuid.uuid4())
                     session_manager.add_session(token, user_to_authenticate)
-                    handler._send_json_response(200, "application/json", {"message": "User logged in", "session_token": token})
+                    handler.send_json_response(200, "application/json", {"message": "User logged in", "session_token": token})
                     return
             else:
                 hashed_password_input = hashlib.sha256(password.encode('utf-8')).hexdigest()
@@ -89,11 +89,11 @@ class post_routes:
                     print(f"DEBUG: SHA256 match for user {username}")
                     token = str(uuid.uuid4())
                     session_manager.add_session(token, user_to_authenticate)
-                    handler._send_json_response(200, "application/json", {"message": "User logged in", "session_token": token})
+                    handler.send_json_response(200, "application/json", {"message": "User logged in", "session_token": token})
                     return
 
         print(f"DEBUG: Login failed for username: {username}. Provided password: {password}. Stored user: {user_to_authenticate}")
-        handler._send_json_response(401, "application/json", {"error": "Invalid credentials"})
+        handler.send_json_response(401, "application/json", {"error": "Invalid credentials"})
 
     def _handle_create_parking_lot(self):
             data = self.get_request_data()
