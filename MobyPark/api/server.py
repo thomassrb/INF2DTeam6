@@ -23,6 +23,7 @@ from socketserver import ThreadingMixIn
 from storage_utils import load_json, save_data, save_user_data, load_parking_lot_data, save_parking_lot_data, save_reservation_data, load_reservation_data, load_payment_data, save_payment_data, load_vehicles_data,save_vehicles_data
 import session_calculator as sc
 import authentication
+from DBConnection import DBConnection
 
 
 class PasswordManager:
@@ -854,3 +855,4 @@ class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
 server = ThreadingHTTPServer(('localhost', 8000), RequestHandler)
 print("Server running on http://localhost:8000")
 server.serve_forever()
+DBConnection = DBConnection("data/MobyPark_data.db")
