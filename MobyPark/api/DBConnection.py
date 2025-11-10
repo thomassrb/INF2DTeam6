@@ -26,7 +26,7 @@ class DBConnection:
         CREATE TABLE IF NOT EXISTS parking_lots(
             id VARCHAR(255) PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
-            location VARCHAR(255) NOT NULL UNIQUE,
+            location VARCHAR(255) NOT NULL,
             address VARCHAR(255) NOT NULL UNIQUE,
             capacity INT NOT NULL,
             reserved INT NOT NULL,
