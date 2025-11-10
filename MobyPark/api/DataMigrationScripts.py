@@ -46,7 +46,6 @@ VALUES
         migrate_data(corrupt_data=corrupt_data, log_file="corrupt_user_logs.txt", data=user, final_data=final_user, query=datadump_query)
 
     connection.connection.commit()
-    connection.close_connection()
     write_json(filename="corrupt_users.json", data=corrupt_data)
     
 
@@ -97,11 +96,44 @@ VALUES
         migrate_data(corrupt_data=corrupt_data, log_file="corrupt_vehicle_logs.txt", query=query, data=vehicle, final_data=final_vehicle)
     
     connection.connection.commit()
-    connection.close_connection()
     if len(corrupt_data) > 0:
         write_json(filename="corrupt_vehicles.json", data=corrupt_data)
 
 
-if "__main__" ==  __name__:
+def migrate_sessions():
+    for i in range(1):
+        sessions = load_json(f"pdata/p{i+1}-sessions.json")
+        corrupt_data = list()
+        query = """
+INSERT INTO sessions
+    (id, parking_lot_id, vehicle_id, started, stopped, user_id, duration_minutes, cost, payment_status)
+SELECT
+    :id,
+    :parking_lot_id,
+    v.id AS vehicle_id,
+    :started,
+    :stopped,
+    u.id AS user_id,
+    :duration_minutes,
+    :cost,
+    :payment_status
+FROM vehicles v
+JOIN users u ON u.username = :user
+WHERE v.license_plate = :licenseplate;
+"""
 
+        for session in sessions.values():
+            final_session = session.copy()
+            final_session["started"] = datetime.strptime(final_session["started"], "%Y-%m-%dT%H:%M:%SZ")
+            final_session["stopped"] = datetime.strptime(final_session["stopped"], "%Y-%m-%dT%H:%M:%SZ")
+            migrate_data(corrupt_data=corrupt_data, log_file="corrupt_session_logs.txt", query=query, data=session, final_data=final_session)
+
+        connection.connection.commit()
+        if len(corrupt_data) > 0:
+            write_json(filename="corrupt_vehicles.json", data=corrupt_data)
+
+
+if "__main__" ==  __name__:
     migrate_vehicles()
+    migrate_sessions()
+    connection.close_connection()
