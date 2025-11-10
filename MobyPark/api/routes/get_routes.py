@@ -17,12 +17,12 @@ class get_routes:
         "created_at": session_user.get("created_at")
             }
 
-        handler._send_json_response(200, "application/json", profile_data)
+        handler.send_json_response(200, "application/json", profile_data)
 
     def handle_get_profile_by_id(handler, session_user):
         match = re.match(r"^/profile/([^/]+)$", handler.path)
         if not match:
-            handler._send_json_response(400, "application/json", {"error": "Invalid URL format"})
+            handler.send_json_response(400, "application/json", {"error": "Invalid URL format"})
             return
         
         target_user_id = match.group(1)
@@ -31,13 +31,13 @@ class get_routes:
         target_user = next((u for u in users if u.get("id") == target_user_id), None)
         
         if not target_user:
-            handler._send_json_response(404, "application/json", {"error": "User not found"})
+            handler.send_json_response(404, "application/json", {"error": "User not found"})
             return
         
         is_admin = session_user["role"] == "ADMIN"
         
         if not is_admin and session_user.get("id") != target_user_id:
-            handler._send_json_response(403, "application/json", {"error": "Access denied. You can only view your own profile."})
+            handler.send_json_response(403, "application/json", {"error": "Access denied. You can only view your own profile."})
             return
         
         profile_data = {
@@ -51,7 +51,7 @@ class get_routes:
             "created_at": target_user.get("created_at")
         }
         
-        handler._send_json_response(200, "application/json", profile_data)
+        handler.send_json_response(200, "application/json", profile_data)
 
     def handle_logout(handler):
         token = extract_bearer_token(handler.headers)
@@ -70,11 +70,11 @@ class get_routes:
             "</body></html>"
         )
     def _handle_favicon(self):
-        self._send_json_response(204, "image/x-icon", "")
+        self.send_json_response(204, "image/x-icon", "")
 
     def _handle_get_parking_lots(self):
         parking_lots = load_parking_lot_data()
-        self._send_json_response(200, "application/json", parking_lots)
+        self.send_json_response(200, "application/json", parking_lots)
     
     @login_required
     def _handle_get_reservations(self, session_user):
@@ -82,7 +82,7 @@ class get_routes:
         print(f"DEBUG: In _handle_get_reservations. Session User: {session_user}")
         print(f"DEBUG: Raw Reservations Data: {reservations}")
         user_reservations = {rid: res for rid, res in reservations.items() if res.get("user") == session_user["username"] or session_user["role"] == "ADMIN"}
-        self._send_json_response(200, "application/json", user_reservations)
+        self.send_json_response(200, "application/json", user_reservations)
 
     @login_required
     def _handle_get_payments(self, session_user):
@@ -90,7 +90,7 @@ class get_routes:
         for payment in load_payment_data():
             if payment.get("initiator") == session_user["username"] or payment.get("processed_by") == session_user["username"] or session_user["role"] == "ADMIN":
                 payments.append(payment)
-        self._send_json_response(200, "application/json", payments)
+        self.send_json_response(200, "application/json", payments)
     
     @login_required
     def _handle_get_billing(self, session_user):
@@ -113,7 +113,7 @@ class get_routes:
                         "payed": payed,
                         "balance": amount - payed
                     })
-        self._send_json_response(200, "application/json", data)
+        self.send_json_response(200, "application/json", data)
     
     @login_required
     def _handle_get_vehicles(self, session_user):
@@ -123,24 +123,24 @@ class get_routes:
             all_vehicles = []
             for user_v_list in vehicles_data.values():
                 all_vehicles.extend(user_v_list)
-            self._send_json_response(200, "application/json", all_vehicles)
+            self.send_json_response(200, "application/json", all_vehicles)
             return
         else:
             user_vehicles = vehicles_data.get(session_user["username"], [])
             if not user_vehicles:
-                self._send_json_response(404, "application/json", {"error": "No vehicles found for this user"})
+                self.send_json_response(404, "application/json", {"error": "No vehicles found for this user"})
                 return
-            self._send_json_response(200, "application/json", user_vehicles)
+            self.send_json_response(200, "application/json", user_vehicles)
     
     def _handle_get_parking_lot_details(self):
         lid = self.path.split("/")[2]
         parking_lots = load_parking_lot_data()
         
         if lid not in parking_lots:
-            self._send_json_response(404, "application/json", {"error": "Parking lot not found"})
+            self.send_json_response(404, "application/json", {"error": "Parking lot not found"})
             return
 
-        self._send_json_response(200, "application/json", parking_lots[lid])
+        self.send_json_response(200, "application/json", parking_lots[lid])
     
     @login_required
     def _handle_get_reservation_details(self, session_user):
@@ -148,14 +148,14 @@ class get_routes:
         rid = self.path.replace("/reservations/", "")
         
         if rid not in reservations:
-            self._send_json_response(404, "application/json", {"error": "Reservation not found"})
+            self.send_json_response(404, "application/json", {"error": "Reservation not found"})
             return
         
         if not (session_user["role"] == "ADMIN") and not session_user["username"] == reservations[rid].get("user"):
-            self._send_json_response(403, "application/json", {"error": "Access denied"})
+            self.send_json_response(403, "application/json", {"error": "Access denied"})
             return
         
-        self._send_json_response(200, "application/json", reservations[rid])
+        self.send_json_response(200, "application/json", reservations[rid])
     @login_required
     def _handle_get_payment_details(self):
         session_user = authentication.get_user_from_session(self)
@@ -163,12 +163,12 @@ class get_routes:
         payments = load_payment_data()
         payment = next((p for p in payments if p.get("transaction") == pid), None)
         if not payment:
-            self._send_json_response(404, "application/json", {"error": "Payment not found!"})
+            self.send_json_response(404, "application/json", {"error": "Payment not found!"})
             return
         if not (session_user["role"] == "ADMIN") and payment.get("initiator") != session_user["username"]:
-            self._send_json_response(403, "application/json", {"error": "Access denied"})
+            self.send_json_response(403, "application/json", {"error": "Access denied"})
             return
-        self._send_json_response(200, "application/json", payment)
+        self.send_json_response(200, "application/json", payment)
 
     @roles_required(['ADMIN'])
     def _handle_get_user_billing(self, session_user):
@@ -194,4 +194,4 @@ class get_routes:
                         "balance": amount - payed
                     })
         self.audit_logger.audit(session_user, action="get_user_billing", target=session_user["username"])
-        self._send_json_response(200, "application/json", data)
+        self.send_json_response(200, "application/json", data)

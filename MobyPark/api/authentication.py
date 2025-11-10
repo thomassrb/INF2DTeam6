@@ -12,7 +12,7 @@ def login_required(func):
     def wrapper(self, *args, **kwargs):
         session_user = get_user_from_session(self)
         if not session_user:
-            self._send_json_response(401, "application/json", {"error": "Unauthorized"})
+            self.send_json_response(401, "application/json", {"error": "Unauthorized"})
             return
         return func(self, session_user, *args, **kwargs)
     return wrapper
@@ -22,10 +22,10 @@ def roles_required(roles):
         def wrapper(self, *args, **kwargs):
             session_user = get_user_from_session(self)
             if not session_user:
-                self._send_json_response(401, "application/json", {"error": "Unauthorized"})
+                self.send_json_response(401, "application/json", {"error": "Unauthorized"})
                 return
             if session_user.get("role") not in roles:
-                self._send_json_response(403, "application/json", {"error": "Access denied"})
+                self.send_json_response(403, "application/json", {"error": "Access denied"})
                 return
             return func(self, session_user, *args, **kwargs)
         return wrapper
@@ -69,7 +69,7 @@ def handle_update_profile(handler, session_user):
         optional_fields={'name': str, 'password': str}
     )
     if not valid:
-        handler._send_json_response(400, "application/json", error)
+        handler.send_json_response(400, "application/json", error)
         return
 
     data["username"] = session_user["username"]
@@ -92,7 +92,7 @@ def handle_update_profile(handler, session_user):
         if updated_user and token:
             handler.session_manager.update_session_user(token, updated_user)
     handler.audit_logger.audit(session_user, action="update_profile")
-    handler._send_json_response(200, "application/json", {"message": "User updated successfully"})
+    handler.send_json_response(200, "application/json", {"message": "User updated successfully"})
 
 
 class PasswordManager:

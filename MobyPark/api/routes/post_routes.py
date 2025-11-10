@@ -58,7 +58,7 @@ class post_routes:
         required_fields = ['username', 'password']
         for field in required_fields:
             if field not in data or not isinstance(data[field], str) or not data[field].strip():
-                handler._send_json_response(400, "application/json", {"error": f"Missing or invalid field: {field}", "field": field})
+                handler.send_json_response(400, "application/json", {"error": f"Missing or invalid field: {field}", "field": field})
                 return
 
         username = data['username']
@@ -108,7 +108,7 @@ class post_routes:
                 self.send_json_response(400, "application/json", {"error": "Capacity must be a positive integer", "field": "capacity"})
                 return
             if not isinstance(data['tariff'], (int, float)) or data['tariff'] < 0:
-                self._send_json_response(400, "application/json", {"error": "Tariff must be a non-negative number", "field": "tariff"})
+                self.send_json_response(400, "application/json", {"error": "Tariff must be a non-negative number", "field": "tariff"})
                 return
             if not isinstance(data['daytariff'], (int, float)) or data['daytariff'] < 0:
                 self.send_json_response(400, "application/json", {"error": "Day tariff must be a non-negative number", "field": "daytariff"})
@@ -322,7 +322,7 @@ class post_routes:
         
         valid, error = self.data_validator.validate_data(data)
         if not valid:
-            self._send_json_response(400, "application/json", error)
+            self.send_json_response(400, "application/json", error)
             return
         
         payments = load_payment_data()
@@ -339,7 +339,7 @@ class post_routes:
         }
         payments.append(payment)
         save_payment_data(payments)
-        self._send_json_response(201, "application/json", {"status": "Success", "payment": payment})
+        self.send_json_response(201, "application/json", {"status": "Success", "payment": payment})
  
     @roles_required(['ADMIN'])
     def _handle_debug_reset(self, session_user):
