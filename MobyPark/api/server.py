@@ -174,6 +174,14 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(data, default=str).encode('utf-8'))
         else:
             self.wfile.write(str(data).encode('utf-8'))
+    
+    @login_required
+    def _handle_profile(self, session_user):
+        authentication.handle_get_profile(self, session_user)
+
+    @login_required
+    def _handle_profile_by_id(self, session_user):
+        authentication.handle_get_profile_by_id(self, session_user)
 
     def get_request_data(self):
         content_length = int(self.headers.get("Content-Length", 0))
@@ -266,8 +274,13 @@ class RequestHandler(BaseHTTPRequestHandler):
 
         required_fields = ['name', 'location', 'capacity', 'tariff', 'daytariff', 'address', 'coordinates']
         for field in required_fields:
-            if field not in data or not isinstance(data[field], str) or not data[field].strip():
+            if field not in data:
                 self.send_json_response(400, "application/json", {"error": f"Missing or invalid field: {field}", "field": field})
+                return
+
+        for sf in ['name', 'location', 'address']:
+            if not isinstance(data.get(sf), str) or not data.get(sf, '').strip():
+                self.send_json_response(400, "application/json", {"error": f"Missing or invalid field: {sf}", "field": sf})
                 return
 
         if not isinstance(data['capacity'], int) or data['capacity'] <= 0:

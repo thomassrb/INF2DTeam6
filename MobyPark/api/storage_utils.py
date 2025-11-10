@@ -5,7 +5,8 @@ import threading
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
-DATA_DIR = os.path.join(PROJECT_ROOT, 'data')
+# Dit zorgt ervoor dat testes data files mogen overriden
+DATA_DIR = os.environ.get('MOBYPARK_DATA_DIR') or os.path.join(PROJECT_ROOT, 'data')
 
 # Zeker weten dat de data directory uberhaupt bestaat
 os.makedirs(DATA_DIR, exist_ok=True)
