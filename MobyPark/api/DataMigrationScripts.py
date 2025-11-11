@@ -149,9 +149,9 @@ VALUES
 
     query = """
 INSERT INTO payments
-    (id, amount, initiatior, user_id, created_at, completed, hash, session_id, parking_lot_id)
+    (id, amount, initiator, user_id, created_at, completed, hash, session_id, parking_lot_id)
 SELECT
-    :id,
+    :transaction,
     :amount,
     :initiator,
     u.id,
@@ -168,21 +168,52 @@ WHERE u.username = :initiator
     
     for payment in payments:
         final_payment = payment.copy()
-        final_payment["created_at"] = datetime.strptime(final_payment["created_at"], "%Y-%m-%dT%H:%M:%SZ")
-        final_payment["completed"] = datetime.strptime(final_payment["completed"], "%Y-%m-%dT%H:%M:%SZ")
-        final_payment["session_id"] = f'{final_payment["session_id"]}-p{final_payment["parking_lot_id"]}'
-        migrate_data(corrupt_data=corrupt_data, log_file="corrupt_payment_logs.txt", query=query, data=payment, final_data=final_payment)
+        try:
+            created_at_timestamp = final_payment["created_at"].rsplit(":", 1)[0]
+            completed_timestamp = final_payment["completed"].rsplit(":", 1)[0]
+            final_payment["created_at"] = datetime.strptime(created_at_timestamp, "%d-%m-%Y %H:%M")
+            final_payment["completed"] = datetime.strptime(completed_timestamp, "%d-%m-%Y %H:%M")
+            final_payment["session_id"] = f'{final_payment["session_id"]}-p{final_payment["parking_lot_id"]}'
+        except KeyError as e:
+            corrupt_data.append(payment)
+            logger(file="corrupt_payment_logs.txt", data=payment, error=e)
+        else:
+            migrate_data(corrupt_data=corrupt_data, log_file="corrupt_payment_logs.txt", query=query, data=payment, final_data=final_payment)
 
-        t_data = payment["t_data"]
-        t_data["id"] = payment["id"]
-        migrate_data(corrupt_data=corrupt_data, log_file="corrupt_payment_logs.txt", query=query, data=payment, final_data=t_data)
+            t_data = payment["t_data"]
+            t_data["id"] = payment["transaction"]
+            migrate_data(corrupt_data=corrupt_data, log_file="corrupt_payment_logs.txt", query=t_data_query, data=payment, final_data=t_data)
 
     connection.connection.commit()
     write_json(filename="corrupt_vehicles.json", data=corrupt_data) if len(corrupt_data) > 0 else None
         
 
 def migrate_reservations():
-    ...
+    reservations = load_json("reservations.json")
+    corrupt_data = list()
+    query = """
+INSERT INTO reservations
+    (id, user_id, parking_lot_id, vehicle_id, start_time, end_time, status, created_at, cost)
+VALUES
+    (:id, :user_id, :parking_lot_id, :vehicle_id, :start_time, :end_time, :status, :created_at, :cost)
+"""
+
+    for reservation in reservations:
+        final_reservation = reservation.copy()
+        final_reservation["start_time"] =  datetime.strptime(final_reservation["start_time"], "%Y-%m-%dT%H:%M:%SZ")
+        final_reservation["end_time"] =  datetime.strptime(final_reservation["end_time"], "%Y-%m-%dT%H:%M:%SZ")
+        final_reservation["created_at"] =  datetime.strptime(final_reservation["created_at"], "%Y-%m-%dT%H:%M:%SZ")
+        migrate_data(corrupt_data=corrupt_data, log_file="corrupt_reservation_logs.txt", query=query, data=reservation, final_data=final_reservation)
+
+    connection.connection.commit()
+    write_json(filename="corrupt_vehicles.json", data=corrupt_data) if len(corrupt_data) > 0 else None
+
+
 if "__main__" ==  __name__:
-  
+    migrate_users()
+    migrate_parking_lots()
+    migrate_vehicles()
+    migrate_sessions()
+    migrate_payments()
+    migrate_reservations()
     connection.close_connection()
