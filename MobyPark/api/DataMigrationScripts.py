@@ -75,7 +75,6 @@ VALUES
         migrate_data(log_file="corrupt_parking_lot_logs.txt", corrupt_data=corrupt_data, query=coordinatesdump_query, data=parking_lot, final_data=coordinates)
 
     connection.connection.commit()
-    connection.close_connection()
     if len(corrupt_data) > 0:
         write_json(filename="corrupt_parking_lots.json", data=corrupt_data)
 
@@ -85,7 +84,7 @@ def migrate_vehicles():
     corrupt_data = list()
     query = """
 INSERT INTO vehicles
-(id, user_id, license_plate, make, model, color, year, created_at)
+(id, user_id, licenseplate, make, model, color, year, created_at)
 VALUES
 (:id, :user_id, :license_plate, :make, :model, :color, :year, :created_at)
 """
@@ -101,31 +100,36 @@ VALUES
 
 
 def migrate_sessions():
-    for i in range(1):
+    for i in range(1500):
+        print(i+1)
         sessions = load_json(f"pdata/p{i+1}-sessions.json")
         corrupt_data = list()
         query = """
 INSERT INTO sessions
-    (id, parking_lot_id, vehicle_id, started, stopped, user_id, duration_minutes, cost, payment_status)
+    (id, parking_lot_id, licenseplate, vehicle_id, started, stopped, username, user_id, duration_minutes, cost, payment_status)
 SELECT
     :id,
     :parking_lot_id,
-    v.id AS vehicle_id,
+    :licenseplate,
+    v.id,          
     :started,
     :stopped,
-    u.id AS user_id,
+    :user,
+    u.id,
     :duration_minutes,
     :cost,
     :payment_status
-FROM vehicles v
-JOIN users u ON u.username = :user
-WHERE v.license_plate = :licenseplate;
+FROM (SELECT 1) AS dummy
+LEFT JOIN vehicles v ON v.licenseplate = :licenseplate
+LEFT JOIN users u ON u.username = :user;
 """
+        
 
         for session in sessions.values():
             final_session = session.copy()
             final_session["started"] = datetime.strptime(final_session["started"], "%Y-%m-%dT%H:%M:%SZ")
             final_session["stopped"] = datetime.strptime(final_session["stopped"], "%Y-%m-%dT%H:%M:%SZ")
+            final_session["id"] = f'{final_session["id"]}-p{i+1}'
             migrate_data(corrupt_data=corrupt_data, log_file="corrupt_session_logs.txt", query=query, data=session, final_data=final_session)
 
         connection.connection.commit()
@@ -133,7 +137,52 @@ WHERE v.license_plate = :licenseplate;
             write_json(filename="corrupt_vehicles.json", data=corrupt_data)
 
 
+def migrate_payments():
+    payments = load_json("payments.json")
+    corrupt_data = list()
+    t_data_query = """
+INSERT INTO t_data
+    (id, amount, date, method, issuer, bank)
+VALUES
+    (:id, :amount, :date, :method, :issuer, :bank)
+"""
+
+    query = """
+INSERT INTO payments
+    (id, amount, initiatior, user_id, created_at, completed, hash, session_id, parking_lot_id)
+SELECT
+    :id,
+    :amount,
+    :initiator,
+    u.id,
+    :created_at,
+    :completed,
+    :hash,
+    s.id,
+    p.id
+FROM users u 
+JOIN sessions s ON s.id = :session_id
+JOIN parking_lots p ON p.id = :parking_lot_id
+WHERE u.username = :initiator
+"""
+    
+    for payment in payments:
+        final_payment = payment.copy()
+        final_payment["created_at"] = datetime.strptime(final_payment["created_at"], "%Y-%m-%dT%H:%M:%SZ")
+        final_payment["completed"] = datetime.strptime(final_payment["completed"], "%Y-%m-%dT%H:%M:%SZ")
+        final_payment["session_id"] = f'{final_payment["session_id"]}-p{final_payment["parking_lot_id"]}'
+        migrate_data(corrupt_data=corrupt_data, log_file="corrupt_payment_logs.txt", query=query, data=payment, final_data=final_payment)
+
+        t_data = payment["t_data"]
+        t_data["id"] = payment["id"]
+        migrate_data(corrupt_data=corrupt_data, log_file="corrupt_payment_logs.txt", query=query, data=payment, final_data=t_data)
+
+    connection.connection.commit()
+    write_json(filename="corrupt_vehicles.json", data=corrupt_data) if len(corrupt_data) > 0 else None
+        
+
+def migrate_reservations():
+    ...
 if "__main__" ==  __name__:
-    migrate_vehicles()
-    migrate_sessions()
+  
     connection.close_connection()
