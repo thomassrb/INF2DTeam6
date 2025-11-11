@@ -1,45 +1,61 @@
 import json
 import csv
 import os
+import threading
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(SCRIPT_DIR, 'data')
+PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
+# Dit zorgt ervoor dat testes data files mogen overriden
+DATA_DIR = os.environ.get('MOBYPARK_DATA_DIR') or os.path.join(PROJECT_ROOT, 'data')
+
+# Zeker weten dat de data directory uberhaupt bestaat
+os.makedirs(DATA_DIR, exist_ok=True)
+
+# Een beveiliging die ervoor zorgt dat meerdere threads niet tegelijk hetzelfde JSON-bestand kunnen aanpassen
+# dit vermijdt de mogelijkheid op data verlies in de jsons
+json_file_lock = threading.Lock()
 
 def load_json(filename):
     full_path = os.path.join(DATA_DIR, filename)
-    try:
-        with open(full_path, 'r') as file:
-            return json.load(file)
-    except FileNotFoundError:
-        return {}
-    except json.JSONDecodeError:
-        print(f"Error decoding JSON from {filename}. Returning empty dictionary.")
-        return {}
+    print(f"DEBUG: load_json trying to open: {full_path}")
+    with json_file_lock:
+        try:
+            with open(full_path, 'r', encoding='utf-8') as file:
+                data = json.load(file)
+                print(f"DEBUG: Successfully loaded JSON from {filename}. Data type: {type(data)}")
+                return data
+        except FileNotFoundError:
+            print(f"DEBUG: FileNotFoundError for {filename}. Returning empty dictionary.")
+            return {}
+        except json.JSONDecodeError:
+            print(f"DEBUG: Error decoding JSON from {filename}. Returning empty dictionary.")
+            return {}
 
 def write_json(filename, data):
     full_path = os.path.join(DATA_DIR, filename)
-    try:
-        with open(full_path, 'w') as file:
-            json.dump(data, file, indent=4)
-    except IOError as e:
-        print(f"Error writing JSON to {filename}: {e}")
+    with json_file_lock:
+        try:
+            with open(full_path, 'w', encoding='utf-8') as file:
+                json.dump(data, file, indent=4)
+        except IOError as e:
+            print(f"Error writing JSON to {filename}: {e}")
 
 def load_csv(filename):
     full_path = os.path.join(DATA_DIR, filename)
     try:
-        with open(full_path, 'r') as file:
+        with open(full_path, 'r', encoding='utf-8') as file:
             reader = csv.reader(file)
             return [row for row in reader]
     except FileNotFoundError:
         return []
-    except Exception as e:
+    except csv.Error as e:
         print(f"Error loading CSV from {filename}: {e}")
         return []
 
 def write_csv(filename, data):
     full_path = os.path.join(DATA_DIR, filename)
     try:
-        with open(full_path, 'w', newline='') as file:
+        with open(full_path, 'w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
             for row in data:
                 writer.writerow(row)
@@ -49,18 +65,18 @@ def write_csv(filename, data):
 def load_text(filename):
     full_path = os.path.join(DATA_DIR, filename)
     try:
-        with open(full_path, 'r') as file:
+        with open(full_path, 'r', encoding='utf-8') as file:
             return file.readlines()
     except FileNotFoundError:
         return []
-    except Exception as e:
+    except IOError as e:
         print(f"Error loading text from {filename}: {e}")
         return []
 
 def write_text(filename, data):
     full_path = os.path.join(DATA_DIR, filename)
     try:
-        with open(full_path, 'w') as file:
+        with open(full_path, 'w', encoding='utf-8') as file:
             for line in data:
                 file.write(line + '\n')
     except IOError as e:
@@ -74,7 +90,7 @@ def save_data(filename, data):
     elif filename.endswith('.txt'):
         write_text(filename, data)
     else:
-        raise ValueError("Unsupported file format") 
+        raise ValueError("Unsupported file format")
 
 def load_data(filename):
     if filename.endswith('.json'):
@@ -120,4 +136,4 @@ def load_vehicles_data():
     return load_data('vehicles.json')
 
 def save_vehicles_data(data):
-    save_data('vehicles.json')
+    save_data('vehicles.json', data)

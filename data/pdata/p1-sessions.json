@@ -4,5 +4,23 @@
         "started": "15-10-2025 15:30:30",
         "stopped": "15-10-2025 15:31:57",
         "user": "admin1"
+    },
+    "2": {
+        "licenseplate": "ABC-123-1857408758",
+        "started": "03-11-2025 20:57:32",
+        "stopped": "03-11-2025 21:30:35",
+        "user": "adminSil"
+    },
+    "3": {
+        "license_plate": "XX-YY-ZZ",
+        "started": "05-11-2025 11:05:25",
+        "stopped": "05-11-2025 11:05:42",
+        "user": "adminSil"
+    },
+    "4": {
+        "license_plate": "XX-YY-ZZ",
+        "started": "05-11-2025 11:08:47",
+        "stopped": null,
+        "user": "adminSil"
     }
 }
