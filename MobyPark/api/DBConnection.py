@@ -45,7 +45,7 @@ class DBConnection:
         CREATE TABLE IF NOT EXISTS vehicles(
             id VARCHAR(255) PRIMARY KEY,
             user_id VARCHAR(255) NOT NULL,
-            license_plate VARCHAR(255) NOT NULL UNIQUE,
+            licenseplate VARCHAR(255) NOT NULL UNIQUE,
             make VARCHAR(255) NOT NULL,
             model VARCHAR(255) NOT NULL,
             color VARCHAR(255) NOT NULL,
@@ -57,10 +57,12 @@ class DBConnection:
         CREATE TABLE IF NOT EXISTS sessions(
             id VARCHAR(255) PRIMARY KEY,
             parking_lot_id VARCHAR(255) NOT NULL,
-            vehicle_id VARCHAR(255) NOT NULL,
+            licenseplate VARCHAR(255) NOT NULL,
+            vehicle_id VARCHAR(255),
             started DATETIME NOT NULL,
             stopped DATETIME NOT NULL,
-            user_id VARCHAR(255) NOT NULL,
+            username VARCHAR(255) NOT NULL,
+            user_id VARCHAR(255),
             duration_minutes INT NOT NULL,
             cost DECIMAL(10,2) NOT NULL,
             payment_status VARCHAR(255) NOT NULL,
