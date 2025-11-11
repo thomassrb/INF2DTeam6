@@ -3,7 +3,7 @@ import csv
 import os
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(SCRIPT_DIR, '..', '..', 'data')
+DATA_DIR = os.path.join(SCRIPT_DIR, 'data')
 
 def load_json(filename):
     full_path = os.path.join(DATA_DIR, filename)
@@ -20,7 +20,7 @@ def write_json(filename, data):
     full_path = os.path.join(DATA_DIR, filename)
     try:
         with open(full_path, 'w') as file:
-            json.dump(data, file, default=str, indent=4)
+            json.dump(data, file, indent=4)
     except IOError as e:
         print(f"Error writing JSON to {filename}: {e}")
 
@@ -115,3 +115,9 @@ def load_discounts_data():
 
 def save_discounts_data(data):
     save_data('discounts.csv', data)
+
+def load_vehicles_data():
+    return load_data('vehicles.json')
+
+def save_vehicles_data(data):
+    save_data('vehicles.json')

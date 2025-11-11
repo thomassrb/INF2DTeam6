@@ -30,5 +30,237 @@
     "name": "Admin One",
     "role": "ADMIN",
     "created_at": "2025-10-05"
+  },
+  "8238fd78-c945-4173-89df-7a6aa594b885": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
+  },
+  "92ffd706-1e09-437f-afc1-d027b533da5b": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
+  },
+  "6d9ab24f-1a66-4e3d-bc3f-7324a83c855f": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
+  },
+  "1f915a15-f0f2-4493-b046-750931b5b308": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
+  },
+  "dcc7391a-44e6-4822-936f-bc0918a6a9a2": {
+    "id": "47",
+    "username": "normaluser",
+    "password": "$2b$12$8lP6CcejWx9zX24BxlE/s.hCapQS3xqjDkNKw6JcwjWfEbZIslYXi",
+    "name": "Normal User",
+    "phone": "1112223333",
+    "email": "normal@example.com",
+    "birth_year": "1990",
+    "role": "USER",
+    "active": true,
+    "created_at": "2025-10-15"
+  },
+  "72d14580-f7c1-48b5-a6c0-73ac50ded0b7": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
+  },
+  "6546f621-03b1-4d85-8589-202750f0e603": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
+  },
+  "4802952c-b5e5-4486-b52b-afc174ab656b": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
+  },
+  "a245fceb-da7b-46eb-ad9e-9f8288eca770": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
+  },
+  "ed27a18b-0283-4ec1-88c1-dcda4a56287d": {
+    "id": "47",
+    "username": "normaluser",
+    "password": "$2b$12$8lP6CcejWx9zX24BxlE/s.hCapQS3xqjDkNKw6JcwjWfEbZIslYXi",
+    "name": "Normal User",
+    "phone": "1112223333",
+    "email": "normal@example.com",
+    "birth_year": "1990",
+    "role": "USER",
+    "active": true,
+    "created_at": "2025-10-15"
+  },
+  "03a68262-b62a-4f92-8f8e-5a6e3ae21cf7": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
+  },
+  "75fd374f-c393-41a1-a1c7-9f574ba14f25": {
+    "id": "47",
+    "username": "normaluser",
+    "password": "$2b$12$8lP6CcejWx9zX24BxlE/s.hCapQS3xqjDkNKw6JcwjWfEbZIslYXi",
+    "name": "Normal User",
+    "phone": "1112223333",
+    "email": "normal@example.com",
+    "birth_year": "1990",
+    "role": "USER",
+    "active": true,
+    "created_at": "2025-10-15"
+  },
+  "0a8337cd-2358-4c2d-98b0-1b9b9d8e6646": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
+  },
+  "bd388cce-befb-403d-8aa2-cb3ece3aa257": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
+  },
+  "89467ce7-8bb8-4817-9b0a-a7ebbc97ad2b": {
+    "id": "48",
+    "username": "normaluser_aa",
+    "password": "$2b$12$9rAe6xCqY.2YBs6WHCMKC.r51AL.6lZdB.oUnvcy7XXcwCw0tN/h6",
+    "name": "Normal User",
+    "phone": "1112223333",
+    "email": "normal@example.com",
+    "birth_year": "1990",
+    "role": "USER",
+    "active": true,
+    "created_at": "2025-10-15"
+  },
+  "cc0a1f79-7e09-4b84-a28c-0beb95e89a8b": {
+    "id": "49",
+    "username": "testuser_ab",
+    "password": "$2b$12$q1nR84F8boPfEs.Ha0Jo9.gl6qb/J4GHGU51tpFve5mG9DfqatH1C",
+    "name": "Test User",
+    "phone": "1234567890",
+    "email": "test@example.com",
+    "birth_year": "2000",
+    "role": "USER",
+    "active": true,
+    "created_at": "2025-10-15"
+  },
+  "3f5f9702-fe36-4685-b940-9b24569d8faa": {
+    "id": "50",
+    "username": "adminuser_aa",
+    "password": "$2b$12$U0gx55dvrMGg7svBLWh.YeONoPz72XCTr75.05P1ISI9Ar1tHiClm",
+    "name": "Admin User",
+    "phone": "0987654321",
+    "email": "admin@example.com",
+    "birth_year": "1990",
+    "role": "ADMIN",
+    "active": true,
+    "created_at": "2025-10-15"
+  },
+  "ce88c35f-d9cb-4ec8-b4d6-06f2050beb10": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
+  },
+  "ca76a21f-af9a-4562-bdff-adaf9d99a021": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
+  },
+  "1b50d860-e893-41e1-b7d4-207b651af31b": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
+  },
+  "9a49e271-b713-42f4-8a60-82ba566ae524": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
+  },
+  "18afcf2a-9fcb-466d-8080-c1cf971287c4": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
+  },
+  "7892b79e-6c4c-47bf-a2b4-9e7d3e344b2b": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
+  },
+  "79e1eec9-9b9f-4e3e-b7b6-1e520d1b684c": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
+  },
+  "6a8f242d-5e88-4f40-83bd-f9c2e060b4ad": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
+  },
+  "fb19a4e9-b7ff-4e25-a843-a3feebdc9a97": {
+    "id": "43",
+    "username": "admin1",
+    "password": "$2b$12$Umu6L53B4osxE8a7vjSYiuc5Rwa3D4Q3RrvM6e8qSH5eTym/fS1qa",
+    "name": "Admin One",
+    "role": "ADMIN",
+    "created_at": "2025-10-05"
   }
 }

@@ -1,1 +1,26 @@
-{}
+{
+    "1": {
+        "licenseplate": "TEST123",
+        "startdate": "2025-10-26T10:00:00Z",
+        "enddate": "2025-10-26T14:00:00Z",
+        "parkinglot": "1",
+        "user": "testuser_new",
+        "id": "1"
+    },
+    "2": {
+        "licenseplate": "TEST_ADMIN_NOUSE",
+        "startdate": "2025-10-28T09:00:00Z",
+        "enddate": "2025-10-28T11:00:00Z",
+        "parkinglot": "1",
+        "user": null,
+        "id": "2"
+    },
+    "3": {
+        "licenseplate": "TEST_USER_AUTO_V",
+        "startdate": "2025-10-29T10:00:00Z",
+        "enddate": "2025-10-29T12:00:00Z",
+        "parkinglot": "1",
+        "user": "normaluser_aa",
+        "id": "3"
+    }
+}
