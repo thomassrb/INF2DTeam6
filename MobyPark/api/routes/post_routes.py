@@ -315,31 +315,6 @@ class post_routes:
         payments.append(payment)
         save_payment_data(payments)
         self.send_json_response(201, "application/json", {"status": "Success", "payment": payment})
-
-    @roles_required(['ADMIN'])
-    def _handle_refund_payment(self, session_user):
-        data = self.get_request_data()
-        
-        valid, error = self.data_validator.validate_data(data)
-        if not valid:
-            self.send_json_response(400, "application/json", error)
-            return
-        
-        payments = load_payment_data()
-        refund_txn = data.get("transaction") if data.get("transaction") else str(uuid.uuid4())
-        payment = {
-            "transaction": refund_txn,
-            "amount": -abs(data['amount']),
-            "coupled_to": data.get("coupled_to"),
-            "processed_by": session_user["username"],
-            "created_at": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
-            "completed": False,
-            "completed_at": None,
-            "hash": sc.generate_transaction_validation_hash()
-        }
-        payments.append(payment)
-        save_payment_data(payments)
-        self.send_json_response(201, "application/json", {"status": "Success", "payment": payment})
  
     @roles_required(['ADMIN'])
     def _handle_debug_reset(self, session_user):
