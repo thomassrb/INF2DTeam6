@@ -7,6 +7,8 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
 # Dit zorgt ervoor dat testes data files mogen overriden
 DATA_DIR = os.environ.get('MOBYPARK_DATA_DIR') or os.path.join(PROJECT_ROOT, 'data')
+TEST_MODE = os.environ.get('TEST_MODE') == '1'
+DEBUG_LOGS = os.environ.get('DEBUG_LOGS') == '1'
 
 # Zeker weten dat de data directory uberhaupt bestaat
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -14,29 +16,47 @@ os.makedirs(DATA_DIR, exist_ok=True)
 # Een beveiliging die ervoor zorgt dat meerdere threads niet tegelijk hetzelfde JSON-bestand kunnen aanpassen
 # dit vermijdt de mogelijkheid op data verlies in de jsons
 json_file_lock = threading.Lock()
+_JSON_CACHE = {} if TEST_MODE else None
 
 def load_json(filename):
     full_path = os.path.join(DATA_DIR, filename)
-    print(f"DEBUG: load_json trying to open: {full_path}")
+    if DEBUG_LOGS:
+        print(f"DEBUG: load_json trying to open: {full_path}")
+    if TEST_MODE and _JSON_CACHE is not None and filename in _JSON_CACHE:
+        return _JSON_CACHE[filename]
     with json_file_lock:
         try:
             with open(full_path, 'r', encoding='utf-8') as file:
                 data = json.load(file)
-                print(f"DEBUG: Successfully loaded JSON from {filename}. Data type: {type(data)}")
+                if DEBUG_LOGS:
+                    print(f"DEBUG: Successfully loaded JSON from {filename}. Data type: {type(data)}")
+                if TEST_MODE and _JSON_CACHE is not None:
+                    _JSON_CACHE[filename] = data
                 return data
         except FileNotFoundError:
-            print(f"DEBUG: FileNotFoundError for {filename}. Returning empty dictionary.")
-            return {}
+            if DEBUG_LOGS:
+                print(f"DEBUG: FileNotFoundError for {filename}. Returning empty dictionary.")
+            data = {}
+            if TEST_MODE and _JSON_CACHE is not None:
+                _JSON_CACHE[filename] = data
+            return data
         except json.JSONDecodeError:
-            print(f"DEBUG: Error decoding JSON from {filename}. Returning empty dictionary.")
-            return {}
+            if DEBUG_LOGS:
+                print(f"DEBUG: Error decoding JSON from {filename}. Returning empty dictionary.")
+            data = {}
+            if TEST_MODE and _JSON_CACHE is not None:
+                _JSON_CACHE[filename] = data
+            return data
 
 def write_json(filename, data):
     full_path = os.path.join(DATA_DIR, filename)
+    if TEST_MODE and _JSON_CACHE is not None:
+        _JSON_CACHE[filename] = data
     with json_file_lock:
         try:
             with open(full_path, 'w', encoding='utf-8') as file:
-                json.dump(data, file, indent=4)
+                indent = None if TEST_MODE else 4
+                json.dump(data, file, indent=indent)
         except IOError as e:
             print(f"Error writing JSON to {filename}: {e}")
 

@@ -2,6 +2,8 @@ import re
 import uuid
 import hashlib
 import bcrypt
+import os
+
 from datetime import datetime
 import session_manager
 
@@ -27,8 +29,15 @@ class post_routes:
         email = data['email']
         birth_year = data['birth_year']
 
+        TEST_MODE = os.environ.get('TEST_MODE') == '1'
+        if TEST_MODE:
+            # In tests, store fast SHA256 to minimize hashing cost
+            hashed_password = hashlib.sha256(password.encode('utf-8')).hexdigest()
+        else:
+            rounds = None
+            salt = bcrypt.gensalt(rounds=rounds) if rounds else bcrypt.gensalt()
+            hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
-        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         users = load_json('users.json')
 
         if any(user['username'] == username for user in users):
@@ -66,19 +75,24 @@ class post_routes:
 
         users = load_json('users.json')
         user_to_authenticate = None
-        print(f"DEBUG: Searching for user '{username}' in users list of type {type(users)}")
+        DEBUG_LOGS = os.environ.get('DEBUG_LOGS') == '1'
+        if DEBUG_LOGS:
+            print(f"DEBUG: Searching for user '{username}' in users list of type {type(users)}")
         for u in users:
-            print(f"DEBUG: Checking user: {u.get('username')}")
+            if DEBUG_LOGS:
+                print(f"DEBUG: Checking user: {u.get('username')}")
             if u.get("username") == username:
                 user_to_authenticate = u
-                print(f"DEBUG: Found user {username}: {user_to_authenticate}")
+                if DEBUG_LOGS:
+                    print(f"DEBUG: Found user {username}: {user_to_authenticate}")
                 break
 
         # COMMENTS TOEVOEGEN VOOR ONDERSTAAND STATEMENT
         if user_to_authenticate:
             if user_to_authenticate.get("password", "").startswith("$2b$"):
                 if bcrypt.checkpw(password.encode('utf-8'), user_to_authenticate["password"].encode('utf-8')):
-                    print(f"DEBUG: Bcrypt match for user {username}")
+                    if DEBUG_LOGS:
+                        print(f"DEBUG: Bcrypt match for user {username}")
                     token = str(uuid.uuid4())
                     session_manager.add_session(token, user_to_authenticate)
                     handler.send_json_response(200, "application/json", {"message": "User logged in", "session_token": token})
@@ -86,13 +100,15 @@ class post_routes:
             else:
                 hashed_password_input = hashlib.sha256(password.encode('utf-8')).hexdigest()
                 if hashed_password_input == user_to_authenticate.get("password", ""):
-                    print(f"DEBUG: SHA256 match for user {username}")
+                    if DEBUG_LOGS:
+                        print(f"DEBUG: SHA256 match for user {username}")
                     token = str(uuid.uuid4())
                     session_manager.add_session(token, user_to_authenticate)
                     handler.send_json_response(200, "application/json", {"message": "User logged in", "session_token": token})
                     return
 
-        print(f"DEBUG: Login failed for username: {username}. Provided password: {password}. Stored user: {user_to_authenticate}")
+        if DEBUG_LOGS:
+            print(f"DEBUG: Login failed for username: {username}. Provided password: {password}. Stored user: {user_to_authenticate}")
         handler.send_json_response(401, "application/json", {"error": "Invalid credentials"})
 
     def _handle_create_parking_lot(self):
