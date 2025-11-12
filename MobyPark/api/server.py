@@ -116,14 +116,14 @@ class RequestHandler(BaseHTTPRequestHandler):
             'POST': {
                 '/register': lambda: post_routes.handle_register(self), # load_tester CHECK!
                 '/login': lambda: post_routes.handle_login(self), # load_tester CHECK!
-                '/parking-lots': post_routes._handle_create_parking_lot, # load_tester CHECK!
-                '/reservations': post_routes._handle_create_reservation, # FAILED!!!!
-                '/vehicles': post_routes._handle_create_vehicle,
-                '/payments': post_routes._handle_create_payment,
-                re.compile(r'^/parking-lots/([^/]+)/sessions/start$'): post_routes._handle_start_session,
-                re.compile(r'^/parking-lots/([^/]+)/sessions/stop$'): post_routes._handle_stop_session,
-                '/payments/refund': post_routes._handle_refund_payment,
-                '/debug/reset': post_routes._handle_debug_reset, # hier nog even naar kijken
+                '/parking-lots': lambda: self._handle_create_parking_lot(), # load_tester CHECK!
+                '/reservations': lambda: self._handle_create_reservation(), # FAILED!!!!
+                '/vehicles': lambda: self._handle_create_vehicle(),
+                '/payments': lambda: self._handle_create_payment(),
+                re.compile(r'^/parking-lots/([^/]+)/sessions/start$'): lambda: self._handle_start_session(),
+                re.compile(r'^/parking-lots/([^/]+)/sessions/stop$'): lambda: self._handle_stop_session(),
+                '/payments/refund': lambda: self._handle_refund_payment(),
+                '/debug/reset': lambda: post_routes._handle_debug_reset(self), # hier nog even naar kijken
             },
             'PUT': {
                 '/profile': lambda: authentication.handle_update_profile(self, authentication.get_user_from_session(self)),
@@ -141,8 +141,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/index.html': lambda: get_routes._handle_index(self),
                 '/favicon.ico': lambda: get_routes._handle_favicon(self),
                 '/parking-lots': lambda: get_routes._handle_get_parking_lots(self),
-                '/profile': lambda: get_routes.handle_get_profile(self, authentication.get_user_from_session(self)),
-                re.compile(r'^/profile/([^/]+)$'): lambda: get_routes.handle_get_profile_by_id(self,  authentication.get_user_from_session(self)),
+                '/profile': lambda: self._handle_profile(),
+                re.compile(r'^/profile/([^/]+)$'): lambda: self._handle_profile_by_id(),
                 '/logout': lambda: get_routes.handle_logout(self),
                 '/reservations': lambda: get_routes._handle_get_reservations(self),
                 '/payments':lambda: get_routes._handle_get_payments(self),
@@ -178,11 +178,11 @@ class RequestHandler(BaseHTTPRequestHandler):
     
     @login_required
     def _handle_profile(self, session_user):
-        authentication.handle_get_profile(self, session_user)
+        get_routes.handle_get_profile(self, session_user)
 
     @login_required
     def _handle_profile_by_id(self, session_user):
-        authentication.handle_get_profile_by_id(self, session_user)
+        get_routes.handle_get_profile_by_id(self, session_user)
 
     def get_request_data(self):
         content_length = int(self.headers.get("Content-Length", 0))
@@ -326,26 +326,28 @@ class RequestHandler(BaseHTTPRequestHandler):
         lid = match.group(1)
         data = self.get_request_data()
 
-        if 'licenseplate' not in data or not isinstance(data['licenseplate'], str) or not data['licenseplate'].strip():
+        lp = data.get('license_plate') or data.get('licenseplate')
+        if not isinstance(lp, str) or not lp.strip():
             self.send_json_response(400, "application/json", {"error": "Missing or invalid field: licenseplate", "field": "licenseplate"})
             return
 
         sessions = load_json(f'pdata/p{lid}-sessions.json')
-        filtered = {key: value for key, value in sessions.items() if value.get("licenseplate") == data['licenseplate'] and not value.get('stopped')}
+        filtered = {key: value for key, value in sessions.items() if (value.get("licenseplate") == lp or value.get("license_plate") == lp) and not value.get('stopped')}
 
         if len(filtered) > 0:
             self.send_json_response(409, "application/json", {"error": "Cannot start a session when another session for this license plate is already started."})
             return 
 
         session = {
-            "licenseplate": data['licenseplate'],
+            "licenseplate": lp,
+            "license_plate": lp,
             "started": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
             "stopped": None,
             "user": session_user["username"]
         }
         sessions[str(len(sessions) + 1)] = session
         save_data(f'pdata/p{lid}-sessions.json', sessions)
-        self.send_json_response(200, "application/json", {"message": f"Session started for: {data['licenseplate']}"})
+        self.send_json_response(200, "application/json", {"message": f"Session started for: {lp}"})
 
     @login_required
     def _handle_stop_session(self, session_user):
@@ -362,7 +364,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
         
         sessions = load_json(f'pdata/p{lid}-sessions.json')
-        filtered = {key: value for key, value in sessions.items() if value.get("licenseplate") == data['licenseplate'] and not value.get('stopped')}
+        lp = data.get('license_plate') or data.get('licenseplate')
+        filtered = {key: value for key, value in sessions.items() if (value.get("licenseplate") == lp or value.get("license_plate") == lp) and not value.get('stopped')}
         
         if len(filtered) == 0:
             self.send_json_response(409, "application/json", {"error": "Cannot stop a session when there is no session for this license plate."})
@@ -371,8 +374,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         sid = next(iter(filtered))
         sessions[sid]["stopped"] = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
         save_data(f'pdata/p{lid}-sessions.json', sessions)
-        self.audit_logger.audit(session_user, action="stop_session", target=sid, extra={"licenseplate": data['licenseplate'], "parking_lot": lid})
-        self.send_json_response(200, "application/json", {"message": f"Session stopped for: {data['licenseplate']}"})
+        self.audit_logger.audit(session_user, action="stop_session", target=sid, extra={"licenseplate": lp, "parking_lot": lid})
+        self.send_json_response(200, "application/json", {"message": f"Session stopped for: {lp}"})
 
     @login_required
     def _handle_create_reservation(self, session_user):

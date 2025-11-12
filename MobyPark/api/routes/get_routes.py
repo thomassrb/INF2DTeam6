@@ -181,7 +181,7 @@ class get_routes:
             except FileNotFoundError:
                 sessions = {}
             for sid, session in sessions.items():
-                if session["user"] == session_user["username"]:
+                if session.get("user") == user:
                     amount, hours, days = sc.calculate_price(parkinglot, sid, session)
                     transaction = sc.generate_payment_hash(sid, session)
                     payed = sc.check_payment_amount(transaction)
@@ -193,5 +193,5 @@ class get_routes:
                         "payed": payed,
                         "balance": amount - payed
                     })
-        self.audit_logger.audit(session_user, action="get_user_billing", target=session_user["username"])
+        self.audit_logger.audit(session_user, action="get_user_billing", target=user)
         self.send_json_response(200, "application/json", data)
