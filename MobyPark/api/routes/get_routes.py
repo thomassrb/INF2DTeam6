@@ -156,6 +156,7 @@ class get_routes:
             return
         
         self.send_json_response(200, "application/json", reservations[rid])
+
     @login_required
     def _handle_get_payment_details(self):
         session_user = authentication.get_user_from_session(self)
@@ -195,3 +196,152 @@ class get_routes:
                     })
         self.audit_logger.audit(session_user, action="get_user_billing", target=session_user["username"])
         self.send_json_response(200, "application/json", data)
+
+    @login_required
+    def _handle_get_vehicle_details(self, session_user):
+        
+        match_id_only = re.match(r"^/vehicles/([^/]+)$", self.path)
+        match_user_and_id = re.match(r"^/vehicles/([^/]+)/([^/]+)$", self.path)
+
+        vid = None
+        target_username = session_user["username"]
+
+        if match_id_only:
+            vid = match_id_only.group(1)
+        elif match_user_and_id:
+            if session_user["role"] == "ADMIN":
+                target_username = match_user_and_id.group(1)
+                vid = match_user_and_id.group(2)
+            else:
+                self.send_json_response(403, "application/json", {"error": "Access denied. Non-admin users cannot specify a username in the path."})
+                return
+        else:
+            self.send_json_response(400, "application/json", {"error": "Invalid URL format for vehicle details"})
+            return
+
+        vehicles_data = load_vehicles_data()
+        user_vehicles = vehicles_data.get(target_username, [])
+        
+        if not user_vehicles:
+            self.send_json_response(404, "application/json", {"error": f"No vehicles found for user {target_username}"})
+            return
+        
+        vehicle = next((v for v in user_vehicles if v.get('id') == vid), None)
+        
+        if not vehicle:
+            self.send_json_response(404, "application/json", {"error": "Vehicle not found"})
+            return
+        
+        self.send_json_response(200, "application/json", {"status": "Accepted", "vehicle": vehicle})
+
+
+    @login_required
+    def _handle_get_vehicle_reservations(self, session_user):
+        vid = self.path.split("/")[2]
+        
+        target_user = session_user["username"]
+        if self.path.count('/') > 3:
+            parts = self.path.split('/')
+            if parts[2] and parts[2] != vid:
+                target_user = parts[2]
+                vid = parts[3]
+            else:
+                self.send_json_response(400, "application/json", {"error": "Invalid vehicle reservations request"})
+                return
+
+        vehicles = load_vehicles_data()
+        user_vehicles = vehicles.get(target_user)
+        
+        if not user_vehicles:
+            self.send_json_response(404, "application/json", {"error": "User or vehicle not found"})
+            return
+            
+        vehicle = next((v for v in user_vehicles if v.get('id') == vid), None)
+        if not vehicle:
+            self.send_json_response(404, "application/json", {"error": "Vehicle not found"})
+            return
+            
+        reservations = load_reservation_data()
+        vehicle_reservations = [
+            res for res in reservations.values()
+            if (res.get('license_plate') == vehicle['license_plate'] or res.get('licenseplate') == vehicle['license_plate'])
+            and res.get('user') == target_user
+        ]
+        
+        self.send_json_response(200, "application/json", vehicle_reservations)
+
+    @login_required
+    def _handle_get_vehicle_history(self, session_user):
+        match = re.match(r"^/vehicles/([^/]+)/history$", self.path)
+        if not match:
+            self.send_json_response(400, "application/json", {"error": "Invalid URL format"})
+            return
+        license_plate = match.group(1)
+
+        is_admin = session_user["role"] == "ADMIN"
+        target_username = session_user["username"]
+
+        vehicles_data = load_json("vehicles.json")
+        reservations_data = load_json("reservations.json")
+        sessions_data = load_json("sessions.json")
+
+        vehicle = None
+        vehicle_owner_username = None
+        for user_vehicles in vehicles_data.values():
+            for v_data in user_vehicles:
+                if v_data.get("license_plate") == license_plate:
+                    vehicle = v_data
+                    vehicle_owner_username = v_data.get("user")
+                    break
+            if vehicle:
+                break
+        
+        if not vehicle:
+            self.send_json_response(404, "application/json", {"error": "Vehicle not found"})
+            return
+
+        if not (session_user["role"] == "ADMIN") and target_username != vehicle_owner_username:
+            self.send_json_response(403, "application/json", {"error": "Access denied. You can only view your own vehicle's history."})
+            return
+
+        history = []
+        for res_data in reservations_data.values():
+            if res_data.get("license_plate") == license_plate or res_data.get("licenseplate") == license_plate:
+                history.append({"type": "reservation", "data": res_data})
+
+        for sess_data in sessions_data.values():
+            if sess_data.get("license_plate") == license_plate or sess_data.get("licenseplate") == license_plate:
+                history.append({"type": "session", "data": sess_data})
+        
+        history.sort(key=lambda x: x["data"].get("start_time", ""))
+
+        self.send_json_response(200, "application/json", history)
+
+    @login_required 
+    def _handle_get_parking_lot_sessions(self, session_user):
+        parking_lots = load_parking_lot_data()
+        lid = self.path.split("/")[-1]
+        if not lid.isdigit():
+            self.send_json_response(400,"application/json",{"error":"Invalid session id"}); return
+        
+        if lid not in parking_lots:
+            self.send_json_response(404, "application/json", {"error": "Parking lot not found"})
+            return
+        sessions = load_json(f'pdata/p{lid}-sessions.json')
+        
+        rsessions = []
+        
+        if self.path.endswith('/sessions'):
+            if session_user["role"] == "ADMIN":
+                rsessions = sessions
+            else:
+                for session in sessions.values():
+                    if session.get('user') == session_user["username"]:
+                        rsessions.append(session)
+            self.send_json_response(200, "application/json", rsessions)
+        else:
+            sid = self.path.split("/")[-1]
+            if not (session_user["role"] == "ADMIN") and not session_user["username"] == sessions[sid].get("user"):
+                self.send_json_response(403, "application/json", {"error": "Access denied"})
+                return
+            self.send_json_response(200, "application/json", sessions[sid])
