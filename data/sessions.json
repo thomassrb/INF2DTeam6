@@ -1018,5 +1018,113 @@
     "role": "USER",
     "active": true,
     "created_at": "2025-11-13"
+  },
+  "0ece0056-cc6d-46bf-b41a-c2ef82b0d0d9": {
+    "id": "166",
+    "username": "e2e_user_cd3fbe64",
+    "password": "$2b$12$GAIbqrvuDYQFBeHBri04WOIgIuwTxvwSoAIkZoXNN0NMByjuceAFO",
+    "name": "e2e_user_cd3fbe64",
+    "phone": "0000000000",
+    "email": "e2e_user_cd3fbe64@example.com",
+    "birth_year": "2000",
+    "role": "USER",
+    "active": true,
+    "created_at": "2025-11-13"
+  },
+  "1c7df78a-9e97-439a-afff-b50a72429d44": {
+    "id": "167",
+    "username": "e2e_user_39e4b5ab",
+    "password": "$2b$12$Hw9fLb5slUXJddUgymJWS.8utovBCCA6926cozkm/QRh0ui/EiErO",
+    "name": "e2e_user_39e4b5ab",
+    "phone": "0000000000",
+    "email": "e2e_user_39e4b5ab@example.com",
+    "birth_year": "2000",
+    "role": "USER",
+    "active": true,
+    "created_at": "2025-11-13"
+  },
+  "49144f0e-afbe-472b-b169-bab5fa28a9ab": {
+    "id": "168",
+    "username": "e2e_admin_10fdd643",
+    "password": "$2b$12$4JH0Aje7o5GtgD2ANiY4vurZfuzc.f5Vu6eYW5FUoyZPluOyG2HpW",
+    "name": "e2e_admin_10fdd643",
+    "phone": "0000000000",
+    "email": "e2e_admin_10fdd643@example.com",
+    "birth_year": "2000",
+    "role": "ADMIN",
+    "active": true,
+    "created_at": "2025-11-13"
+  },
+  "feba1c38-62f1-4202-b541-ef41bdcdd2c3": {
+    "id": "169",
+    "username": "e2e_admin_685f1fd3",
+    "password": "$2b$12$zM5ZhXmImbaevMIjd3d3muC8ryZemjOZTwRKCmiQ0I6FCpCs9kdfq",
+    "name": "e2e_admin_685f1fd3",
+    "phone": "0000000000",
+    "email": "e2e_admin_685f1fd3@example.com",
+    "birth_year": "2000",
+    "role": "ADMIN",
+    "active": true,
+    "created_at": "2025-11-13"
+  },
+  "3d725b58-d2e8-427a-9a94-80eace1637b7": {
+    "id": "170",
+    "username": "e2e_user_de89cb58",
+    "password": "$2b$12$099y5eBMtYula0fqio05ounbx01OgaO4vmyGe0ZfZy9SdSCG/7fb.",
+    "name": "e2e_user_de89cb58",
+    "phone": "0000000000",
+    "email": "e2e_user_de89cb58@example.com",
+    "birth_year": "2000",
+    "role": "USER",
+    "active": true,
+    "created_at": "2025-11-13"
+  },
+  "5199822e-c0a5-41e7-ae0f-dfee5e56a97c": {
+    "id": "171",
+    "username": "e2e_admin_62101232",
+    "password": "$2b$12$VB.JOgjS.fQuKLecNMekF.350fSFEHJikVTNISsp1nfqIeU7wK.fW",
+    "name": "e2e_admin_62101232",
+    "phone": "0000000000",
+    "email": "e2e_admin_62101232@example.com",
+    "birth_year": "2000",
+    "role": "ADMIN",
+    "active": true,
+    "created_at": "2025-11-13"
+  },
+  "4dcf2a51-78ba-4804-ac06-4dc17ad30bfa": {
+    "id": "172",
+    "username": "e2e_user_91de7dc2",
+    "password": "$2b$12$7.YZWXnYMqWnUPJ3qm0gA.CGcGSOnA3xvJ.HP1TIdLzekefq.6rg6",
+    "name": "e2e_user_91de7dc2",
+    "phone": "0000000000",
+    "email": "e2e_user_91de7dc2@example.com",
+    "birth_year": "2000",
+    "role": "USER",
+    "active": true,
+    "created_at": "2025-11-13"
+  },
+  "4cc6e5e5-bf17-42c8-8153-4ff9bc417a42": {
+    "id": "173",
+    "username": "e2e_admin_3240a149",
+    "password": "$2b$12$vTa.Emv.BL9JvpauOEtqVuLL1VHEvd.xDbZyG5OWagzrcy/BNvM/y",
+    "name": "e2e_admin_3240a149",
+    "phone": "0000000000",
+    "email": "e2e_admin_3240a149@example.com",
+    "birth_year": "2000",
+    "role": "ADMIN",
+    "active": true,
+    "created_at": "2025-11-13"
+  },
+  "35378000-ae70-43a5-8554-53b6fb2d0d62": {
+    "id": "174",
+    "username": "e2e_user_e100c3be",
+    "password": "$2b$12$5TecVW6Py0y13Pxh.CWoNOUa3UWpaQfj5t4saWF8B8hXXj14XwcWq",
+    "name": "e2e_user_e100c3be",
+    "phone": "0000000000",
+    "email": "e2e_user_e100c3be@example.com",
+    "birth_year": "2000",
+    "role": "USER",
+    "active": true,
+    "created_at": "2025-11-13"
   }
 }
