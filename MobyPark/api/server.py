@@ -5,6 +5,7 @@ if __name__ == "__main__" and __package__ is None:
     __package__ = "api"
 """-----------------------------------------------------------------"""
 
+
 import json
 import uuid
 from datetime import datetime
@@ -13,10 +14,12 @@ import time
 import threading
 import hashlib
 
+
 from routes.put_routes import put_routes
 from routes.delete_routes import delete_routes
 from routes.post_routes import post_routes
 from routes.get_routes import get_routes
+
 
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
@@ -26,30 +29,38 @@ import authentication
 from DBConnection import DBConnection
 
 
+
 class PasswordManager:
     def hash_password(self, password):
         return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
 
 class DataValidator:
     def validate_data(self, _data, _required_fields=None, _optional_fields=None, _allow_unknown=False, **kwargs):
         return True, None 
 
+
 class AuditLogger:
     def audit(self, user, action, target=None, extra=None):
         pass 
+
 
 class HTTPSecurity:
     CORS_ALLOW_METHODS = "GET, POST, PUT, DELETE, OPTIONS"
     CORS_ALLOW_HEADERS = "Content-Type, Authorization"
 
+
     def enforce_https(self, _handler, _headers, _path):
         return False 
+
 
     def apply_security_headers(self, _handler, _headers):
         pass 
 
+
     def is_origin_allowed(self, _origin):
         return True 
+
 
 class SessionManager:
     ''' Beheert de user session, waarbij session token en bijbehorende gebruiksgegevens worden opgeslagen
@@ -59,25 +70,31 @@ class SessionManager:
         self.active_sessions = {}
         self.session_lock = threading.Lock()
 
+
     def add_session(self, token, user):
         with self.session_lock:
             self.active_sessions[token] = user
 
+
     def get_session(self, token):
         with self.session_lock:
             return self.active_sessions.get(token)
+
 
     def clear_sessions(self, token):
         with self.session_lock:
             if token in self.active_sessions:
                 del self.active_sessions[token]
 
+
     def update_session_user(self, token, user_data):
         with self.session_lock:
             if token in self.active_sessions:
                 self.active_sessions[token].update(user_data)
 
+
 global_session_manager = SessionManager()
+
 
 def login_required(func):
     def wrapper(self, *args, **kwargs):
@@ -87,6 +104,7 @@ def login_required(func):
             return
         return func(self, session_user, *args, **kwargs)
     return wrapper
+
 
 def roles_required(roles):
     def decorator(func):
@@ -102,7 +120,9 @@ def roles_required(roles):
         return wrapper
     return decorator
 
+
 class RequestHandler(BaseHTTPRequestHandler):
+
 
     def __init__(self, *args, **kwargs):
         self.http_security = HTTPSecurity() 
@@ -127,13 +147,13 @@ class RequestHandler(BaseHTTPRequestHandler):
             },
             'PUT': {
                 '/profile': lambda: authentication.handle_update_profile(self, authentication.get_user_from_session(self)),
-                re.compile(r'^/profile/([^/]+)$'): lambda: put_routes._handle_update_profile_by_id(self, authentication.get_user_from_session(self)),
-                '/parking-lots/': lambda: put_routes._handle_update_parking_lot(self, authentication.get_user_from_session(self)),
-                re.compile(r'^/parking-lots/([^/]+)$'):lambda:  put_routes._handle_update_parking_lot_by_id(self, authentication.get_user_from_session(self)),
-                '/reservations/': lambda: put_routes._handle_update_reservation(self, authentication.get_user_from_session(self)),
-                re.compile(r'^/reservations/([^/]+)$'): lambda: put_routes._handle_update_reservation(self, authentication.get_user_from_session(self)),
-                '/vehicles/': lambda: put_routes._handle_update_vehicle(self, authentication.get_user_from_session(self)),
-                '/payments/': lambda: put_routes._handle_update_payment(self, authentication.get_user_from_session(self)),
+                re.compile(r'^/profile/([^/]+)$'): lambda: put_routes._handle_update_profile_by_id(self),
+                '/parking-lots/': lambda: put_routes._handle_update_parking_lot(self),
+                re.compile(r'^/parking-lots/([^/]+)$'): lambda: put_routes._handle_update_parking_lot_by_id(self),
+                '/reservations/': lambda: put_routes._handle_update_reservation(self),
+                re.compile(r'^/reservations/([^/]+)$'): lambda: put_routes._handle_update_reservation(self),
+                '/vehicles/': lambda: put_routes._handle_update_vehicle(self),
+                '/payments/': lambda: put_routes._handle_update_payment(self),
             },
             'GET': {
                 '/': lambda: get_routes._handle_index(self),
@@ -159,13 +179,14 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/profile/': lambda: get_routes.handle_get_profile_by_id(self, authentication.get_user_from_session(self)),
             },
             'DELETE': {
-                '/parking-lots/': lambda: delete_routes._handle_delete_parking_lot(self, authentication.get_user_from_session(self)),
-                '/reservations/': lambda: delete_routes._handle_delete_reservation(self, authentication.get_user_from_session(self)),
-                '/vehicles/': lambda: delete_routes._handle_delete_vehicle(self, authentication.get_user_from_session(self)),
-                '/parking-lots/sessions/': lambda: delete_routes._handle_delete_session(self, authentication.get_user_from_session(self)),
+                '/parking-lots/': lambda: delete_routes._handle_delete_parking_lot(self),
+                '/reservations/': lambda: delete_routes._handle_delete_reservation(self),
+                '/vehicles/': lambda: delete_routes._handle_delete_vehicle(self),
+                '/parking-lots/sessions/': lambda: delete_routes._handle_delete_session(self),
             }
         }
         super().__init__(*args, **kwargs)
+
 
     def send_json_response(self, status_code, content_type, data):
         super().send_response(status_code)
@@ -180,9 +201,11 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _handle_profile(self, session_user):
         get_routes.handle_get_profile(self, session_user)
 
+
     @login_required
     def _handle_profile_by_id(self, session_user):
         get_routes.handle_get_profile_by_id(self, session_user)
+
 
     def get_request_data(self):
         content_length = int(self.headers.get("Content-Length", 0))
@@ -203,8 +226,10 @@ class RequestHandler(BaseHTTPRequestHandler):
             response_time = (end_time - start_time) * 1000
             print(f"{method} {self.path} - Response time: {response_time:.2f} ms")
 
+
     def do_POST(self):
         self._handle_request_with_timing('POST')
+
 
     def do_PUT(self):
         self._handle_request_with_timing('PUT')
@@ -212,8 +237,10 @@ class RequestHandler(BaseHTTPRequestHandler):
     def do_DELETE(self):
         self._handle_request_with_timing('DELETE')
 
+
     def do_GET(self):
         self._handle_request_with_timing('GET')
+
 
     def do_OPTIONS(self):
         if self.http_security.enforce_https(self, self.headers, self.path):
@@ -231,15 +258,18 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_header('Access-Control-Max-Age', '600')
         self.end_headers()
 
+
     def dispatch_request(self, method):
         if self.path in self.routes[method]:
             self.routes[method][self.path]()
             return
 
+
         for k, handler in self.routes[method].items():
             if isinstance(k, re.Pattern) and k.match(self.path):
                 handler()
                 return
+
 
         for path_prefix, handler in self.routes[method].items():
             if isinstance(path_prefix, str) and path_prefix != '/' and path_prefix.endswith('/') and self.path.startswith(path_prefix):
@@ -248,6 +278,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif isinstance(path_prefix, str) and not path_prefix.endswith('/') and self.path == path_prefix:
                 handler()
                 return
+
 
         allowed_methods = []
         for m, routes in self.routes.items():
@@ -259,6 +290,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     allowed_methods.append(m)
 
 
+
         if allowed_methods:
             # Verbeterde 405 response
             super().send_response(405)
@@ -268,10 +300,13 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"error": "Method Not Allowed"}).encode("utf-8"))
             return
 
+
         self.send_json_response(404, "application/json", {"error": "Not Found"})
+
 
     def _handle_create_parking_lot(self):
         data = self.get_request_data()
+
 
         required_fields = ['name', 'location', 'capacity', 'tariff', 'daytariff', 'address', 'coordinates']
         for field in required_fields:
@@ -279,10 +314,12 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self.send_json_response(400, "application/json", {"error": f"Missing or invalid field: {field}", "field": field})
                 return
 
+
         for sf in ['name', 'location', 'address']:
             if not isinstance(data.get(sf), str) or not data.get(sf, '').strip():
                 self.send_json_response(400, "application/json", {"error": f"Missing or invalid field: {sf}", "field": sf})
                 return
+
 
         if not isinstance(data['capacity'], int) or data['capacity'] <= 0:
             self.send_json_response(400, "application/json", {"error": "Capacity must be a positive integer", "field": "capacity"})
@@ -296,6 +333,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         if not isinstance(data['coordinates'], list) or not all(isinstance(coord, (int, float)) for coord in data['coordinates']) or len(data['coordinates']) != 2:
             self.send_json_response(400, "application/json", {"error": "Coordinates must be a list of two numbers", "field": "coordinates"})
             return
+
 
         parking_lots = load_parking_lot_data()
         new_lid = str(len(parking_lots) + 1)
@@ -313,6 +351,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         save_parking_lot_data(parking_lots)
         self.send_json_response(201, "application/json", {"message": f"Parking lot saved under ID: {new_lid}"})
 
+
     @login_required
     def _handle_start_session(self, session_user):
         session_user = authentication.get_user_from_session(self)
@@ -326,17 +365,21 @@ class RequestHandler(BaseHTTPRequestHandler):
         lid = match.group(1)
         data = self.get_request_data()
 
+
         lp = data.get('license_plate') or data.get('licenseplate')
         if not isinstance(lp, str) or not lp.strip():
             self.send_json_response(400, "application/json", {"error": "Missing or invalid field: licenseplate", "field": "licenseplate"})
             return
 
+
         sessions = load_json(f'pdata/p{lid}-sessions.json')
         filtered = {key: value for key, value in sessions.items() if (value.get("licenseplate") == lp or value.get("license_plate") == lp) and not value.get('stopped')}
+
 
         if len(filtered) > 0:
             self.send_json_response(409, "application/json", {"error": "Cannot start a session when another session for this license plate is already started."})
             return 
+
 
         session = {
             "licenseplate": lp,
@@ -348,6 +391,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         sessions[str(len(sessions) + 1)] = session
         save_data(f'pdata/p{lid}-sessions.json', sessions)
         self.send_json_response(200, "application/json", {"message": f"Session started for: {lp}"})
+
 
     @login_required
     def _handle_stop_session(self, session_user):
@@ -377,6 +421,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.audit_logger.audit(session_user, action="stop_session", target=sid, extra={"licenseplate": lp, "parking_lot": lid})
         self.send_json_response(200, "application/json", {"message": f"Session stopped for: {lp}"})
 
+
     @login_required
     def _handle_create_reservation(self, session_user):
         data = self.get_request_data()
@@ -403,6 +448,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             if "user" not in data:
                 data["user"] = None
 
+
         rid = str(len(reservations) + 1)
         reservations[rid] = data
         data["id"] = rid
@@ -410,6 +456,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         save_reservation_data(reservations)
         save_parking_lot_data(parking_lots)
         self.send_json_response(201, "application/json", {"status": "Success", "reservation": data})
+
 
     @login_required
     def _handle_create_vehicle(self, session_user):
@@ -447,6 +494,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.audit_logger.audit(session_user, action="create_vehicle", target=new_vid, extra={"license_plate": data['licenseplate']})
         self.send_json_response(201, "application/json", {"status": "Success", "vehicle": vehicle})
 
+
     @login_required
     def _handle_create_payment(self, session_user):
         data = self.get_request_data()
@@ -471,6 +519,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         save_payment_data(payments)
         self.audit_logger.audit(session_user, action="create_payment", target=payment["transaction"],extra={"amount": payment["amount"], "coupled_to": payment.get("coupled_to")})
         self.send_json_response(201, "application/json", {"status": "Success", "payment": payment})
+
 
   
     @roles_required(['ADMIN'])
@@ -499,7 +548,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.send_json_response(201, "application/json", {"status": "Success", "payment": payment})
 
    
-   
+    
     
     @roles_required(['ADMIN'])
     def _handle_delete_parking_lot(self, session_user):
@@ -508,7 +557,9 @@ class RequestHandler(BaseHTTPRequestHandler):
         if len(path_parts) > 2 and path_parts[2]:
             lid = path_parts[2]
 
+
         parking_lots = load_parking_lot_data()
+
 
         if lid:
             if lid not in parking_lots:
@@ -549,11 +600,13 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.audit_logger.audit(session_user, action="delete_session", target={"parking_lot": lid, "session": sid})
         self.send_json_response(200, "application/json", {"message": "Session deleted"})
 
+
     @login_required
     def _handle_delete_reservation(self, session_user):
         reservations = load_reservation_data()
         parking_lots = load_parking_lot_data()
         rid = self.path.replace("/reservations/", "")
+
 
         if not rid:
             if session_user["role"] == "ADMIN":
@@ -584,16 +637,20 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self.send_json_response(200, "application/json", {"status": "All user reservations deleted"})
                 return
 
+
         if rid not in reservations:
             self.send_json_response(404, "application/json", {"error": "Reservation not found"})
             return
+
 
         if not (session_user["role"] == "ADMIN") and not session_user["username"] == reservations[rid].get("user"):
             self.send_json_response(403, "application/json", {"error": "Access denied"})
             return
 
+
         reservation_to_delete = reservations[rid]
         pid = reservation_to_delete["parkinglot"]
+
 
         if parking_lots[pid]["reserved"] > 0:
             parking_lots[pid]["reserved"] -= 1
@@ -601,14 +658,17 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_json_response(400, "application/json", {"error": "Parking lot reserved count is already zero"})
             return
 
+
         del reservations[rid]
         save_reservation_data(reservations)
         save_parking_lot_data(parking_lots)
         self.send_json_response(200, "application/json", {"status": "Deleted"})
 
+
     @login_required
     def _handle_delete_vehicle(self, session_user):
         vid = self.path.replace("/vehicles/", "")
+
 
         vehicles = load_vehicles_data()
         user_vehicles = vehicles.get(session_user["username"])
@@ -628,6 +688,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         save_data("vehicles.json", vehicles)
         self.audit_logger.audit(session_user, action="delete_vehicle", target=vid)
         self.send_json_response(200, "application/json", {"status": "Deleted"})
+
 
     @login_required 
     def _handle_get_parking_lot_sessions(self, session_user):
@@ -658,6 +719,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 return
             self.send_json_response(200, "application/json", sessions[sid])
 
+
     @login_required
     def _handle_get_vehicle_reservations(self, session_user):
         vid = self.path.split("/")[2]
@@ -671,6 +733,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             else:
                 self.send_json_response(400, "application/json", {"error": "Invalid vehicle reservations request"})
                 return
+
 
         vehicles = load_vehicles_data()
         user_vehicles = vehicles.get(target_user)
@@ -693,6 +756,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         self.send_json_response(200, "application/json", vehicle_reservations)
 
+
     @login_required
     def _handle_get_vehicle_history(self, session_user):
         match = re.match(r"^/vehicles/([^/]+)/history$", self.path)
@@ -701,12 +765,15 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
         license_plate = match.group(1)
 
+
         is_admin = session_user["role"] == "ADMIN"
         target_username = session_user["username"]
+
 
         vehicles_data = load_json("vehicles.json")
         reservations_data = load_json("reservations.json")
         sessions_data = load_json("sessions.json")
+
 
         vehicle = None
         vehicle_owner_username = None
@@ -723,14 +790,17 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_json_response(404, "application/json", {"error": "Vehicle not found"})
             return
 
+
         if not (session_user["role"] == "ADMIN") and target_username != vehicle_owner_username:
             self.send_json_response(403, "application/json", {"error": "Access denied. You can only view your own vehicle's history."})
             return
+
 
         history = []
         for res_data in reservations_data.values():
             if res_data.get("license_plate") == license_plate or res_data.get("licenseplate") == license_plate:
                 history.append({"type": "reservation", "data": res_data})
+
 
         for sess_data in sessions_data.values():
             if sess_data.get("license_plate") == license_plate or sess_data.get("licenseplate") == license_plate:
@@ -738,7 +808,9 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         history.sort(key=lambda x: x["data"].get("start_time", ""))
 
+
         self.send_json_response(200, "application/json", history)
+
 
     @login_required
     def _handle_get_vehicle_reservations_by_license_plate(self, session_user):
@@ -748,11 +820,14 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
         license_plate = match.group(1)
 
+
         is_admin = session_user["role"] == "ADMIN"
         target_username = session_user["username"]
 
+
         vehicles_data = load_json("vehicles.json")
         reservations_data = load_json("reservations.json")
+
 
         vehicle = None
         vehicle_owner_username = None
@@ -769,9 +844,11 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_json_response(404, "application/json", {"error": "Vehicle not found"})
             return
 
+
         if not (session_user["role"] == "ADMIN") and target_username != vehicle_owner_username:
             self.send_json_response(403, "application/json", {"error": "Access denied. You can only view your own vehicle's reservations."})
             return
+
 
         vehicle_reservations = [
             res for res in reservations_data.values()
@@ -781,14 +858,17 @@ class RequestHandler(BaseHTTPRequestHandler):
         
         self.send_json_response(200, "application/json", vehicle_reservations)
 
+
     @login_required
     def _handle_get_vehicle_details(self, session_user):
         
         match_id_only = re.match(r"^/vehicles/([^/]+)$", self.path)
         match_user_and_id = re.match(r"^/vehicles/([^/]+)/([^/]+)$", self.path)
 
+
         vid = None
         target_username = session_user["username"]
+
 
         if match_id_only:
             vid = match_id_only.group(1)
@@ -802,6 +882,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         else:
             self.send_json_response(400, "application/json", {"error": "Invalid URL format for vehicle details"})
             return
+
 
         vehicles_data = load_vehicles_data()
         user_vehicles = vehicles_data.get(target_username, [])
@@ -833,11 +914,14 @@ class RequestHandler(BaseHTTPRequestHandler):
         # Cleared de huidige sessions
         self.session_manager.active_sessions.clear()
 
+
         self.audit_logger.audit(session_user, action="debug_reset", target="all_data")
         self.send_json_response(200, "application/json", {"message": "All data reset successfully"})
 
+
     def update_activity(self):
         self.last_activity = time.time()
+
 
     def session_expiry_maintenance(self):
         timer = threading.Timer(600, self.session_expiry_maintenance)
@@ -846,14 +930,17 @@ class RequestHandler(BaseHTTPRequestHandler):
         if time.time() - self.last_activity > self.timeout:
             authentication.handle_logout(self)
 
+
 '''Deze aangepaste import functie zorgt voor het volgende:
 De aanpassing in de https zorgt ervoor dat je meerdere request tegelijk kan afhandelen ipv 1
 door de threadingmix in the combineren met de https server krijgt elke request zijn eigen thread
 Dat zorgt er voor dat indien er een nieuw request is, die niet geblokt wordt terwijl er nog een andere bezig is
 
+
 En daemon_threads = true zorgt er voor dat de threads automatisch stoppen zodra de server stopt'''
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
+
 
 server = ThreadingHTTPServer(('localhost', 8000), RequestHandler)
 print("Server running on http://localhost:8000")
