@@ -505,5 +505,47 @@
             4.0
         ],
         "reserved": 0
+    },
+    "39": {
+        "id": "39",
+        "name": "ParkeerplaatsX",
+        "location": "Y",
+        "capacity": 10,
+        "hourly_rate": 1.0,
+        "day_rate": 9.0,
+        "address": "Nietparkeren",
+        "coordinates": [
+            1.0,
+            2.0
+        ],
+        "reserved": 0
+    },
+    "40": {
+        "id": "40",
+        "name": "E2E Billing Lot 1763058835",
+        "location": "Center",
+        "capacity": 50,
+        "hourly_rate": 3.0,
+        "day_rate": 15.0,
+        "address": "E2E Blvd 1",
+        "coordinates": [
+            52.0,
+            4.0
+        ],
+        "reserved": 0
+    },
+    "41": {
+        "id": "41",
+        "name": "E2E Lot 1763058855",
+        "location": "Rotterdam",
+        "capacity": 100,
+        "hourly_rate": 2.5,
+        "day_rate": 12.0,
+        "address": "Wijnhaven 100",
+        "coordinates": [
+            52.0,
+            4.0
+        ],
+        "reserved": 0
     }
 }

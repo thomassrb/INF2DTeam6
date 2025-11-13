@@ -1690,5 +1690,113 @@
         "role": "USER",
         "active": true,
         "created_at": "2025-11-12"
+    },
+    {
+        "id": "157",
+        "username": "e2e_user_ac6a3198",
+        "password": "$2b$12$E/jJ2g5ve7rzdjFH3Vc8UucwQx24T59KUbDPU1Ce/3.qiBvJTZcSa",
+        "name": "e2e_user_ac6a3198",
+        "phone": "0000000000",
+        "email": "e2e_user_ac6a3198@example.com",
+        "birth_year": "2000",
+        "role": "USER",
+        "active": true,
+        "created_at": "2025-11-13"
+    },
+    {
+        "id": "158",
+        "username": "e2e_user_c23627f5",
+        "password": "$2b$12$XRFqS1ybCMW0xNQZKbfAl.iPd.LIwWlIO1PD4GmoJQD/vV7einIRa",
+        "name": "e2e_user_c23627f5",
+        "phone": "0000000000",
+        "email": "e2e_user_c23627f5@example.com",
+        "birth_year": "2000",
+        "role": "USER",
+        "active": true,
+        "created_at": "2025-11-13"
+    },
+    {
+        "id": "159",
+        "username": "e2e_admin_dc51a737",
+        "password": "$2b$12$T5xBmEu46jrDwRrRDq4hPO7lGIdDQI1gaq0nEwwhtn8AwM9.PzNiq",
+        "name": "e2e_admin_dc51a737",
+        "phone": "0000000000",
+        "email": "e2e_admin_dc51a737@example.com",
+        "birth_year": "2000",
+        "role": "ADMIN",
+        "active": true,
+        "created_at": "2025-11-13"
+    },
+    {
+        "id": "160",
+        "username": "e2e_admin_f1a055ec",
+        "password": "$2b$12$AVTCwd0HfqWJxls8MJ3VUO7nhLK1/x0/YuugAB8gSAS39li0N7KFS",
+        "name": "e2e_admin_f1a055ec",
+        "phone": "0000000000",
+        "email": "e2e_admin_f1a055ec@example.com",
+        "birth_year": "2000",
+        "role": "ADMIN",
+        "active": true,
+        "created_at": "2025-11-13"
+    },
+    {
+        "id": "161",
+        "username": "e2e_user_1ed65126",
+        "password": "$2b$12$Yv8p9x5KFHXs.Qha.amzaehSIhqMSxdnclaCV0xCx38YRxGKNe7RG",
+        "name": "e2e_user_1ed65126",
+        "phone": "0000000000",
+        "email": "e2e_user_1ed65126@example.com",
+        "birth_year": "2000",
+        "role": "USER",
+        "active": true,
+        "created_at": "2025-11-13"
+    },
+    {
+        "id": "162",
+        "username": "e2e_admin_70737a79",
+        "password": "$2b$12$DkP09HkdzdAnOmZ7U21mVOJXKy6soI7nvpM/SnAomYx9yJ6jl4oh.",
+        "name": "e2e_admin_70737a79",
+        "phone": "0000000000",
+        "email": "e2e_admin_70737a79@example.com",
+        "birth_year": "2000",
+        "role": "ADMIN",
+        "active": true,
+        "created_at": "2025-11-13"
+    },
+    {
+        "id": "163",
+        "username": "e2e_user_3ce486d2",
+        "password": "$2b$12$2l9zrtBJ8f1PrM8sh1nzf.rNFHSz1/34h0Kj1cRFMbi8Bq6Rvncju",
+        "name": "e2e_user_3ce486d2",
+        "phone": "0000000000",
+        "email": "e2e_user_3ce486d2@example.com",
+        "birth_year": "2000",
+        "role": "USER",
+        "active": true,
+        "created_at": "2025-11-13"
+    },
+    {
+        "id": "164",
+        "username": "e2e_admin_6eafd5cb",
+        "password": "$2b$12$ZA/3WAWUP3r8wnt2Pzmxk.lr6CqGx7SsCFiA1enyXlxBq8KELLkRm",
+        "name": "e2e_admin_6eafd5cb",
+        "phone": "0000000000",
+        "email": "e2e_admin_6eafd5cb@example.com",
+        "birth_year": "2000",
+        "role": "ADMIN",
+        "active": true,
+        "created_at": "2025-11-13"
+    },
+    {
+        "id": "165",
+        "username": "e2e_user_a497628b",
+        "password": "$2b$12$D1cqd2j2AYz62E/JqTYnNOYnB9W0Xed.l/F73CgAVE2FEzQmBuPk.",
+        "name": "e2e_user_a497628b",
+        "phone": "0000000000",
+        "email": "e2e_user_a497628b@example.com",
+        "birth_year": "2000",
+        "role": "USER",
+        "active": true,
+        "created_at": "2025-11-13"
     }
 ]
