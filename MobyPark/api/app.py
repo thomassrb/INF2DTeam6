@@ -14,4 +14,4 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {"message": "MobyPark FastAPI is running (test)"}
+    return {"message": "MobyPark FastAPI is running"}

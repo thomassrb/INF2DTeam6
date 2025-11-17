@@ -1702,5 +1702,29 @@
     "role": "USER",
     "active": true,
     "created_at": "2025-11-13"
+  },
+  "1ea6ccc3-8f9c-4f0b-b85e-b7adee9e9b5c": {
+    "id": "225",
+    "username": "TestUser",
+    "password": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+    "name": "Gebruiker",
+    "phone": "0614141414",
+    "email": "user@gmail.com",
+    "birth_year": "2000",
+    "role": "ADMIN",
+    "active": true,
+    "created_at": "2025-11-17"
+  },
+  "82078cc7-8794-4257-93a8-44f14d9589b9": {
+    "id": "225",
+    "username": "TestUser",
+    "password": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+    "name": "Gebruiker",
+    "phone": "0614141414",
+    "email": "user@gmail.com",
+    "birth_year": "2000",
+    "role": "ADMIN",
+    "active": true,
+    "created_at": "2025-11-17"
   }
 }

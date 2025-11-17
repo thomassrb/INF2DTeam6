@@ -2482,5 +2482,41 @@
         "role": "USER",
         "active": true,
         "created_at": "2025-11-13"
+    },
+    {
+        "id": "223",
+        "username": "string",
+        "password": "string",
+        "name": "string",
+        "phone": "string",
+        "email": "string",
+        "birth_year": "string",
+        "role": "USER",
+        "active": true,
+        "created_at": "2025-11-17"
+    },
+    {
+        "id": "224",
+        "username": "ArdyV",
+        "password": "Ardy123",
+        "name": "Ardy",
+        "phone": "0611898919",
+        "email": "12443473@hr.nl",
+        "birth_year": "2002",
+        "role": "USER",
+        "active": true,
+        "created_at": "2025-11-17"
+    },
+    {
+        "id": "225",
+        "username": "TestUser",
+        "password": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+        "name": "Gebruiker",
+        "phone": "0614141414",
+        "email": "user@gmail.com",
+        "birth_year": "2000",
+        "role": "ADMIN",
+        "active": true,
+        "created_at": "2025-11-17"
     }
 ]
