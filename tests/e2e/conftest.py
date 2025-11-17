@@ -9,6 +9,7 @@ import requests
 
 BASE_URL = os.environ.get("BASE_URL", "http://localhost:8000")
 SERVER_ENTRY = Path(__file__).resolve().parents[2] / "MobyPark" / "api" / "server.py" # verkeerd path..
+DATA_DIR = Path(__file__).resolve().parents[2] / "MobyPark-api-data"
 
 #  ---
 def wait_for_server(url: str, timeout_sec: int = 20) -> None:
@@ -28,12 +29,19 @@ def wait_for_server(url: str, timeout_sec: int = 20) -> None:
 @pytest.fixture(scope="session", autouse=True)
 def server_process():
     # API starten als subprocess op de achtergrond
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    (DATA_DIR / "pdata").mkdir(parents=True, exist_ok=True)
+
+    env = os.environ.copy()
+    env["MOBYPARK_DATA_DIR"] = str(DATA_DIR)
+
     proc = subprocess.Popen(
         [sys.executable, "-u", str(SERVER_ENTRY)],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
         cwd=str(SERVER_ENTRY.parent),
+        env=env,
     )
     try:
         wait_for_server(f"{BASE_URL}/")

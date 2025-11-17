@@ -5,6 +5,7 @@ if __name__ == "__main__" and __package__ is None:
     __package__ = "api"
 """-----------------------------------------------------------------"""
 
+
 import json
 import uuid
 from datetime import datetime
@@ -13,10 +14,12 @@ import time
 import threading
 import hashlib
 
+
 from routes.put_routes import put_routes
 from routes.delete_routes import delete_routes
 from routes.post_routes import post_routes
 from routes.get_routes import get_routes
+
 
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
@@ -26,30 +29,38 @@ import authentication
 from DBConnection import DBConnection
 
 
+
 class PasswordManager:
     def hash_password(self, password):
         return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
 
 class DataValidator:
     def validate_data(self, _data, _required_fields=None, _optional_fields=None, _allow_unknown=False, **kwargs):
         return True, None 
 
+
 class AuditLogger:
     def audit(self, user, action, target=None, extra=None):
         pass 
+
 
 class HTTPSecurity:
     CORS_ALLOW_METHODS = "GET, POST, PUT, DELETE, OPTIONS"
     CORS_ALLOW_HEADERS = "Content-Type, Authorization"
 
+
     def enforce_https(self, _handler, _headers, _path):
         return False 
+
 
     def apply_security_headers(self, _handler, _headers):
         pass 
 
+
     def is_origin_allowed(self, _origin):
         return True 
+
 
 class SessionManager:
     ''' Beheert de user session, waarbij session token en bijbehorende gebruiksgegevens worden opgeslagen
@@ -59,25 +70,31 @@ class SessionManager:
         self.active_sessions = {}
         self.session_lock = threading.Lock()
 
+
     def add_session(self, token, user):
         with self.session_lock:
             self.active_sessions[token] = user
 
+
     def get_session(self, token):
         with self.session_lock:
             return self.active_sessions.get(token)
+
 
     def clear_sessions(self, token):
         with self.session_lock:
             if token in self.active_sessions:
                 del self.active_sessions[token]
 
+
     def update_session_user(self, token, user_data):
         with self.session_lock:
             if token in self.active_sessions:
                 self.active_sessions[token].update(user_data)
 
+
 global_session_manager = SessionManager()
+
 
 def login_required(func):
     def wrapper(self, *args, **kwargs):
@@ -87,6 +104,7 @@ def login_required(func):
             return
         return func(self, session_user, *args, **kwargs)
     return wrapper
+
 
 def roles_required(roles):
     def decorator(func):
@@ -102,7 +120,9 @@ def roles_required(roles):
         return wrapper
     return decorator
 
+
 class RequestHandler(BaseHTTPRequestHandler):
+
 
     def __init__(self, *args, **kwargs):
         self.http_security = HTTPSecurity() 
@@ -116,24 +136,24 @@ class RequestHandler(BaseHTTPRequestHandler):
             'POST': {
                 '/register': lambda: post_routes.handle_register(self), # load_tester CHECK!
                 '/login': lambda: post_routes.handle_login(self), # load_tester CHECK!
-                '/parking-lots': post_routes._handle_create_parking_lot, # load_tester CHECK!
-                '/reservations': post_routes._handle_create_reservation, # FAILED!!!!
-                '/vehicles': post_routes._handle_create_vehicle,
-                '/payments': post_routes._handle_create_payment,
-                re.compile(r'^/parking-lots/([^/]+)/sessions/start$'): post_routes._handle_start_session,
-                re.compile(r'^/parking-lots/([^/]+)/sessions/stop$'): post_routes._handle_stop_session,
-                '/payments/refund': post_routes._handle_refund_payment,
-                '/debug/reset': post_routes._handle_debug_reset, # hier nog even naar kijken
+                '/parking-lots': lambda: self._handle_create_parking_lot(), # load_tester CHECK!
+                '/reservations': lambda: self._handle_create_reservation(), # FAILED!!!!
+                '/vehicles': lambda: self._handle_create_vehicle(),
+                '/payments': lambda: self._handle_create_payment(),
+                re.compile(r'^/parking-lots/([^/]+)/sessions/start$'): lambda: self._handle_start_session(),
+                re.compile(r'^/parking-lots/([^/]+)/sessions/stop$'): lambda: self._handle_stop_session(),
+                '/payments/refund': lambda: self._handle_refund_payment(),
+                '/debug/reset': lambda: post_routes._handle_debug_reset(self), # hier nog even naar kijken
             },
             'PUT': {
                 '/profile': lambda: authentication.handle_update_profile(self, authentication.get_user_from_session(self)),
-                re.compile(r'^/profile/([^/]+)$'): lambda: put_routes._handle_update_profile_by_id(self, authentication.get_user_from_session(self)),
-                '/parking-lots/': lambda: put_routes._handle_update_parking_lot(self, authentication.get_user_from_session(self)),
-                re.compile(r'^/parking-lots/([^/]+)$'):lambda:  put_routes._handle_update_parking_lot_by_id(self, authentication.get_user_from_session(self)),
-                '/reservations/': lambda: put_routes._handle_update_reservation(self, authentication.get_user_from_session(self)),
-                re.compile(r'^/reservations/([^/]+)$'): lambda: put_routes._handle_update_reservation(self, authentication.get_user_from_session(self)),
-                '/vehicles/': lambda: put_routes._handle_update_vehicle(self, authentication.get_user_from_session(self)),
-                '/payments/': lambda: put_routes._handle_update_payment(self, authentication.get_user_from_session(self)),
+                re.compile(r'^/profile/([^/]+)$'): lambda: put_routes._handle_update_profile_by_id(self),
+                '/parking-lots/': lambda: put_routes._handle_update_parking_lot(self),
+                re.compile(r'^/parking-lots/([^/]+)$'): lambda: put_routes._handle_update_parking_lot_by_id(self),
+                '/reservations/': lambda: put_routes._handle_update_reservation(self),
+                re.compile(r'^/reservations/([^/]+)$'): lambda: put_routes._handle_update_reservation(self),
+                '/vehicles/': lambda: put_routes._handle_update_vehicle(self),
+                '/payments/': lambda: put_routes._handle_update_payment(self),
             },
             'GET': {
                 '/': lambda: get_routes._handle_index(self),
@@ -141,8 +161,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/index.html': lambda: get_routes._handle_index(self),
                 '/favicon.ico': lambda: get_routes._handle_favicon(self),
                 '/parking-lots': lambda: get_routes._handle_get_parking_lots(self),
-                '/profile': lambda: get_routes.handle_get_profile(self, authentication.get_user_from_session(self)),
-                re.compile(r'^/profile/([^/]+)$'): lambda: get_routes.handle_get_profile_by_id(self,  authentication.get_user_from_session(self)),
+                '/profile': lambda: self._handle_profile(),
+                re.compile(r'^/profile/([^/]+)$'): lambda: self._handle_profile_by_id(),
                 '/logout': lambda: get_routes.handle_logout(self),
                 '/reservations': lambda: get_routes._handle_get_reservations(self),
                 '/payments':lambda: get_routes._handle_get_payments(self),
@@ -159,13 +179,14 @@ class RequestHandler(BaseHTTPRequestHandler):
                 '/profile/': lambda: get_routes.handle_get_profile_by_id(self, authentication.get_user_from_session(self)),
             },
             'DELETE': {
-                '/parking-lots/': lambda: delete_routes._handle_delete_parking_lot(self, authentication.get_user_from_session(self)),
-                '/reservations/': lambda: delete_routes._handle_delete_reservation(self, authentication.get_user_from_session(self)),
-                '/vehicles/': lambda: delete_routes._handle_delete_vehicle(self, authentication.get_user_from_session(self)),
-                '/parking-lots/sessions/': lambda: delete_routes._handle_delete_session(self, authentication.get_user_from_session(self)),
+                '/parking-lots/': lambda: delete_routes._handle_delete_parking_lot(self),
+                '/reservations/': lambda: delete_routes._handle_delete_reservation(self),
+                '/vehicles/': lambda: delete_routes._handle_delete_vehicle(self),
+                '/parking-lots/sessions/': lambda: delete_routes._handle_delete_session(self),
             }
         }
         super().__init__(*args, **kwargs)
+
 
     def send_json_response(self, status_code, content_type, data):
         super().send_response(status_code)
@@ -203,8 +224,10 @@ class RequestHandler(BaseHTTPRequestHandler):
             response_time = (end_time - start_time) * 1000
             print(f"{method} {self.path} - Response time: {response_time:.2f} ms")
 
+
     def do_POST(self):
         self._handle_request_with_timing('POST')
+
 
     def do_PUT(self):
         self._handle_request_with_timing('PUT')
@@ -212,8 +235,10 @@ class RequestHandler(BaseHTTPRequestHandler):
     def do_DELETE(self):
         self._handle_request_with_timing('DELETE')
 
+
     def do_GET(self):
         self._handle_request_with_timing('GET')
+
 
     def do_OPTIONS(self):
         if self.http_security.enforce_https(self, self.headers, self.path):
@@ -231,15 +256,18 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_header('Access-Control-Max-Age', '600')
         self.end_headers()
 
+
     def dispatch_request(self, method):
         if self.path in self.routes[method]:
             self.routes[method][self.path]()
             return
 
+
         for k, handler in self.routes[method].items():
             if isinstance(k, re.Pattern) and k.match(self.path):
                 handler()
                 return
+
 
         for path_prefix, handler in self.routes[method].items():
             if isinstance(path_prefix, str) and path_prefix != '/' and path_prefix.endswith('/') and self.path.startswith(path_prefix):
@@ -248,6 +276,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             elif isinstance(path_prefix, str) and not path_prefix.endswith('/') and self.path == path_prefix:
                 handler()
                 return
+
 
         allowed_methods = []
         for m, routes in self.routes.items():
@@ -259,6 +288,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     allowed_methods.append(m)
 
 
+
         if allowed_methods:
             # Verbeterde 405 response
             super().send_response(405)
@@ -267,6 +297,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"error": "Method Not Allowed"}).encode("utf-8"))
             return
+
 
         self.send_json_response(404, "application/json", {"error": "Not Found"})
 
@@ -278,11 +309,14 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
         license_plate = match.group(1)
 
+
         is_admin = session_user["role"] == "ADMIN"
         target_username = session_user["username"]
 
+
         vehicles_data = load_json("vehicles.json")
         reservations_data = load_json("reservations.json")
+
 
         vehicle = None
         vehicle_owner_username = None
@@ -299,9 +333,11 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_json_response(404, "application/json", {"error": "Vehicle not found"})
             return
 
+
         if not (session_user["role"] == "ADMIN") and target_username != vehicle_owner_username:
             self.send_json_response(403, "application/json", {"error": "Access denied. You can only view your own vehicle's reservations."})
             return
+
 
         vehicle_reservations = [
             res for res in reservations_data.values()
@@ -314,6 +350,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     def update_activity(self):
         self.last_activity = time.time()
 
+
     def session_expiry_maintenance(self):
         timer = threading.Timer(600, self.session_expiry_maintenance)
         timer.daemon = True
@@ -321,14 +358,17 @@ class RequestHandler(BaseHTTPRequestHandler):
         if time.time() - self.last_activity > self.timeout:
             get_routes.handle_logout(self)
 
+
 '''Deze aangepaste import functie zorgt voor het volgende:
 De aanpassing in de https zorgt ervoor dat je meerdere request tegelijk kan afhandelen ipv 1
 door de threadingmix in the combineren met de https server krijgt elke request zijn eigen thread
 Dat zorgt er voor dat indien er een nieuw request is, die niet geblokt wordt terwijl er nog een andere bezig is
 
+
 En daemon_threads = true zorgt er voor dat de threads automatisch stoppen zodra de server stopt'''
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
+
 
 server = ThreadingHTTPServer(('localhost', 8000), RequestHandler)
 print("Server running on http://localhost:8000")

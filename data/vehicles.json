@@ -54,5 +54,34 @@
             "name": "Audi A8",
             "created_at": "2025-10-16"
         }
+    ],
+    "e2e_user_3ee52fec": [
+        {
+            "id": "4d32835c-e2c4-4b33-b368-ac001aa54d2d",
+            "user_id": "196",
+            "license_plate": "DMX-123",
+            "name": "Amarok",
+            "created_at": "2025-11-13"
+        }
+    ],
+    "e2e_user_f1487225": [
+        {
+            "id": "1f3db65d-f272-4450-bbd5-84c993b00033",
+            "user_id": "209",
+            "license_plate": "DMX-123",
+            "name": "Amarok twee",
+            "created_at": "2025-11-13",
+            "updated_at": "2025-11-13 20:43:35"
+        }
+    ],
+    "e2e_user_6c64ed8f": [
+        {
+            "id": "70d5e934-8ec7-4176-88a9-a1818cc0772d",
+            "user_id": "222",
+            "license_plate": "DMX-123",
+            "name": "Amarok twee",
+            "created_at": "2025-11-13",
+            "updated_at": "2025-11-13 21:00:58"
+        }
     ]
 }

@@ -2,18 +2,18 @@ import requests
 
 BASE = "http://localhost:8000"
 
-def test_401_profile_without_token(server_process):
+def test_profile_without_token_returns_401(server_process):
     r = requests.get(f"{BASE}/profile", timeout=5)
     assert r.status_code == 401
 
-def test_403_billing_for_other_user_as_non_admin(server_process, make_user_and_login):
+def test_non_admin_cannot_view_other_users_billing_returns_403(server_process, make_user_and_login):
     u1, tok1 = make_user_and_login("USER")
     u2, tok2 = make_user_and_login("USER")
 
     r = requests.get(f"{BASE}/billing/{u2}", headers={"Authorization": f"Bearer {tok1}"}, timeout=5)
     assert r.status_code == 403
 
-def test_400_parking_lot_missing_capacity(server_process, admin_token):
+def test_create_parking_lot_without_capacity_returns_400(server_process, admin_token):
     payload = {
         "name": "NoCapLot",
         "location": "X",
@@ -26,7 +26,7 @@ def test_400_parking_lot_missing_capacity(server_process, admin_token):
     r = requests.post(f"{BASE}/parking-lots", json=payload, headers={"Authorization": f"Bearer {admin_token}"}, timeout=5)
     assert r.status_code == 400
 
-def test_400_session_start_missing_plate(server_process, admin_token, user_token):
+def test_start_session_without_license_plate_returns_400(server_process, admin_token, user_token):
     # Test die een parking sessie start zonder licence plate en returned een HTTP 400
     # De  `_, u_tok = user_token` unpacked de username en token pair en returned het by fixture
     # De underscore (_) wordt gebruikt om de eerste value (the username) te ignoren, keeping alleen de token (`u_tok`)

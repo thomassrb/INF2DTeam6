@@ -11,7 +11,7 @@ def fake_parking(tariff=2.5, daytariff=12.0):
 def fmt(dt: datetime, fmt="%d-%m-%Y %H:%M:%S"):
     return dt.strftime(fmt)
 
-def test_free_under_3_minutes():
+def test_price_is_zero_for_parking_under_3_minutes():
     now = datetime.now()
     data = {"started": fmt(now), "stopped": fmt(now + timedelta(seconds=100))}
     price, hours, days = sc.calculate_price(fake_parking(), "1", data)
@@ -26,7 +26,7 @@ def test_hourly_vs_day_cap():
     assert price == 12.0
     assert hours == 5
 
-def test_multiple_formats_iso_zulu():
+def test_calculates_hourly_price_for_iso_zulu_timestamps():
     now = datetime.now()
     data = {"start_time": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "end_time": (now + timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")}
     price, hours, days = sc.calculate_price(fake_parking(tariff=3.0, daytariff=50.0), "1", data)

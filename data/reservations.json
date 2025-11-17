@@ -22,5 +22,13 @@
         "parkinglot": "1",
         "user": "normaluser_aa",
         "id": "3"
+    },
+    "4": {
+        "parkinglot": "50",
+        "license_plate": "DMX-001",
+        "start_time": "2025-01-01 10:00:00",
+        "end_time": "2025-01-01 12:00:00",
+        "user": "e2e_user_cd85565a",
+        "id": "4"
     }
 }
