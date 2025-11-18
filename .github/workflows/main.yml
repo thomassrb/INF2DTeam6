@@ -28,7 +28,7 @@ jobs:
         run: |
           nohup python -u MobyPark/api/server.py >/dev/null 2>&1 &
           for i in {1..30}; do
-            if curl -fsS "http://localhost:8000/index" > /dev/null; then
+            if curl -sS "http://localhost:8000/index" > /dev/null; then
               echo "Server is up"
               exit 0
             fi
@@ -69,7 +69,13 @@ jobs:
             echo "pipeline failed: some system tests did not pass" > result.txt
             exit 1
           fi
-
+      - name: Upload server log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-log
+          path: server.log
+          if-no-files-found: ignore
       - name: Upload failure reason
         if: failure()
         uses: actions/upload-artifact@v4
