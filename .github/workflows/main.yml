@@ -28,7 +28,7 @@ jobs:
         run: |
           nohup python -u api\server.py >/dev/null 2>&1 &
           for i in {1..30}; do
-            if curl -fsS "http://localhost:8000/" > /dev/null; then
+            if curl -fsS "http://localhost:8000/index" > /dev/null; then
               echo "Server is up"
               exit 0
             fi
