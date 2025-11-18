@@ -6,8 +6,10 @@ import os
 
 from datetime import datetime
 import session_manager
+import authentication
 
-from storage_utils import load_json, load_payment_data, load_reservation_data, save_data, save_payment_data, save_reservation_data, save_user_data, load_parking_lot_data, save_parking_lot_data, load_json, save_user_data
+
+from storage_utils import load_json, load_payment_data, load_reservation_data, save_data, save_payment_data, save_reservation_data, save_user_data, load_parking_lot_data, save_parking_lot_data, load_json, save_user_data, load_vehicles_data, save_vehicles_data
 from authentication import login_required, roles_required
 import session_calculator as sc
 
@@ -112,42 +114,51 @@ class post_routes:
         handler.send_json_response(401, "application/json", {"error": "Invalid credentials"})
 
     def _handle_create_parking_lot(self):
-            data = self.get_request_data()
+        data = self.get_request_data()
 
-            required_fields = ['name', 'location', 'capacity', 'tariff', 'daytariff', 'address', 'coordinates']
-            for field in required_fields:
-                if field not in data or not isinstance(data[field], str) or not data[field].strip():
-                    self.send_json_response(400, "application/json", {"error": f"Missing or invalid field: {field}", "field": field})
-                    return
 
-            if not isinstance(data['capacity'], int) or data['capacity'] <= 0:
-                self.send_json_response(400, "application/json", {"error": "Capacity must be a positive integer", "field": "capacity"})
-                return
-            if not isinstance(data['tariff'], (int, float)) or data['tariff'] < 0:
-                self.send_json_response(400, "application/json", {"error": "Tariff must be a non-negative number", "field": "tariff"})
-                return
-            if not isinstance(data['daytariff'], (int, float)) or data['daytariff'] < 0:
-                self.send_json_response(400, "application/json", {"error": "Day tariff must be a non-negative number", "field": "daytariff"})
-                return
-            if not isinstance(data['coordinates'], list) or not all(isinstance(coord, (int, float)) for coord in data['coordinates']) or len(data['coordinates']) != 2:
-                self.send_json_response(400, "application/json", {"error": "Coordinates must be a list of two numbers", "field": "coordinates"})
+        required_fields = ['name', 'location', 'capacity', 'tariff', 'daytariff', 'address', 'coordinates']
+        for field in required_fields:
+            if field not in data:
+                self.send_json_response(400, "application/json", {"error": f"Missing or invalid field: {field}", "field": field})
                 return
 
-            parking_lots = load_parking_lot_data()
-            new_lid = str(len(parking_lots) + 1)
-            parking_lots[new_lid] = {
-                "id": new_lid,
-                "name": data['name'],
-                "location": data['location'],
-                "capacity": data['capacity'],
-                "hourly_rate": data['tariff'],
-                "day_rate": data['daytariff'],
-                "address": data['address'],
-                "coordinates": data['coordinates'],
-                "reserved": 0
-            }
-            save_parking_lot_data(parking_lots)
-            self.send_json_response(201, "application/json", {"Server message": f"Parking lot saved under ID: {new_lid}"})
+
+        for sf in ['name', 'location', 'address']:
+            if not isinstance(data.get(sf), str) or not data.get(sf, '').strip():
+                self.send_json_response(400, "application/json", {"error": f"Missing or invalid field: {sf}", "field": sf})
+                return
+
+
+        if not isinstance(data['capacity'], int) or data['capacity'] <= 0:
+            self.send_json_response(400, "application/json", {"error": "Capacity must be a positive integer", "field": "capacity"})
+            return
+        if not isinstance(data['tariff'], (int, float)) or data['tariff'] < 0:
+            self.send_json_response(400, "application/json", {"error": "Tariff must be a non-negative number", "field": "tariff"})
+            return
+        if not isinstance(data['daytariff'], (int, float)) or data['daytariff'] < 0:
+            self.send_json_response(400, "application/json", {"error": "Day tariff must be a non-negative number", "field": "daytariff"})
+            return
+        if not isinstance(data['coordinates'], list) or not all(isinstance(coord, (int, float)) for coord in data['coordinates']) or len(data['coordinates']) != 2:
+            self.send_json_response(400, "application/json", {"error": "Coordinates must be a list of two numbers", "field": "coordinates"})
+            return
+
+
+        parking_lots = load_parking_lot_data()
+        new_lid = str(len(parking_lots) + 1)
+        parking_lots[new_lid] = {
+            "id": new_lid,
+            "name": data['name'],
+            "location": data['location'],
+            "capacity": data['capacity'],
+            "hourly_rate": data['tariff'],
+            "day_rate": data['daytariff'],
+            "address": data['address'],
+            "coordinates": data['coordinates'],
+            "reserved": 0
+        }
+        save_parking_lot_data(parking_lots)
+        self.send_json_response(201, "application/json", {"message": f"Parking lot saved under ID: {new_lid}"})
 
     @login_required
     def _handle_create_reservation(self, session_user):
@@ -175,9 +186,6 @@ class post_routes:
             if "user" not in data:
                 data["user"] = None
 
-        # toegevoegd, dit zorgt ervoor dat beide mogelijk zijn als data, hij replaced de var licenseplate dan met license_plate 
-        if 'license_plate' not in data and 'licenseplate' in data:
-            data['license_plate'] = data['licenseplate']
 
         rid = str(len(reservations) + 1)
         reservations[rid] = data
@@ -196,7 +204,7 @@ class post_routes:
             self.send_json_response(400, "application/json", error)
             return
         
-        vehicles = self._load_vehicles()
+        vehicles = load_vehicles_data()
         users = load_json('users.json')
         current_user = next((u for u in users if u.get('username') == session_user['username']), None)
         
@@ -219,7 +227,7 @@ class post_routes:
         }
         user_vehicles.append(vehicle)
         vehicles[current_user["username"]] = user_vehicles
-        self._save_vehicles(vehicles)
+        save_vehicles_data(vehicles)
         self.audit_logger.audit(session_user, action="create_vehicle", target=new_vid, extra={"license_plate": data['licenseplate']})
         self.send_json_response(201, "application/json", {"status": "Success", "vehicle": vehicle})
 
@@ -250,6 +258,10 @@ class post_routes:
 
     @login_required
     def _handle_start_session(self, session_user):
+        session_user = authentication.get_user_from_session(self)
+        if not session_user:
+            self.send_json_response(401, "application/json", {"error": "Unauthorized"})
+            return
         match = re.match(r"^/parking-lots/([^/]+)/sessions/start$", self.path)
         if not match:
             self.send_json_response(400, "application/json", {"error": "Invalid URL format for starting session"})
@@ -259,17 +271,19 @@ class post_routes:
 
         lp = data.get('license_plate') or data.get('licenseplate')
         if not isinstance(lp, str) or not lp.strip():
-            self.send_json_response(400, "application/json", {"error": "Missing or invalid field: license_plate", "field": "license_plate"})
+            self.send_json_response(400, "application/json", {"error": "Missing or invalid field: licenseplate", "field": "licenseplate"})
             return
 
         sessions = load_json(f'pdata/p{lid}-sessions.json')
-        filtered = {key: value for key, value in sessions.items() if (value.get("license_plate") == lp or value.get("licenseplate") == lp) and not value.get('stopped')}
+        filtered = {key: value for key, value in sessions.items() if (value.get("licenseplate") == lp or value.get("license_plate") == lp) and not value.get('stopped')}
+
 
         if len(filtered) > 0:
             self.send_json_response(409, "application/json", {"error": "Cannot start a session when another session for this license plate is already started."})
             return 
 
         session = {
+            "licenseplate": lp,
             "license_plate": lp,
             "started": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
             "stopped": None,
@@ -277,7 +291,8 @@ class post_routes:
         }
         sessions[str(len(sessions) + 1)] = session
         save_data(f'pdata/p{lid}-sessions.json', sessions)
-        self.send_json_response(200, "application/json", {"Server message": f"Session started for: {lp}"})
+        self.send_json_response(200, "application/json", {"message": f"Session started for: {lp}"})
+
 
     @login_required
     def _handle_stop_session(self, session_user):
@@ -295,7 +310,7 @@ class post_routes:
         
         sessions = load_json(f'pdata/p{lid}-sessions.json')
         lp = data.get('license_plate') or data.get('licenseplate')
-        filtered = {key: value for key, value in sessions.items() if (value.get("license_plate") == lp or value.get("licenseplate") == lp) and not value.get('stopped')}
+        filtered = {key: value for key, value in sessions.items() if (value.get("licenseplate") == lp or value.get("license_plate") == lp) and not value.get('stopped')}
         
         if len(filtered) == 0:
             self.send_json_response(409, "application/json", {"error": "Cannot stop a session when there is no session for this license plate."})
@@ -304,8 +319,9 @@ class post_routes:
         sid = next(iter(filtered))
         sessions[sid]["stopped"] = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
         save_data(f'pdata/p{lid}-sessions.json', sessions)
-        self.audit_logger.audit(session_user, action="stop_session", target=sid, extra={"license_plate": lp, "parking_lot": lid})
-        self.send_json_response(200, "application/json", {"Server message": f"Session stopped for: {lp}"})
+        self.audit_logger.audit(session_user, action="stop_session", target=sid, extra={"licenseplate": lp, "parking_lot": lid})
+        self.send_json_response(200, "application/json", {"message": f"Session stopped for: {lp}"})
+
 
     @roles_required(['ADMIN'])
     def _handle_refund_payment(self, session_user):
@@ -332,6 +348,7 @@ class post_routes:
         save_payment_data(payments)
         self.send_json_response(201, "application/json", {"status": "Success", "payment": payment})
  
+
     @roles_required(['ADMIN'])
     def _handle_debug_reset(self, session_user):
         # Cleared de users data
