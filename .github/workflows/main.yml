@@ -60,7 +60,6 @@ jobs:
           exit 1
 
       - name: Run unit tests
-        working-directory: MobyPark
         run: |
           set +e
           pytest -v tests/unit
@@ -72,7 +71,6 @@ jobs:
           fi
 
       - name: Run endpoint tests
-        working-directory: MobyPark
         run: |
           set +e
           pytest -v tests/e2e
@@ -84,7 +82,6 @@ jobs:
           fi
 
       - name: Run integration tests
-        working-directory: MobyPark
         run: |
           set +e
           pytest -v tests/integration
