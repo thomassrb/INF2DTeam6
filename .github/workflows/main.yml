@@ -10,7 +10,7 @@ jobs:
   pipeline-job-definition:
     runs-on: ubuntu-latest
     env:
-      PYTHONPATH: .
+      PYTHONPATH: .:./MobyPark
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
