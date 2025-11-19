@@ -1,11 +1,11 @@
-name: Hello pipeline
+name: CI pipeline
 
 on:
   push:
     branches:
       - main
   workflow_dispatch:
-  
+
 jobs:
   pipeline-job-definition:
     runs-on: ubuntu-latest
@@ -23,22 +23,44 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install fastapi uvicorn pytest requests
+          pip install pytest requests
+
       - name: Start server
+        working-directory: MobyPark
         run: |
-          cd MobyPark
-          nohup python -u api/server.py >/dev/null 2>&1 &
+          # Start server in background and log output
+          python -u api/server.py > server.log 2>&1 &
+          SERVER_PID=$!
+          echo "Started server.py with PID $SERVER_PID"
+
+          # Wait for server to be ready, but also check if it crashes
           for i in {1..30}; do
-            if curl -sS "http://localhost:8000/index" > /dev/null; then
+            if curl -sS http://127.0.0.1:8000/index >/dev/null 2>&1; then
               echo "Server is up"
               exit 0
             fi
-            echo "waiting for server..."; sleep 1
+
+            # If process died, show log and fail immediately
+            if ! ps -p $SERVER_PID >/dev/null 2>&1; then
+              echo "Server process died before we could connect"
+              echo "==== server.log ===="
+              cat server.log || true
+              echo "pipeline failed: server crashed" > result.txt
+              exit 1
+            fi
+
+            echo "waiting for server..."
+            sleep 1
           done
-          echo "pipeline failed: server did not start" > result.txt
+
+          echo "Server did not become ready in time"
+          echo "==== server.log ===="
+          cat server.log || true
+          echo "pipeline failed: server did not start in time" > result.txt
           exit 1
 
       - name: Run unit tests
+        working-directory: MobyPark
         run: |
           set +e
           pytest -v tests/unit
@@ -50,37 +72,41 @@ jobs:
           fi
 
       - name: Run endpoint tests
+        working-directory: MobyPark
         run: |
           set +e
           pytest -v tests/e2e
           STATUS=$?
           set -e
           if [ $STATUS -ne 0 ]; then
-            echo "pipeline failed: some system tests did not pass" > result.txt
+            echo "pipeline failed: some endpoint tests did not pass" > result.txt
             exit 1
           fi
-          
+
       - name: Run integration tests
+        working-directory: MobyPark
         run: |
           set +e
           pytest -v tests/integration
           STATUS=$?
           set -e
           if [ $STATUS -ne 0 ]; then
-            echo "pipeline failed: some system tests did not pass" > result.txt
+            echo "pipeline failed: some integration tests did not pass" > result.txt
             exit 1
           fi
+
       - name: Upload server log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: server-log
-          path: server.log
-          if-no-files-found: ignore
+          path: MobyPark/server.log
+          if-no-files-found: warn
+
       - name: Upload failure reason
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: Artifacts
-          path: result.txt
+          name: failure-reason
+          path: MobyPark/result.txt
           if-no-files-found: ignore
