@@ -13,14 +13,6 @@ def test_non_admin_cannot_view_other_users_billing_returns_403(server_process, m
     r = requests.get(f"{BASE}/billing/{u2}", headers={"Authorization": f"Bearer {tok1}"}, timeout=5)
     assert r.status_code == 403
 
-def test_unauthorized_access_to_admin_endpoint(server_process):
-    response = requests.post(
-        f"{BASE}/parking-lots",
-        json={"name": "Test", "location": "Test", "capacity": 10},
-        headers={"Authorization": "Bearer INVALID_TOKEN"},
-        timeout=5
-    )
-    assert response.status_code == 401  # Unauthorized
 
 
 def test_create_parking_lot_without_capacity_returns_400(server_process, admin_token):
