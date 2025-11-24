@@ -2,6 +2,7 @@ import os
 import json
 import threading
 from typing import Optional, Dict, Any
+from app import access_sessions
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))    # Geeft het absolute pad van de directory terug  waar het scriptbestand staat
 _DATA_DIR = os.path.join(_SCRIPT_DIR, '..', '..', 'data')   # Bepaalt het pad naar de data-directory

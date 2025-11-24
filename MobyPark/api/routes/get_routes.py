@@ -1,5 +1,5 @@
 import re
-from storage_utils import load_json, load_parking_lot_data, load_reservation_data, load_payment_data, load_vehicles_data
+from app import access_vehicles, access_parkinglots, access_payments, access_reservations, access_sessions, access_users
 from authentication import extract_bearer_token, login_required, roles_required
 import session_calculator as sc
 import authentication

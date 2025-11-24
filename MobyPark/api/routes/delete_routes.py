@@ -1,15 +1,6 @@
 
-from storage_utils import (
-    load_json,
-    save_data,
-    save_parking_lot_data,
-    load_parking_lot_data,
-    save_reservation_data,
-    load_reservation_data,
-    load_vehicles_data,
-    save_vehicles_data,
-)
 from authentication import login_required, roles_required
+from app import access_vehicles, access_parkinglots, access_payments, access_reservations, access_sessions, access_users
 
 
 class delete_routes:

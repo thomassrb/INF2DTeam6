@@ -4,20 +4,23 @@ from fastapi import FastAPI, Depends, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from .storage_utils import (
-    load_parking_lot_data,
-    save_parking_lot_data,
-    load_reservation_data,
-    save_reservation_data,
-    load_payment_data,
-    save_payment_data,
-    load_vehicles_data,
-    save_vehicles_data,
-    load_json,
-    save_user_data,
-)
+from .DBConnection import DBConnection
+from DataAccess.AccessParkingLots import AccessParkingLots
+from DataAccess.AccessPayments import AccessPayments
+from DataAccess.AccessReservations import AccessReservations
+from DataAccess.AccessSessions import AccessSessions
+from DataAccess.AccessUsers import AccessUsers
+from DataAccess.AccessVehicles import AccessVehicles
+
 from . import session_manager
 
+connection = DBConnection(database_path="MobyPark/api/data/MobyParkData.db")
+access_parkinglots = AccessParkingLots(conn=connection)
+access_payments = AccessPayments(conn=connection)
+access_reservations = AccessReservations(conn=connection)
+access_sessions = AccessSessions(conn=connection)
+access_users = AccessUsers(conn=connection)
+access_vehicles = AccessVehicles(conn=connection)
 
 app = FastAPI(title="MobyPark API", version="1.0.0")
 
