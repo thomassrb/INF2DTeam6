@@ -799,5 +799,187 @@
             4.0
         ],
         "reserved": 0
+    },
+    "60": {
+        "id": "60",
+        "name": "ParkeerplaatsX",
+        "location": "Y",
+        "capacity": 10,
+        "hourly_rate": 1.0,
+        "day_rate": 9.0,
+        "address": "Nietparkeren",
+        "coordinates": [
+            1.0,
+            2.0
+        ],
+        "reserved": 0
+    },
+    "61": {
+        "id": "61",
+        "name": "E2E Billing Lot 1763544922",
+        "location": "Center",
+        "capacity": 50,
+        "hourly_rate": 3.0,
+        "day_rate": 15.0,
+        "address": "E2E Blvd 1",
+        "coordinates": [
+            52.0,
+            4.0
+        ],
+        "reserved": 0
+    },
+    "62": {
+        "id": "62",
+        "name": "Gereserveerdeparking",
+        "location": "Wijnhaven_parking",
+        "capacity": 50,
+        "hourly_rate": 2.0,
+        "day_rate": 15.0,
+        "address": "Wijnhaven 106",
+        "coordinates": [
+            4.0,
+            5.0
+        ],
+        "reserved": 0
+    },
+    "63": {
+        "id": "63",
+        "name": "E2E Lot 1763544971",
+        "location": "Rotterdam",
+        "capacity": 100,
+        "hourly_rate": 2.5,
+        "day_rate": 12.0,
+        "address": "Wijnhaven 100",
+        "coordinates": [
+            52.0,
+            4.0
+        ],
+        "reserved": 0
+    },
+    "64": {
+        "id": "64",
+        "name": "ParkeerplaatsX",
+        "location": "Y",
+        "capacity": 10,
+        "hourly_rate": 1.0,
+        "day_rate": 9.0,
+        "address": "Nietparkeren",
+        "coordinates": [
+            1.0,
+            2.0
+        ],
+        "reserved": 0
+    },
+    "65": {
+        "id": "65",
+        "name": "E2E Billing Lot 1763545353",
+        "location": "Center",
+        "capacity": 50,
+        "hourly_rate": 3.0,
+        "day_rate": 15.0,
+        "address": "E2E Blvd 1",
+        "coordinates": [
+            52.0,
+            4.0
+        ],
+        "reserved": 0
+    },
+    "66": {
+        "id": "66",
+        "name": "Gereserveerdeparking",
+        "location": "Wijnhaven_parking",
+        "capacity": 50,
+        "hourly_rate": 2.0,
+        "day_rate": 15.0,
+        "address": "Wijnhaven 106",
+        "coordinates": [
+            4.0,
+            5.0
+        ],
+        "reserved": 0
+    },
+    "67": {
+        "id": "67",
+        "name": "E2E Lot 1763545386",
+        "location": "Rotterdam",
+        "capacity": 100,
+        "hourly_rate": 2.5,
+        "day_rate": 12.0,
+        "address": "Wijnhaven 100",
+        "coordinates": [
+            52.0,
+            4.0
+        ],
+        "reserved": 0
+    },
+    "68": {
+        "id": "68",
+        "name": "NoCapLot",
+        "location": "X",
+        "capacity": null,
+        "hourly_rate": 2.0,
+        "day_rate": 10.0,
+        "address": "X",
+        "coordinates": [
+            1.0,
+            2.0
+        ],
+        "reserved": 0
+    },
+    "69": {
+        "id": "69",
+        "name": "ParkeerplaatsX",
+        "location": "Y",
+        "capacity": 10,
+        "hourly_rate": 1.0,
+        "day_rate": 9.0,
+        "address": "Nietparkeren",
+        "coordinates": [
+            1.0,
+            2.0
+        ],
+        "reserved": 0
+    },
+    "70": {
+        "id": "70",
+        "name": "E2E Billing Lot 1763547666",
+        "location": "Center",
+        "capacity": 50,
+        "hourly_rate": 3.0,
+        "day_rate": 15.0,
+        "address": "E2E Blvd 1",
+        "coordinates": [
+            52.0,
+            4.0
+        ],
+        "reserved": 0
+    },
+    "71": {
+        "id": "71",
+        "name": "Gereserveerdeparking",
+        "location": "Wijnhaven_parking",
+        "capacity": 50,
+        "hourly_rate": 2.0,
+        "day_rate": 15.0,
+        "address": "Wijnhaven 106",
+        "coordinates": [
+            4.0,
+            5.0
+        ],
+        "reserved": 0
+    },
+    "72": {
+        "id": "72",
+        "name": "E2E Lot 1763547712",
+        "location": "Rotterdam",
+        "capacity": 100,
+        "hourly_rate": 2.5,
+        "day_rate": 12.0,
+        "address": "Wijnhaven 100",
+        "coordinates": [
+            52.0,
+            4.0
+        ],
+        "reserved": 0
     }
 }
