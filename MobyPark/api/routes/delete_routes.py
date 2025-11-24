@@ -1,5 +1,14 @@
 
-from storage_utils import load_json, save_data, save_parking_lot_data, load_parking_lot_data, save_reservation_data, load_reservation_data
+from storage_utils import (
+    load_json,
+    save_data,
+    save_parking_lot_data,
+    load_parking_lot_data,
+    save_reservation_data,
+    load_reservation_data,
+    load_vehicles_data,
+    save_vehicles_data,
+)
 from authentication import login_required, roles_required
 
 
@@ -86,26 +95,26 @@ class delete_routes:
     @login_required
     def _handle_delete_vehicle(self, session_user):
         vid = self.path.replace("/vehicles/", "")
-        
-        vehicles = self._load_vehicles()
-        user_vehicles = vehicles.get(session_user["username"])
-        
+
+        vehicles = load_vehicles_data()
+        user_vehicles = vehicles.get(session_user["username"], [])
+
         if not user_vehicles:
             self.send_json_response(404, "application/json", {"error": "User vehicles not found"})
             return
-        
+
         original_len = len(user_vehicles)
         user_vehicles = [v for v in user_vehicles if v.get('id') != vid]
-        
+
         if len(user_vehicles) == original_len:
             self.send_json_response(404, "application/json", {"error": "Vehicle not found"})
             return
-        
+
         vehicles[session_user["username"]] = user_vehicles
-        save_data("vehicles.json", vehicles)
+        save_vehicles_data(vehicles)
         self.audit_logger.audit(session_user, action="delete_vehicle", target=vid)
         self.send_json_response(200, "application/json", {"status": "Deleted"})
-    
+
     @roles_required(['ADMIN'])
     def _handle_delete_session(self, session_user):
         lid = self.path.split("/")[2]

@@ -133,7 +133,16 @@ def save_discounts_data(data):
     save_data('discounts.csv', data)
 
 def load_vehicles_data():
-    return load_data('vehicles.json')
+    data = load_data('vehicles.json')
+    # Ensure we always work with a dict keyed by username -> list[vehicle]
+    if isinstance(data, dict):
+        return data
+    # Handle legacy flat-list formats defensively
+    if isinstance(data, list):
+        return {"__legacy__": data}
+    # Fallback to empty mapping
+    return {}
+
 
 def save_vehicles_data(data):
     save_data('vehicles.json', data)

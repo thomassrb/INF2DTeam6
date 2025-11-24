@@ -127,11 +127,9 @@ class get_routes:
             return
         else:
             user_vehicles = vehicles_data.get(session_user["username"], [])
-            if not user_vehicles:
-                self.send_json_response(404, "application/json", {"error": "No vehicles found for this user"})
-                return
+            # For normal users, always return a list (which may be empty)
             self.send_json_response(200, "application/json", user_vehicles)
-    
+
     def _handle_get_parking_lot_details(self):
         lid = self.path.split("/")[2]
         parking_lots = load_parking_lot_data()
