@@ -2,7 +2,7 @@ import os
 import json
 import threading
 from typing import Optional, Dict, Any
-from app import access_sessions
+from Models.User import User
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))    # Geeft het absolute pad van de directory terug  waar het scriptbestand staat
 _DATA_DIR = os.path.join(_SCRIPT_DIR, '..', '..', 'data')   # Bepaalt het pad naar de data-directory
@@ -51,23 +51,24 @@ class _FileSessionStore(_BaseSessionStore):
         with open(_SESSIONS_FILE, 'w', encoding='utf-8') as f:
             json.dump(self._sessions, f, ensure_ascii=False, indent=2)
 
-    def add(self, token: str, user: Dict[str, Any]) -> None:
+    def add(self, token: str, user: User) -> None:
         # Voegt een user toe aan de session en slaat changes op
         with _LOCK:
-            self._sessions[token] = user
+            self._sessions[token] = user.__dict__
             self._flush()
 
-    def remove(self, token: str) -> Optional[Dict[str, Any]]:
+    def remove(self, token: str) -> Optional[User]:
         # Delete een session en returned de bijbehorende user
         with _LOCK:
             user = self._sessions.pop(token, None)
             self._flush()
-            return user
+            return User(**user)
 
-    def get(self, token: str) -> Optional[Dict[str, Any]]:
+    def get(self, token: str) -> Optional[User]:
         # Haalt de user op die bij de given token hoort, anders none als token invalid is
         with _LOCK:
-            return self._sessions.get(token)
+            user_dict = self._sessions.get(token)
+            return User(**user_dict)
 
     def update_user(self, token: str, user_data: Dict[str, Any]) -> None:
         # Update de gegevens van de gebruiker en slaat de wijzegingen op

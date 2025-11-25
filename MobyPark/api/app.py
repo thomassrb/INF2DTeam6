@@ -12,6 +12,8 @@ from DataAccess.AccessSessions import AccessSessions
 from DataAccess.AccessUsers import AccessUsers
 from DataAccess.AccessVehicles import AccessVehicles
 
+from Models.User import User
+
 from . import session_manager
 
 connection = DBConnection(database_path="MobyPark/api/data/MobyParkData.db")
@@ -105,7 +107,7 @@ class ProfileUpdate(BaseModel):
     password: Optional[str] = None
 
 
-def get_current_user(request: Request) -> Dict[str, Any]:
+def get_current_user(request: Request) -> User:
     """FastAPI dependency to get current user from session token in Authorization header."""
     auth_header = request.headers.get("Authorization")
     if not auth_header:
@@ -121,8 +123,8 @@ def get_current_user(request: Request) -> Dict[str, Any]:
 
 
 def require_roles(*roles: str):
-    def dependency(user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
-        if user.get("role") not in roles:
+    def dependency(user: User = Depends(get_current_user)) -> User:
+        if user.role not in roles:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         return user
 
@@ -136,35 +138,31 @@ async def root():
 
 @app.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(body: RegisterRequest):
-    users = load_json("users.json")
-    if any(u.get("username") == body.username for u in users):
+    if access_users.get_user_byusername(username=body.username) is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken")
 
-    new_id = str(max(int(u.get("id", 0)) for u in users) + 1) if users else "1"
     from datetime import datetime
     import hashlib
 
-    new_user = {
-        "id": new_id,
-        "username": body.username,
-        "password": hashlib.sha256(body.password.encode("utf-8")).hexdigest(),
-        "name": body.name,
-        "phone": body.phone,
-        "email": body.email,
-        "birth_year": body.birth_year,
-        "role": body.role or "USER",
-        "active": True,
-        "created_at": datetime.now().strftime("%Y-%m-%d"),
-    }
-    users.append(new_user)
-    save_user_data(users)
+    new_user = User(
+        username=body.username,
+        password=hashlib.sha256(body.password.encode("utf-8")).hexdigest(),
+        name=body.name,
+        phone=body.phone,
+        email=body.email,
+        birth_year=body.birth_year,
+        role=body.role or "USER",
+        active=True,
+        created_at=datetime.now().strftime("%Y-%m-%d")
+    )
+    
+    access_users.add_user(user=new_user)
     return {"message": "User created"}
 
 
 @app.post("/login")
 async def login(body: LoginRequest):
-    users = load_json("users.json")
-    user = next((u for u in users if u.get("username") == body.username), None)
+    user = access_users.get_user_byusername(username=body.username)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
@@ -172,7 +170,7 @@ async def login(body: LoginRequest):
     import bcrypt
     import uuid
 
-    stored_password = user.get("password", "")
+    stored_password = user.password
     password_ok = False
 
     if stored_password.startswith("$2b$"):
@@ -193,7 +191,7 @@ async def login(body: LoginRequest):
 
 
 @app.post("/logout")
-async def logout(user: Dict[str, Any] = Depends(get_current_user), request: Request = None):
+async def logout(user: User = Depends(get_current_user), request: Request = None):
     auth_header = request.headers.get("Authorization") if request else None
     token = None
     if auth_header:
@@ -206,71 +204,58 @@ async def logout(user: Dict[str, Any] = Depends(get_current_user), request: Requ
 
 
 @app.get("/profile")
-async def get_profile(user: Dict[str, Any] = Depends(get_current_user)):
+async def get_profile(user: User = Depends(get_current_user)):
     profile_data = {
-        "username": user.get("username"),
-        "role": user.get("role"),
-        "name": user.get("name"),
-        "email": user.get("email"),
-        "phone": user.get("phone"),
-        "birth_year": user.get("birth_year"),
-        "created_at": user.get("created_at"),
+        "username": user.username,
+        "role": user.role,
+        "name": user.name,
+        "email": user.email,
+        "phone": user.phone,
+        "birth_year": user.birth_year,
+        "created_at": user.created_at.strftime("%d-%m-%Y"),
     }
     return profile_data
 
 
 @app.put("/profile")
-async def update_profile(body: ProfileUpdate, user: Dict[str, Any] = Depends(get_current_user)):
+async def update_profile(body: ProfileUpdate, user: User = Depends(get_current_user)):
     """Update the current user's profile (name/password)."""
-    from .storage_utils import load_json, save_user_data
     import hashlib
+    if body.name is None or body.password is None:
+        return {"message": "Invalid input"}
+    
+    user.name = body.name
+    user.password = body.password
+    access_users.update_user(user=user)
 
-    users = load_json("users.json")
-    updated_user = None
-    for i, u in enumerate(users):
-        if u.get("username") == user.get("username"):
-            if body.name is not None:
-                users[i]["name"] = body.name
-            if body.password is not None:
-                users[i]["password"] = hashlib.sha256(body.password.encode("utf-8")).hexdigest()
-            updated_user = users[i]
-            break
-
-    if not updated_user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
-    save_user_data(users)
     return {"message": "User updated successfully"}
 
 
 @app.get("/profile/{user_id}")
-async def get_profile_by_id(user_id: str, user: Dict[str, Any] = Depends(get_current_user)):
-    from .storage_utils import load_json
-
-    users = load_json("users.json")
-    target_user = next((u for u in users if u.get("id") == user_id), None)
+async def get_profile_by_id(user_id: str, user: User = Depends(get_current_user)):
+    target_user = access_users.get_user_byid(id=user_id)
     if not target_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    is_admin = user.get("role") == "ADMIN"
-    if not is_admin and user.get("id") != user_id:
+    is_admin = user.role == "ADMIN"
+    if not is_admin and user.id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied. You can only view your own profile.")
 
     profile_data = {
-        "id": target_user.get("id"),
-        "username": target_user.get("username"),
-        "role": target_user.get("role"),
-        "name": target_user.get("name"),
-        "email": target_user.get("email"),
-        "phone": target_user.get("phone"),
-        "birth_year": target_user.get("birth_year"),
-        "created_at": target_user.get("created_at"),
+        "username": target_user.username,
+        "role": target_user.role,
+        "name": target_user.name,
+        "email": target_user.email,
+        "phone": target_user.phone,
+        "birth_year": target_user.birth_year,
+        "created_at": target_user.created_at.strftime("%d-%m-%Y"),
     }
+    
     return profile_data
 
 
 @app.put("/profile/{user_id}")
-async def update_profile_by_id(user_id: str, body: ProfileUpdate, user: Dict[str, Any] = Depends(get_current_user)):
+async def update_profile_by_id(user_id: str, body: ProfileUpdate, user: User = Depends(get_current_user)):
     from .storage_utils import load_json, save_user_data
     import hashlib
 
@@ -299,7 +284,7 @@ async def list_parking_lots():
 
 
 @app.post("/parking-lots", status_code=status.HTTP_201_CREATED)
-async def create_parking_lot(body: ParkingLotCreate, user: Dict[str, Any] = Depends(require_roles("ADMIN"))):
+async def create_parking_lot(body: ParkingLotCreate, user: User = Depends(require_roles("ADMIN"))):
     parking_lots = load_parking_lot_data()
     new_lid = str(len(parking_lots) + 1)
     parking_lots[new_lid] = {
@@ -336,7 +321,7 @@ class ParkingLotUpdate(BaseModel):
 
 
 @app.put("/parking-lots/{lid}")
-async def update_parking_lot(lid: str, body: ParkingLotUpdate, user: Dict[str, Any] = Depends(require_roles("ADMIN"))):
+async def update_parking_lot(lid: str, body: ParkingLotUpdate, user: User = Depends(require_roles("ADMIN"))):
     parking_lots = load_parking_lot_data()
     if lid not in parking_lots:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parking lot not found")
@@ -354,7 +339,7 @@ async def update_parking_lot(lid: str, body: ParkingLotUpdate, user: Dict[str, A
 
 
 @app.delete("/parking-lots/{lid}")
-async def delete_parking_lot(lid: str, user: Dict[str, Any] = Depends(require_roles("ADMIN"))):
+async def delete_parking_lot(lid: str, user: User = Depends(require_roles("ADMIN"))):
     parking_lots = load_parking_lot_data()
     if lid not in parking_lots:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parking lot not found")
@@ -364,7 +349,7 @@ async def delete_parking_lot(lid: str, user: Dict[str, Any] = Depends(require_ro
 
 
 @app.delete("/parking-lots")
-async def delete_all_parking_lots(user: Dict[str, Any] = Depends(require_roles("ADMIN"))):
+async def delete_all_parking_lots(user: User = Depends(require_roles("ADMIN"))):
     save_parking_lot_data({})
     return {"message": "All parking lots deleted"}
 
@@ -375,7 +360,7 @@ class SessionStartRequest(BaseModel):
 
 
 @app.post("/parking-lots/{lid}/sessions/start")
-async def start_session(lid: str, body: SessionStartRequest, user: Dict[str, Any] = Depends(get_current_user)):
+async def start_session(lid: str, body: SessionStartRequest, user: User = Depends(get_current_user)):
     from .storage_utils import save_data, load_json
     from datetime import datetime
 
@@ -406,7 +391,7 @@ class SessionStopRequest(BaseModel):
 
 
 @app.post("/parking-lots/{lid}/sessions/stop")
-async def stop_session(lid: str, body: SessionStopRequest, user: Dict[str, Any] = Depends(get_current_user)):
+async def stop_session(lid: str, body: SessionStopRequest, user: User = Depends(get_current_user)):
     from .storage_utils import save_data, load_json
     from datetime import datetime
 
@@ -424,7 +409,7 @@ async def stop_session(lid: str, body: SessionStopRequest, user: Dict[str, Any] 
 
 
 @app.get("/parking-lots/{lid}/sessions")
-async def list_parking_lot_sessions(lid: str, user: Dict[str, Any] = Depends(get_current_user)):
+async def list_parking_lot_sessions(lid: str, user: User = Depends(get_current_user)):
     from .storage_utils import load_json
 
     parking_lots = load_parking_lot_data()
@@ -444,7 +429,7 @@ async def list_parking_lot_sessions(lid: str, user: Dict[str, Any] = Depends(get
 
 
 @app.get("/reservations")
-async def list_reservations(user: Dict[str, Any] = Depends(get_current_user)):
+async def list_reservations(user: User = Depends(get_current_user)):
     reservations = load_reservation_data()
     if user.get("role") == "ADMIN":
         return reservations
@@ -453,7 +438,7 @@ async def list_reservations(user: Dict[str, Any] = Depends(get_current_user)):
 
 
 @app.post("/reservations", status_code=status.HTTP_201_CREATED)
-async def create_reservation(body: ReservationCreate, user: Dict[str, Any] = Depends(get_current_user)):
+async def create_reservation(body: ReservationCreate, user: User = Depends(get_current_user)):
     reservations = load_reservation_data()
     parking_lots = load_parking_lot_data()
 
@@ -489,7 +474,7 @@ async def create_reservation(body: ReservationCreate, user: Dict[str, Any] = Dep
 
 
 @app.get("/reservations/{rid}")
-async def get_reservation_details(rid: str, user: Dict[str, Any] = Depends(get_current_user)):
+async def get_reservation_details(rid: str, user: User = Depends(get_current_user)):
     reservations = load_reservation_data()
     if rid not in reservations:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reservation not found")
@@ -501,7 +486,7 @@ async def get_reservation_details(rid: str, user: Dict[str, Any] = Depends(get_c
 
 
 @app.put("/reservations/{rid}")
-async def update_reservation(rid: str, body: ReservationUpdate, user: Dict[str, Any] = Depends(get_current_user)):
+async def update_reservation(rid: str, body: ReservationUpdate, user: User = Depends(get_current_user)):
     reservations = load_reservation_data()
     if rid not in reservations:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reservation not found")
@@ -526,7 +511,7 @@ async def update_reservation(rid: str, body: ReservationUpdate, user: Dict[str, 
 
 
 @app.delete("/reservations/{rid}")
-async def delete_reservation(rid: str, user: Dict[str, Any] = Depends(get_current_user)):
+async def delete_reservation(rid: str, user: User = Depends(get_current_user)):
     reservations = load_reservation_data()
     parking_lots = load_parking_lot_data()
 
@@ -550,7 +535,7 @@ async def delete_reservation(rid: str, user: Dict[str, Any] = Depends(get_curren
 
 
 @app.delete("/reservations")
-async def delete_reservations(user: Dict[str, Any] = Depends(get_current_user)):
+async def delete_reservations(user: User = Depends(get_current_user)):
     reservations = load_reservation_data()
     parking_lots = load_parking_lot_data()
 
@@ -583,7 +568,7 @@ async def delete_reservations(user: Dict[str, Any] = Depends(get_current_user)):
 
 
 @app.get("/vehicles")
-async def list_vehicles(user: Dict[str, Any] = Depends(get_current_user)):
+async def list_vehicles(user: User = Depends(get_current_user)):
     vehicles_data = load_vehicles_data()
     if user.get("role") == "ADMIN":
         all_vehicles = []
@@ -595,7 +580,7 @@ async def list_vehicles(user: Dict[str, Any] = Depends(get_current_user)):
 
 
 @app.post("/vehicles", status_code=status.HTTP_201_CREATED)
-async def create_vehicle(body: VehicleCreate, user: Dict[str, Any] = Depends(get_current_user)):
+async def create_vehicle(body: VehicleCreate, user: User = Depends(get_current_user)):
     vehicles = load_vehicles_data()
     users = load_json("users.json")
     current_user = next((u for u in users if u.get("username") == user.get("username")), None)
@@ -628,7 +613,7 @@ class VehicleUpdate(BaseModel):
 
 
 @app.get("/vehicles/{vid}")
-async def get_vehicle_details(vid: str, username: Optional[str] = None, user: Dict[str, Any] = Depends(get_current_user)):
+async def get_vehicle_details(vid: str, username: Optional[str] = None, user: User = Depends(get_current_user)):
     """Get vehicle details by ID.
 
     - Normal users: can only access their own vehicles.
@@ -653,7 +638,7 @@ async def get_vehicle_details(vid: str, username: Optional[str] = None, user: Di
 
 
 @app.put("/vehicles/{vid}")
-async def update_vehicle(vid: str, body: VehicleUpdate, user: Dict[str, Any] = Depends(get_current_user)):
+async def update_vehicle(vid: str, body: VehicleUpdate, user: User = Depends(get_current_user)):
     """Update a vehicle's name for the current user."""
     from datetime import datetime
 
@@ -680,7 +665,7 @@ async def update_vehicle(vid: str, body: VehicleUpdate, user: Dict[str, Any] = D
 
 
 @app.delete("/vehicles/{vid}")
-async def delete_vehicle(vid: str, user: Dict[str, Any] = Depends(get_current_user)):
+async def delete_vehicle(vid: str, user: User = Depends(get_current_user)):
     """Delete a vehicle belonging to the current user."""
     vehicles = load_vehicles_data()
     user_vehicles = vehicles.get(user.get("username"))
@@ -700,7 +685,7 @@ async def delete_vehicle(vid: str, user: Dict[str, Any] = Depends(get_current_us
 
 
 @app.get("/vehicles/{license_plate}/history")
-async def get_vehicle_history(license_plate: str, user: Dict[str, Any] = Depends(get_current_user)):
+async def get_vehicle_history(license_plate: str, user: User = Depends(get_current_user)):
     """Get combined reservation/session history for a vehicle by license plate.
 
     Non-admin users can only view their own vehicle's history.
@@ -743,7 +728,7 @@ async def get_vehicle_history(license_plate: str, user: Dict[str, Any] = Depends
 
 
 @app.get("/vehicles/{license_plate}/reservations")
-async def get_vehicle_reservations_by_license_plate(license_plate: str, user: Dict[str, Any] = Depends(get_current_user)):
+async def get_vehicle_reservations_by_license_plate(license_plate: str, user: User = Depends(get_current_user)):
     """Get reservations for a vehicle by license plate.
 
     Non-admin users can only view their own vehicle's reservations.
@@ -782,7 +767,7 @@ async def get_vehicle_reservations_by_license_plate(license_plate: str, user: Di
 
 
 @app.get("/payments")
-async def list_payments(user: Dict[str, Any] = Depends(get_current_user)):
+async def list_payments(user: User = Depends(get_current_user)):
     payments = []
     for payment in load_payment_data():
         if (
@@ -795,7 +780,7 @@ async def list_payments(user: Dict[str, Any] = Depends(get_current_user)):
 
 
 @app.post("/payments", status_code=status.HTTP_201_CREATED)
-async def create_payment(body: PaymentCreate, user: Dict[str, Any] = Depends(get_current_user)):
+async def create_payment(body: PaymentCreate, user: User = Depends(get_current_user)):
     payments = load_payment_data()
     from datetime import datetime
     from . import session_calculator as sc
@@ -815,7 +800,7 @@ async def create_payment(body: PaymentCreate, user: Dict[str, Any] = Depends(get
 
 
 @app.get("/payments/{transaction}")
-async def get_payment_details(transaction: str, user: Dict[str, Any] = Depends(get_current_user)):
+async def get_payment_details(transaction: str, user: User = Depends(get_current_user)):
     payments = load_payment_data()
     payment = next((p for p in payments if p.get("transaction") == transaction), None)
     if not payment:
@@ -828,7 +813,7 @@ async def get_payment_details(transaction: str, user: Dict[str, Any] = Depends(g
 
 
 @app.put("/payments/{transaction}")
-async def update_payment(transaction: str, body: PaymentUpdate, user: Dict[str, Any] = Depends(get_current_user)):
+async def update_payment(transaction: str, body: PaymentUpdate, user: User = Depends(get_current_user)):
     payments = load_payment_data()
     payment = next((p for p in payments if p.get("transaction") == transaction), None)
     if not payment:
@@ -850,7 +835,7 @@ async def update_payment(transaction: str, body: PaymentUpdate, user: Dict[str, 
 
 
 @app.post("/payments/refund", status_code=status.HTTP_201_CREATED)
-async def refund_payment(body: RefundCreate, user: Dict[str, Any] = Depends(require_roles("ADMIN"))):
+async def refund_payment(body: RefundCreate, user: User = Depends(require_roles("ADMIN"))):
     """Create a refund payment (negative amount), admin only."""
     payments = load_payment_data()
     from datetime import datetime
@@ -874,7 +859,7 @@ async def refund_payment(body: RefundCreate, user: Dict[str, Any] = Depends(requ
 
 
 @app.get("/billing")
-async def get_billing(user: Dict[str, Any] = Depends(get_current_user)):
+async def get_billing(user: User = Depends(get_current_user)):
     """Get billing overview for the current user based on parking sessions and payments."""
     from .storage_utils import load_json
     from . import session_calculator as sc
@@ -905,7 +890,7 @@ async def get_billing(user: Dict[str, Any] = Depends(get_current_user)):
 
 
 @app.post("/debug/reset")
-async def debug_reset(user: Dict[str, Any] = Depends(require_roles("ADMIN"))):
+async def debug_reset(user: User = Depends(require_roles("ADMIN"))):
     """Dangerous debug endpoint that clears all user, parking, reservation, payment, vehicle data, and sessions."""
     from .storage_utils import save_user_data, save_parking_lot_data, save_reservation_data, save_payment_data, save_vehicles_data
     from . import session_manager as sm
@@ -918,7 +903,7 @@ async def debug_reset(user: Dict[str, Any] = Depends(require_roles("ADMIN"))):
 
     return {"Server message": "All data reset successfully"}
 @app.get("/billing/{username}")
-async def get_user_billing(username: str, user: Dict[str, Any] = Depends(require_roles("ADMIN"))):
+async def get_user_billing(username: str, user: User = Depends(require_roles("ADMIN"))):
     """Get billing overview for a specific user, admin only."""
     from .storage_utils import load_json
     from . import session_calculator as sc
