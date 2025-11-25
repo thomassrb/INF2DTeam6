@@ -1,4 +1,5 @@
 from datetime import datetime
+from .ParkingLotCoordinates import ParkingLotCoordinates
 
 class ParkingLot:
 
@@ -11,8 +12,9 @@ class ParkingLot:
                  reserved: int,
                  tariff: float,
                  daytariff: float,
+                 coordinates: ParkingLotCoordinates,
                  created_at: datetime):
-        # might add coordinate attribute to make it more compact
+
         
         self.id = id
         self.name = name
@@ -21,6 +23,7 @@ class ParkingLot:
         self.capacity = capacity
         self.reserved = reserved
         self.tariff = tariff
-        self.daytarrif = daytariff
+        self.daytariff = daytariff
+        self.coordinates = coordinates
         self.created_at = created_at
         
