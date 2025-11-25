@@ -4,54 +4,55 @@ from authentication import extract_bearer_token, login_required, roles_required
 import session_calculator as sc
 import authentication
 
+from Models.User import User
+
 
 class get_routes:
-    def handle_get_profile(handler, session_user):
+    def handle_get_profile(handler, session_user: User):
         profile_data = {
-        "username": session_user["username"],
-        "role": session_user["role"],
-        "name": session_user["name"],
-        "email": session_user["email"],
-        "phone": session_user["phone"],
-        "birth_year": session_user.get("birth_year"),
-        "created_at": session_user.get("created_at")
-            }
+        "username": session_user.username,
+        "role": session_user.role,
+        "name": session_user.name,
+        "email": session_user.email,
+        "phone": session_user.phone,
+        "birth_year": session_user.birth_year,
+        "created_at": session_user.created_at.strftime("%d-%m-%Y"),
+    }
 
         handler.send_json_response(200, "application/json", profile_data)
 
-    def handle_get_profile_by_id(handler, session_user):
+
+    def handle_get_profile_by_id(handler, session_user: User):
         match = re.match(r"^/profile/([^/]+)$", handler.path)
         if not match:
             handler.send_json_response(400, "application/json", {"error": "Invalid URL format"})
             return
         
         target_user_id = match.group(1)
-        
-        users = load_json('users.json')
-        target_user = next((u for u in users if u.get("id") == target_user_id), None)
+        target_user = access_users.get_user_byid(id=target_user_id)
         
         if not target_user:
             handler.send_json_response(404, "application/json", {"error": "User not found"})
             return
         
-        is_admin = session_user["role"] == "ADMIN"
+        is_admin = session_user.role == "ADMIN"
         
-        if not is_admin and session_user.get("id") != target_user_id:
+        if not is_admin and session_user.id != target_user_id:
             handler.send_json_response(403, "application/json", {"error": "Access denied. You can only view your own profile."})
             return
         
         profile_data = {
-            "id": target_user.get("id"),
-            "username": target_user.get("username"),
-            "role": target_user.get("role"),
-            "name": target_user.get("name"),
-            "email": target_user.get("email"),
-            "phone": target_user.get("phone"),
-            "birth_year": target_user.get("birth_year"),
-            "created_at": target_user.get("created_at")
+            "username": target_user.username,
+            "role": target_user.role,
+            "name": target_user.name,
+            "email": target_user.email,
+            "phone": target_user.phone,
+            "birth_year": target_user.birth_year,
+            "created_at": target_user.created_at.strftime("%d-%m-%Y"),
         }
         
         handler.send_json_response(200, "application/json", profile_data)
+
 
     def handle_logout(handler):
         token = extract_bearer_token(handler.headers)
@@ -61,6 +62,7 @@ class get_routes:
         else:
             handler.send_json_response(400, "application/json", {"error": "No active session or invalid token"})
 
+
     def _handle_index(self):
         self.send_json_response(200, "text/html; charset=utf-8", 
             "<html><head><title>MobyPark API</title></head>"
@@ -69,20 +71,24 @@ class get_routes:
             "<p>Try endpoints like <code>/parking-lots</code>, <code>/profile</code> (requires Authorization), etc.</p>"
             "</body></html>"
         )
+
+
     def _handle_favicon(self):
         self.send_json_response(204, "image/x-icon", "")
 
+
     def _handle_get_parking_lots(self):
-        parking_lots = load_parking_lot_data()
+        parking_lots = access_parkinglots.get_all_parking_lots()
         self.send_json_response(200, "application/json", parking_lots)
     
+
     @login_required
-    def _handle_get_reservations(self, session_user):
-        reservations = load_reservation_data()
+    def _handle_get_reservations(self, session_user: User):
         print(f"DEBUG: In _handle_get_reservations. Session User: {session_user}")
         print(f"DEBUG: Raw Reservations Data: {reservations}")
         user_reservations = {rid: res for rid, res in reservations.items() if res.get("user") == session_user["username"] or session_user["role"] == "ADMIN"}
         self.send_json_response(200, "application/json", user_reservations)
+
 
     @login_required
     def _handle_get_payments(self, session_user):

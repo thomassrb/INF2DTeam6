@@ -9,6 +9,14 @@ class AccessParkingLots:
         self.cursor = conn.cursor
         self.conn = conn.connection
 
+
+    def get_all_parking_lots(self):
+        query = """"
+        SELECT id, name FROM parking_lots
+        """
+        self.cursor.execute(query)
+        return self.cursor.fetchall()
+    
     
     def get_parking_lot(self, id):
         query = """

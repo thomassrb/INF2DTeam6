@@ -13,6 +13,8 @@ from DataAccess.AccessUsers import AccessUsers
 from DataAccess.AccessVehicles import AccessVehicles
 
 from Models.User import User
+from Models.ParkingLot import ParkingLot
+from Models.ParkingLotCoordinates import ParkingLotCoordinates
 
 from . import session_manager
 
@@ -279,27 +281,26 @@ async def update_profile_by_id(user_id: str, body: ProfileUpdate, user: User = D
 
 @app.get("/parking-lots")
 async def list_parking_lots():
-    parking_lots = load_parking_lot_data()
+    parking_lots = access_parkinglots.get_all_parking_lots()
     return parking_lots
 
 
 @app.post("/parking-lots", status_code=status.HTTP_201_CREATED)
 async def create_parking_lot(body: ParkingLotCreate, user: User = Depends(require_roles("ADMIN"))):
-    parking_lots = load_parking_lot_data()
-    new_lid = str(len(parking_lots) + 1)
-    parking_lots[new_lid] = {
-        "id": new_lid,
-        "name": body.name,
-        "location": body.location,
-        "capacity": body.capacity,
-        "hourly_rate": body.tariff,
-        "day_rate": body.daytariff,
-        "address": body.address,
-        "coordinates": body.coordinates,
-        "reserved": 0,
-    }
-    save_parking_lot_data(parking_lots)
-    return {"message": f"Parking lot saved under ID: {new_lid}"}
+    from datetime import datetime
+    new_parking_lot = ParkingLot(
+        name=body.name,
+        location=body.location,
+        capacity=body.capacity,
+        tariff=body.tariff,
+        daytariff=body.daytariff,
+        address=body.address,
+        coordinates=ParkingLotCoordinates(**body.coordinates),
+        created_at=datetime.now(),
+        reserved=0
+    )
+    access_parkinglots.add_parking_lot(parkinglot=new_parking_lot)
+    return {"message": f"Parking lot saved under ID: {new_parking_lot.id}"}
 
 
 @app.get("/parking-lots/{lid}")
