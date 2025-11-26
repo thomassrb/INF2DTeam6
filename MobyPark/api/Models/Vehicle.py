@@ -1,11 +1,12 @@
 from datetime import datetime
+from .User import User
 
 class Vehicle:
 
     def __init__(self,
                   id: str,
-                  user_id: str,
-                  licence_plate: str,
+                  user: User,
+                  licenseplate: str,
                   make: str,
                   model: str,
                   color: str,
@@ -13,8 +14,8 @@ class Vehicle:
                   created_at: datetime):
         
         self.id = id
-        self.user_id = user_id
-        self.license_plate = licence_plate
+        self.user = user
+        self.licenseplate = licenseplate
         self.make = make
         self.model = model
         self.color = color

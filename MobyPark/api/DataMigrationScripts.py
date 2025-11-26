@@ -43,6 +43,7 @@ VALUES
     for user in users:
         final_user = user.copy()
         final_user["created_at"] = datetime.strptime(final_user["created_at"], "%Y-%m-%d")
+        final_user["id"] = int(final_user["id"])
         migrate_data(corrupt_data=corrupt_data, log_file="corrupt_user_logs.txt", data=user, final_data=final_user, query=datadump_query)
 
     connection.connection.commit()
@@ -68,10 +69,11 @@ VALUES
     for parking_lot in parking_lots.values():
         final_parking_lot = parking_lot.copy()
         final_parking_lot["created_at"] = datetime.strptime(final_parking_lot["created_at"], "%Y-%m-%d")
+        final_parking_lot["id"] = int(final_parking_lot["id"])
         migrate_data(log_file="corrupt_parking_lot_logs.txt", corrupt_data=corrupt_data, query=datadump_query, data=parking_lot, final_data=final_parking_lot)
 
         coordinates = parking_lot["coordinates"].copy()
-        coordinates["id"] = parking_lot["id"]
+        coordinates["id"] = final_parking_lot["id"]
         migrate_data(log_file="corrupt_parking_lot_logs.txt", corrupt_data=corrupt_data, query=coordinatesdump_query, data=parking_lot, final_data=coordinates)
 
     connection.connection.commit()
@@ -92,6 +94,8 @@ VALUES
     for vehicle in vehicles:
         final_vehicle = vehicle.copy()
         final_vehicle["created_at"] = datetime.strptime(final_vehicle["created_at"], "%Y-%m-%d")
+        final_vehicle["id"] = int(final_vehicle["id"])
+        final_vehicle["user_id"] = int(final_vehicle["user_id"])
         migrate_data(corrupt_data=corrupt_data, log_file="corrupt_vehicle_logs.txt", query=query, data=vehicle, final_data=final_vehicle)
     
     connection.connection.commit()
@@ -106,9 +110,9 @@ def migrate_sessions():
         corrupt_data = list()
         query = """
 INSERT INTO sessions
-    (id, parking_lot_id, licenseplate, vehicle_id, started, stopped, username, user_id, duration_minutes, cost, payment_status)
+    (session_id, parking_lot_id, licenseplate, vehicle_id, started, stopped, username, user_id, duration_minutes, cost, payment_status)
 SELECT
-    :id,
+    :session_id,
     :parking_lot_id,
     :licenseplate,
     v.id,          
@@ -129,7 +133,9 @@ LEFT JOIN users u ON u.username = :user;
             final_session = session.copy()
             final_session["started"] = datetime.strptime(final_session["started"], "%Y-%m-%dT%H:%M:%SZ")
             final_session["stopped"] = datetime.strptime(final_session["stopped"], "%Y-%m-%dT%H:%M:%SZ")
-            final_session["id"] = f'{final_session["id"]}-p{i+1}'
+            final_session["session_id"] = int(final_session["id"])
+            del final_session["id"]
+            final_session["parking_lot_id"] = int(final_session["parking_lot_id"])
             migrate_data(corrupt_data=corrupt_data, log_file="corrupt_session_logs.txt", query=query, data=session, final_data=final_session)
 
         connection.connection.commit()
@@ -140,6 +146,7 @@ LEFT JOIN users u ON u.username = :user;
 def migrate_payments():
     payments = load_json("payments.json")
     corrupt_data = list()
+    length_payments = len(payments)
     t_data_query = """
 INSERT INTO t_data
     (id, amount, date, method, issuer, bank)
@@ -160,20 +167,29 @@ SELECT
     :hash,
     s.id,
     p.id
-FROM users u 
-JOIN sessions s ON s.id = :session_id
+FROM sessions s
+JOIN users u ON u.username = :initiator
 JOIN parking_lots p ON p.id = :parking_lot_id
-WHERE u.username = :initiator
+WHERE s.session_id = :session_id AND s.parking_lot_id = :parking_lot_id;
 """
-    
+    connection.cursor.executescript("""
+    CREATE INDEX IF NOT EXISTS idx_sessions_session_parking
+        ON sessions(session_id, parking_lot_id);
+    """)
+
+    counter = 0
     for payment in payments:
+        counter += 1
+        if counter % 100 == 0:
+            print(f"{counter}/{length_payments} done")
+
         final_payment = payment.copy()
         try:
             created_at_timestamp = final_payment["created_at"].rsplit(":", 1)[0]
             completed_timestamp = final_payment["completed"].rsplit(":", 1)[0]
             final_payment["created_at"] = datetime.strptime(created_at_timestamp, "%d-%m-%Y %H:%M")
             final_payment["completed"] = datetime.strptime(completed_timestamp, "%d-%m-%Y %H:%M")
-            final_payment["session_id"] = f'{final_payment["session_id"]}-p{final_payment["parking_lot_id"]}'
+            final_payment["session_id"] = int(final_payment["session_id"])
         except KeyError as e:
             corrupt_data.append(payment)
             logger(file="corrupt_payment_logs.txt", data=payment, error=e)
@@ -203,6 +219,9 @@ VALUES
         final_reservation["start_time"] =  datetime.strptime(final_reservation["start_time"], "%Y-%m-%dT%H:%M:%SZ")
         final_reservation["end_time"] =  datetime.strptime(final_reservation["end_time"], "%Y-%m-%dT%H:%M:%SZ")
         final_reservation["created_at"] =  datetime.strptime(final_reservation["created_at"], "%Y-%m-%dT%H:%M:%SZ")
+        final_reservation["user_id"] = int(final_reservation["user_id"])
+        final_reservation["parking_lot_id"] = int(final_reservation["parking_lot_id"])
+        final_reservation["vehicle_id"] = int(final_reservation["vehicle_id"])
         migrate_data(corrupt_data=corrupt_data, log_file="corrupt_reservation_logs.txt", query=query, data=reservation, final_data=final_reservation)
 
     connection.connection.commit()
@@ -210,10 +229,10 @@ VALUES
 
 
 if "__main__" ==  __name__:
-    migrate_users()
-    migrate_parking_lots()
-    migrate_vehicles()
-    migrate_sessions()
+    # migrate_users()
+    # migrate_parking_lots()
+    # migrate_vehicles()
+    # migrate_sessions()
     migrate_payments()
     migrate_reservations()
     connection.close_connection()
