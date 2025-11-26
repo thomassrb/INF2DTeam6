@@ -79,25 +79,24 @@ class get_routes:
 
     def _handle_get_parking_lots(self):
         parking_lots = access_parkinglots.get_all_parking_lots()
-        self.send_json_response(200, "application/json", parking_lots)
+        parking_lots_dicts = list(map(lambda lot: lot.__dict__, parking_lots))
+        self.send_json_response(200, "application/json", parking_lots_dicts)
     
 
     @login_required
     def _handle_get_reservations(self, session_user: User):
-        print(f"DEBUG: In _handle_get_reservations. Session User: {session_user}")
-        print(f"DEBUG: Raw Reservations Data: {reservations}")
-        user_reservations = {rid: res for rid, res in reservations.items() if res.get("user") == session_user["username"] or session_user["role"] == "ADMIN"}
-        self.send_json_response(200, "application/json", user_reservations)
+        reservations = access_reservations.get_reservations_by_userid(user_id=session_user.id)
+        reservations_dicts = list(map(lambda res: res.__dict__, reservations))
+        self.send_json_response(200, "application/json", reservations_dicts)
 
 
     @login_required
-    def _handle_get_payments(self, session_user):
-        payments = []
-        for payment in load_payment_data():
-            if payment.get("initiator") == session_user["username"] or payment.get("processed_by") == session_user["username"] or session_user["role"] == "ADMIN":
-                payments.append(payment)
-        self.send_json_response(200, "application/json", payments)
+    def _handle_get_payments(self, session_user: User):
+        payments = access_payments.get_payments_by_userid(user_id=session_user.id)
+        payments_dicts = list(map(lambda pay: pay.__dict__, payments))
+        self.send_json_response(200, "application/json", payments_dicts)
     
+# hier ben ik gebleven------------------------------------------------------------------------------
     @login_required
     def _handle_get_billing(self, session_user):
         data = []
@@ -121,6 +120,7 @@ class get_routes:
                     })
         self.send_json_response(200, "application/json", data)
     
+
     @login_required
     def _handle_get_vehicles(self, session_user):
         vehicles_data = load_vehicles_data()
@@ -136,6 +136,7 @@ class get_routes:
             # For normal users, always return a list (which may be empty)
             self.send_json_response(200, "application/json", user_vehicles)
 
+
     def _handle_get_parking_lot_details(self):
         lid = self.path.split("/")[2]
         parking_lots = load_parking_lot_data()
@@ -146,6 +147,7 @@ class get_routes:
 
         self.send_json_response(200, "application/json", parking_lots[lid])
     
+
     @login_required
     def _handle_get_reservation_details(self, session_user):
         reservations = load_reservation_data()
@@ -160,6 +162,8 @@ class get_routes:
             return
         
         self.send_json_response(200, "application/json", reservations[rid])
+
+
     @login_required
     def _handle_get_payment_details(self):
         session_user = authentication.get_user_from_session(self)

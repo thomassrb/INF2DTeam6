@@ -52,6 +52,18 @@ class AccessPayments:
         return Payment(**payment_dict)
 
 
+    def get_payments_by_userid(self, user_id:int) -> list[Payment]:
+        query = """
+        SELECT id FROM payments
+        WHERE user_id = ?;
+        """
+        self.cursor.execute(query, [user_id])
+        ids = self.cursor.fetchall()
+        payments = list(map(lambda id: self.get_payment(id["id"]), ids))
+
+        return payments
+    
+    
     def add_payment(self, payment: Payment):
         query = """
         INSERT INTO payments

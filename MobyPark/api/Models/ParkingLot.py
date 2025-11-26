@@ -26,4 +26,7 @@ class ParkingLot:
         self.daytariff = daytariff
         self.coordinates = coordinates
         self.created_at = created_at
+
+    def __repr__(self):
+        return self.name
         

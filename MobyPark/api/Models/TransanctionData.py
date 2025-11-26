@@ -16,4 +16,8 @@ class TransactionData:
         self.method = method
         self.issuer = issuer
         self.bank = bank
+
+    
+    def __repr__(self):
+        return f"t_data obj: {self.id}"
         

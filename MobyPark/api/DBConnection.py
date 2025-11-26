@@ -4,7 +4,9 @@ class DBConnection:
 
     def __init__(self, database_path):
         self.connection = sqlite3.connect(database_path)
+        self.connection.row_factory = sqlite3.Row
         self.cursor = self.connection.cursor()
+        
         self.create_database_and_tables()
 
 

@@ -24,6 +24,10 @@ class User:
         self.role = role
         self.birth_year = birth_year
         self.active = active
+
+    
+    def __repr__(self):
+        return self.username
     
 
 

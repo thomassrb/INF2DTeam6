@@ -17,7 +17,7 @@ from DataAccess.AccessPayments import AccessPayments
 from DataAccess.AccessReservations import AccessReservations
 from DBConnection import DBConnection
 
-conn = DBConnection("MobyPark/api/data/TestMobyParkData.db")
+conn = DBConnection("MobyPark/api/data/MobyParkData.db")
 AccessUsers = AccessUsers(conn=conn)
 AccessParkingLots = AccessParkingLots(conn=conn)
 AccessVehicles = AccessVehicles(conn=conn)
@@ -55,14 +55,10 @@ vehicle = Vehicle(id=None,
                   color="red",
                   year=2003,
                   created_at=datetime(year=2025, month=11, day=19))
-session = AccessSessions.get_session("1-p1")
-payment = AccessPayments.get_payment("82724346a21e6ddf8da490f7c49355bcBB")
-reservation = AccessReservations.get_reservation("1")
+payments = AccessReservations.get_reservations_by_userid(user_id=281)
 
-AccessUsers.add_user(user=user)
-AccessParkingLots.add_parking_lot(parkinglot=parking_lot)
-AccessVehicles.add_vehicle(vehicle=vehicle)
-print(user.id)
+
+print(payments)
 
 conn.close_connection()
 

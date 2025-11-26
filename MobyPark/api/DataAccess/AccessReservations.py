@@ -43,6 +43,17 @@ class AccessReservations:
         return Reservation(**reservation_dict)
 
 
+    def get_reservations_by_userid(self, user_id:int) -> list[Reservation]:
+        query = """
+        SELECT id FROM reservations
+        WHERE user_id = ?;
+        """
+        self.cursor.execute(query, [user_id])
+        ids = self.cursor.fetchall()
+        reservations = list(map(lambda id: self.get_reservation(id["id"]), ids))
+
+        return reservations
+    
 
     def add_reservation(self, reservation: Reservation):
         query = """"
