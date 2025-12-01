@@ -39,6 +39,16 @@ class AccessUsers:
             result = dict(result)
             result["created_at"] = datetime.strptime(result["created_at"], "%Y-%m-%d %H:%M:%S")
             return User(**result)
+        
+
+    def get_all_users(self):
+        query = """"
+        SELECT * FROM users
+        """
+        self.cursor.execute(query)
+        users = self.cursor.fetchall()
+
+        return users
 
     
     def add_user(self, user: User):

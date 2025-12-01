@@ -24,5 +24,5 @@ class Vehicle:
 
 
     def __repr__(self):
-        return self.licenseplate
+        return self.__dict__
         

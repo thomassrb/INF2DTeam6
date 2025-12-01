@@ -32,4 +32,4 @@ class Payment:
 
     
     def __repr__(self):
-        return f"payment: {self.id}"
+        return self.__dict__

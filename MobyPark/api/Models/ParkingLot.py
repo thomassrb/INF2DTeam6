@@ -28,5 +28,5 @@ class ParkingLot:
         self.created_at = created_at
 
     def __repr__(self):
-        return self.name
+        return self.__dict__
         

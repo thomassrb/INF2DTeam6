@@ -11,4 +11,4 @@ class ParkingLotCoordinates:
 
         
     def __repr__(self):
-        return f"coordinates obj: {self.id}"
+        return self.__dict__

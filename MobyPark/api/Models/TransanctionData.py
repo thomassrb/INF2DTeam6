@@ -19,5 +19,5 @@ class TransactionData:
 
     
     def __repr__(self):
-        return f"t_data obj: {self.id}"
+        return self.__dict__
         

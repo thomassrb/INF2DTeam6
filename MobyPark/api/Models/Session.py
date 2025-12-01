@@ -34,5 +34,5 @@ class Session:
 
 
     def __repr__(self):
-        return f"session: {self.id}"
+        return self.__dict__
         

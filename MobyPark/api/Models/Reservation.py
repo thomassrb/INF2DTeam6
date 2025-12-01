@@ -28,4 +28,4 @@ class Reservation:
         
     
     def __repr__(self):
-        return f"reservation: {self.id}"
+        return self.__dict__

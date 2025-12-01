@@ -1,6 +1,7 @@
 import sqlite3
 from DBConnection import DBConnection
 from Models.Reservation import Reservation
+from Models.User import User
 from DataAccess.AccessUsers import AccessUsers
 from DataAccess.AccessVehicles import AccessVehicles
 from DataAccess.AccessParkingLots import AccessParkingLots
@@ -41,14 +42,24 @@ class AccessReservations:
         del reservation_dict["parking_lot_id"]
 
         return Reservation(**reservation_dict)
+    
+
+    def get_all_reservations(self):
+        query = """"
+        SELECT * FROM reservations
+        """
+        self.cursor.execute(query)
+        reservations = self.cursor.fetchall()
+
+        return reservations
 
 
-    def get_reservations_by_userid(self, user_id:int) -> list[Reservation]:
+    def get_reservations_by_user(self, user: User) -> list[Reservation]:
         query = """
         SELECT id FROM reservations
         WHERE user_id = ?;
         """
-        self.cursor.execute(query, [user_id])
+        self.cursor.execute(query, [user.id])
         ids = self.cursor.fetchall()
         reservations = list(map(lambda id: self.get_reservation(id["id"]), ids))
 

@@ -42,6 +42,18 @@ class AccessSessions:
         del session_dict["vehicle_id"]
 
         return Session(**session_dict)
+    
+
+    def get_sessions_byuser(self, user: User):
+        query = """
+        SELECT id FROM sessions
+        WHERE user_id = ?;
+        """
+        self.cursor.execute(query, [user.id])
+        ids = self.cursor.fetchall()
+        sessions = list(map(lambda id: self.get_session(id=id["id"]), ids))
+
+        return sessions
 
 
     def add_session(self, session: Session):

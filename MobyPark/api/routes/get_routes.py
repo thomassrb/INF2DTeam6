@@ -79,127 +79,135 @@ class get_routes:
 
     def _handle_get_parking_lots(self):
         parking_lots = access_parkinglots.get_all_parking_lots()
-        parking_lots_dicts = list(map(lambda lot: lot.__dict__, parking_lots))
-        self.send_json_response(200, "application/json", parking_lots_dicts)
+        self.send_json_response(200, "application/json", parking_lots)
     
 
     @login_required
     def _handle_get_reservations(self, session_user: User):
-        reservations = access_reservations.get_reservations_by_userid(user_id=session_user.id)
-        reservations_dicts = list(map(lambda res: res.__dict__, reservations))
-        self.send_json_response(200, "application/json", reservations_dicts)
+        if session_user.role == "ADMIN":
+            self.send_json_response(200, "application/json", access_reservations.get_all_reservations())
+        else:
+            reservations = access_reservations.get_reservations_by_user(user=session_user)
+            self.send_json_response(200, "application/json", reservations)
 
 
     @login_required
     def _handle_get_payments(self, session_user: User):
-        payments = access_payments.get_payments_by_userid(user_id=session_user.id)
-        payments_dicts = list(map(lambda pay: pay.__dict__, payments))
-        self.send_json_response(200, "application/json", payments_dicts)
+        if session_user.role == "ADMIN":
+            self.send_json_response(200,  "application/json", access_payments.get_all_payments())
+        else:
+            payments = access_payments.get_payments_by_user(user_id=session_user)
+            self.send_json_response(200, "application/json", payments)
     
-# hier ben ik gebleven------------------------------------------------------------------------------
+
     @login_required
     def _handle_get_billing(self, session_user):
-        data = []
-        for pid, parkinglot in load_parking_lot_data().items():
-            try:
-                sessions = load_json(f'pdata/p{pid}-sessions.json')
-            except FileNotFoundError:
-                sessions = {}
-            for sid, session in sessions.items():
-                if session["user"] == session_user["username"]:
-                    amount, hours, days = sc.calculate_price(parkinglot, sid, session)
-                    transaction = sc.generate_payment_hash(sid, session)
-                    payed = sc.check_payment_amount(transaction)
-                    data.append({
-                        "session": {k: v for k, v in session.items() if k in ["licenseplate", "started", "stopped"]} | {"hours": hours, "days": days},
-                        "parking": {k: v for k, v in parkinglot.items() if k in ["name", "location", "tariff", "daytariff"]},
-                        "amount": amount,
-                        "thash": transaction,
-                        "payed": payed,
-                        "balance": amount - payed
-                    })
+        sessions = access_sessions.get_sessions_byuser(user=session_user)
+        data = list()
+        
+        for session in sessions:
+            amount, hours, days = sc.calculate_price(session.parking_lot, session)
+            transaction = sc.generate_payment_hash(session.id, session)
+            payed = sc.check_payment_amount(transaction)
+            data.append({
+                "session": {
+                    "licenseplate": session.licenseplate,
+                    "started": session.started,
+                    "stopped": session.stopped,
+                    "hours": hours,
+                    "days": days
+                    },
+                "parking": {
+                    "name": session.parking_lot.name, 
+                    "location": session.parking_lot.location, 
+                    "tariff": session.parking_lot.tariff,
+                    "daytariff": session.parking_lot.daytariff
+                    },
+                "amount": amount,
+                "thash": transaction,
+                "payed": payed,
+                "balance": amount - payed
+            })
         self.send_json_response(200, "application/json", data)
     
 
     @login_required
-    def _handle_get_vehicles(self, session_user):
-        vehicles_data = load_vehicles_data()
-
-        if session_user["role"] == "ADMIN":
-            all_vehicles = []
-            for user_v_list in vehicles_data.values():
-                all_vehicles.extend(user_v_list)
-            self.send_json_response(200, "application/json", all_vehicles)
-            return
+    def _handle_get_vehicles(self, session_user: User):
+        if session_user.role == "ADMIN":
+            self.send_json_response(200, "application/json", access_vehicles.get_all_vehicles())
         else:
-            user_vehicles = vehicles_data.get(session_user["username"], [])
-            # For normal users, always return a list (which may be empty)
+            user_vehicles = access_vehicles.get_vehicles_byuser(user=session_user)
             self.send_json_response(200, "application/json", user_vehicles)
 
 
     def _handle_get_parking_lot_details(self):
         lid = self.path.split("/")[2]
-        parking_lots = load_parking_lot_data()
+        parking_lot = access_parkinglots.get_parking_lot(id=lid)
         
-        if lid not in parking_lots:
+        if lid is None:
             self.send_json_response(404, "application/json", {"error": "Parking lot not found"})
-            return
-
-        self.send_json_response(200, "application/json", parking_lots[lid])
+        else:
+            self.send_json_response(200, "application/json", parking_lot)
     
 
     @login_required
-    def _handle_get_reservation_details(self, session_user):
-        reservations = load_reservation_data()
+    def _handle_get_reservation_details(self, session_user: User):
         rid = self.path.replace("/reservations/", "")
-        
-        if rid not in reservations:
+        reservation = access_reservations.get_reservation(id=rid)
+        if rid is None:
             self.send_json_response(404, "application/json", {"error": "Reservation not found"})
             return
-        
-        if not (session_user["role"] == "ADMIN") and not session_user["username"] == reservations[rid].get("user"):
+
+        if not (session_user.role == "ADMIN") and not session_user.id == reservation.user.id:
             self.send_json_response(403, "application/json", {"error": "Access denied"})
             return
         
-        self.send_json_response(200, "application/json", reservations[rid])
+        self.send_json_response(200, "application/json", reservation)
 
 
     @login_required
     def _handle_get_payment_details(self):
         session_user = authentication.get_user_from_session(self)
         pid = self.path.replace("/payments/", "")
-        payments = load_payment_data()
-        payment = next((p for p in payments if p.get("transaction") == pid), None)
+        payment = access_payments.get_payment(id=pid)
         if not payment:
             self.send_json_response(404, "application/json", {"error": "Payment not found!"})
             return
-        if not (session_user["role"] == "ADMIN") and payment.get("initiator") != session_user["username"]:
+        if (session_user.role != "ADMIN") and (payment.user.id != session_user.id):
             self.send_json_response(403, "application/json", {"error": "Access denied"})
             return
+        
         self.send_json_response(200, "application/json", payment)
 
+
     @roles_required(['ADMIN'])
-    def _handle_get_user_billing(self, session_user):
-        
+    def _handle_get_user_billing(self):
         user = self.path.replace("/billing/", "")
-        data = []
-        for pid, parkinglot in load_parking_lot_data().items():
-            try:
-                sessions = load_json(f'pdata/p{pid}-sessions.json')
-            except FileNotFoundError:
-                sessions = {}
-            for sid, session in sessions.items():
-                if session.get("user") == user:
-                    amount, hours, days = sc.calculate_price(parkinglot, sid, session)
-                    transaction = sc.generate_payment_hash(sid, session)
-                    payed = sc.check_payment_amount(transaction)
-                    data.append({
-                        "session": {k: v for k, v in session.items() if k in ["licenseplate", "started", "stopped"]} | {"hours": hours, "days": days},
-                        "parking": {k: v for k, v in parkinglot.items() if k in ["name", "location", "tariff", "daytariff"]},
-                        "amount": amount,
-                        "thash": transaction,
-                        "payed": payed,
-                        "balance": amount - payed
-                    })
-        self.audit_logger.audit(session_user, action="get_user_billing", target=user)
+        sessions = access_sessions.get_sessions_byuser(user=user)
+        data = list()
+        
+        for session in sessions:
+            amount, hours, days = sc.calculate_price(session.parking_lot, session)
+            transaction = sc.generate_payment_hash(session.id, session)
+            payed = sc.check_payment_amount(transaction)
+            data.append({
+                "session": {
+                    "licenseplate": session.licenseplate,
+                    "started": session.started,
+                    "stopped": session.stopped,
+                    "hours": hours,
+                    "days": days
+                    },
+                "parking": {
+                    "name": session.parking_lot.name, 
+                    "location": session.parking_lot.location, 
+                    "tariff": session.parking_lot.tariff,
+                    "daytariff": session.parking_lot.daytariff
+                    },
+                "amount": amount,
+                "thash": transaction,
+                "payed": payed,
+                "balance": amount - payed
+            })
         self.send_json_response(200, "application/json", data)
+    
