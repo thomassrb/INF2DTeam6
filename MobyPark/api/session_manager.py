@@ -85,9 +85,9 @@ def _create_store() -> _BaseSessionStore:
 _STORE: _BaseSessionStore = _create_store()
 
 
-def add_session(token: str, user: Dict[str, Any]) -> None:
+def add_session(token: str, user: User) -> None:
     # Dit voegt een session toe
-    _STORE.add(token, user)
+    _STORE.add(token, user.__dict__)
 
 
 def remove_session(token: str) -> Optional[Dict[str, Any]]:

@@ -1,7 +1,7 @@
 
 from authentication import login_required, roles_required
-from app import access_vehicles, access_parkinglots, access_payments, access_reservations, access_sessions, access_users
-
+from app import access_vehicles, access_parkinglots, access_payments, access_reservations, access_sessions, access_users, connection
+from Models.User import User
 
 class delete_routes:
     @roles_required(['ADMIN'])
@@ -11,29 +11,27 @@ class delete_routes:
         if len(path_parts) > 2 and path_parts[2]:
             lid = path_parts[2]
 
-        parking_lots = load_parking_lot_data()
-
         if lid:
-            if lid not in parking_lots:
+            parking_lot = access_parkinglots.get_parking_lot(id=lid)
+            if not parking_lot:
                 self.send_json_response(404, "application/json", {"error": "Parking lot not found"})
                 return
-            del parking_lots[lid]
-            save_parking_lot_data(parking_lots)
+            access_parkinglots.delete_parking_lot(parkinglot=parking_lot)
             self.audit_logger.audit(session_user, action="delete_parking_lot", target=lid)
             self.send_json_response(200, "application/json", {"message": f"Parking lot {lid} deleted"})
         else:
-            save_parking_lot_data({})
+            connection.cursor.execute("TRUNCATE TABLE parking_lots, parking_lots_coordinates") # lijkt me erg riskant
             self.audit_logger.audit(session_user, action="delete_all_parking_lots")
             self.send_json_response(200, "application/json", {"message": "All parking lots deleted"})
     
+
     @login_required
-    def _handle_delete_reservation(self, session_user):
-        reservations = load_reservation_data()
-        parking_lots = load_parking_lot_data()
+    def _handle_delete_reservation(self, session_user: User):
         rid = self.path.replace("/reservations/", "")
+        reservation = access_reservations.get_reservation(id=rid)
 
         if not rid:
-            if session_user["role"] == "ADMIN":
+            if session_user.role == "ADMIN":
                 for res_id, reservation in list(reservations.items()):
                     pid = reservation["parkinglot"]
                     if parking_lots[pid]["reserved"] > 0:
@@ -45,7 +43,7 @@ class delete_routes:
                 self.send_json_response(200, "application/json", {"status": "All reservations deleted by admin"})
                 return
             else:
-                user_reservations_to_delete = [res_id for res_id, res in reservations.items() if res.get("user") == session_user["username"]]
+                user_reservations_to_delete = access_reservations.get_reservations_by_user(user=session_user)
                 if not user_reservations_to_delete:
                     self.send_json_response(404, "application/json", {"error": "No reservations found for this user"})
                     return
@@ -109,9 +107,9 @@ class delete_routes:
     @roles_required(['ADMIN'])
     def _handle_delete_session(self, session_user):
         lid = self.path.split("/")[2]
-        parking_lots = load_parking_lot_data()
+        parking_lot = access_parkinglots.get_parking_lot(id=lid)
         
-        if lid not in parking_lots:
+        if not parking_lot:
             self.send_json_response(404, "application/json", {"error": "Parking lot not found"})
             return
         
