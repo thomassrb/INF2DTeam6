@@ -8,7 +8,7 @@ import pytest
 from MobyPark.api import session_calculator as sc
 
 def create_parking_lot(tariff=2.5, daytariff=12.0):
-    coordinates = ParkingLotCoordinates(latitude=0.0, longitude=0.0)
+    coordinates = ParkingLotCoordinates(id="1", lng=0.0, lat=0.0)
     return ParkingLot(
         id="1",
         name="Test Parking",
