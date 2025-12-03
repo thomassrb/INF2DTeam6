@@ -953,10 +953,7 @@ class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
 
 
-HOST = os.environ.get('HOST', '0.0.0.0')
-PORT = int(os.environ.get('PORT', 8000))
-
-server = ThreadingHTTPServer((HOST, PORT), RequestHandler)
-print(f"Server running on http://{HOST}:{PORT}")
+server = ThreadingHTTPServer(('localhost', 8000), RequestHandler)
+print("Server running on http://localhost:8000")
 server.serve_forever()
 DBConnection = DBConnection("data/MobyPark_data.db")
