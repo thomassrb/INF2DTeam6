@@ -1,10 +1,16 @@
 """ --- bootstrap zodat dit bestand kan gerunt worden als module en gebruikt voor imports ---"""
-if __name__ == "__main__" and __package__ is None:
-    import sys, pathlib
-    sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
-    __package__ = "api"
-"""-----------------------------------------------------------------"""
+import os
+import sys
+import pathlib
 
+project_root = str(pathlib.Path(__file__).resolve().parent.parent.parent)
+
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+if __package__ is None:
+    __package__ = "MobyPark.api"
+"""-----------------------------------------------------------------"""
 
 import json
 import uuid
@@ -14,19 +20,24 @@ import time
 import threading
 import hashlib
 
-
-from routes.put_routes import put_routes
-from routes.delete_routes import delete_routes
-from routes.post_routes import post_routes
-from routes.get_routes import get_routes
-
+from MobyPark.api.routes.put_routes import put_routes
+from MobyPark.api.routes.delete_routes import delete_routes
+from MobyPark.api.routes.post_routes import post_routes
+from MobyPark.api.routes.get_routes import get_routes
+from MobyPark.api.storage_utils import (
+    load_json, save_data, save_user_data, 
+    load_parking_lot_data, save_parking_lot_data, 
+    save_reservation_data, load_reservation_data, 
+    load_payment_data, save_payment_data, 
+    load_vehicles_data, save_vehicles_data
+)
+from MobyPark.api import session_calculator as sc
+from MobyPark.api import authentication
+from MobyPark.api.DBConnection import DBConnection
 
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
-from storage_utils import load_json, save_data, save_user_data, load_parking_lot_data, save_parking_lot_data, save_reservation_data, load_reservation_data, load_payment_data, save_payment_data, load_vehicles_data,save_vehicles_data
-import session_calculator as sc
-import authentication
-from DBConnection import DBConnection
+
 
 
 

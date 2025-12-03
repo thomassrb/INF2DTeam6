@@ -1,22 +1,29 @@
 from typing import Optional, Dict, Any
+import os
+import sys
+import pathlib
+
+project_root = str(pathlib.Path(__file__).resolve().parent.parent.parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 from fastapi import FastAPI, Depends, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from .DBConnection import DBConnection
-from DataAccess.AccessParkingLots import AccessParkingLots
-from DataAccess.AccessPayments import AccessPayments
-from DataAccess.AccessReservations import AccessReservations
-from DataAccess.AccessSessions import AccessSessions
-from DataAccess.AccessUsers import AccessUsers
-from DataAccess.AccessVehicles import AccessVehicles
+from MobyPark.api.DBConnection import DBConnection
+from MobyPark.api.DataAccess.AccessParkingLots import AccessParkingLots
+from MobyPark.api.DataAccess.AccessPayments import AccessPayments
+from MobyPark.api.DataAccess.AccessReservations import AccessReservations
+from MobyPark.api.DataAccess.AccessSessions import AccessSessions
+from MobyPark.api.DataAccess.AccessUsers import AccessUsers
+from MobyPark.api.DataAccess.AccessVehicles import AccessVehicles
 
-from Models.User import User
-from Models.ParkingLot import ParkingLot
-from Models.ParkingLotCoordinates import ParkingLotCoordinates
+from MobyPark.api.Models.User import User
+from MobyPark.api.Models.ParkingLot import ParkingLot
+from MobyPark.api.Models.ParkingLotCoordinates import ParkingLotCoordinates
 
-from . import session_manager
+from MobyPark.api import session_manager
 
 connection = DBConnection(database_path="MobyPark/api/data/MobyParkData.db")
 access_parkinglots = AccessParkingLots(conn=connection)
