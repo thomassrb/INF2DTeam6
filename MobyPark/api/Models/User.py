@@ -27,7 +27,7 @@ class User:
 
     
     def __repr__(self):
-        return self.__dict__
+        return f"User(id='{self.id}', username='{self.username}', name='{self.name}')"
     
 
 
