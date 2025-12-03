@@ -106,5 +106,5 @@ class delete_routes:
             return
         
         access_sessions.delete_session(session=session)
-        self.audit_logger.audit(session_user, action="delete_session", target={"parking_lot": lid, "session": sid})
+        self.audit_logger.audit(session_user, action="delete_session", target={"parking_lot": session.parking_lot.id, "session": sid})
         self.send_json_response(200, "application/json", {"message": "Session deleted"})
