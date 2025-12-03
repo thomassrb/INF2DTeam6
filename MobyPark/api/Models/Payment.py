@@ -29,3 +29,7 @@ class Payment:
         self.session = session
         self.parking_lot = parking_lot
         self.t_data = t_data
+
+    
+    def __repr__(self):
+        return self.__dict__

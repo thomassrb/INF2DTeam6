@@ -16,8 +16,10 @@ from DataAccess.AccessSessions import AccessSessions
 from DataAccess.AccessPayments import AccessPayments
 from DataAccess.AccessReservations import AccessReservations
 from DBConnection import DBConnection
+from storage_utils import load_user_data
+from timeit import timeit
 
-conn = DBConnection("MobyPark/api/data/TestMobyParkData.db")
+conn = DBConnection("MobyPark/api/data/MobyParkData.db")
 AccessUsers = AccessUsers(conn=conn)
 AccessParkingLots = AccessParkingLots(conn=conn)
 AccessVehicles = AccessVehicles(conn=conn)
@@ -55,14 +57,14 @@ vehicle = Vehicle(id=None,
                   color="red",
                   year=2003,
                   created_at=datetime(year=2025, month=11, day=19))
-session = AccessSessions.get_session("1-p1")
-payment = AccessPayments.get_payment("82724346a21e6ddf8da490f7c49355bcBB")
-reservation = AccessReservations.get_reservation("1")
+payments = AccessReservations.get_reservations_by_userid(user_id=281)
 
-AccessUsers.add_user(user=user)
-AccessParkingLots.add_parking_lot(parkinglot=parking_lot)
-AccessVehicles.add_vehicle(vehicle=vehicle)
-print(user.id)
+timing_oud = timeit(lambda: load_user_data()[1], number=1000)
+timing_nieuw = timeit(lambda: AccessUsers.get_user_byid(id=1), number=1000)
+
+print("timing oud", timing_oud/1000)
+print("timing nieuw", timing_nieuw/1000)
+
 
 conn.close_connection()
 

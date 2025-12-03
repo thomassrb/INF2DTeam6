@@ -26,3 +26,6 @@ class Reservation:
         self.created_at = created_at
         self.cost = cost
         
+    
+    def __repr__(self):
+        return self.__dict__
