@@ -25,7 +25,10 @@ from MobyPark.api.Models.ParkingLotCoordinates import ParkingLotCoordinates
 
 from MobyPark.api import session_manager
 
-connection = DBConnection(database_path="MobyPark/api/data/MobyParkData.db")
+import os
+
+db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "MobyParkData.db")
+connection = DBConnection(database_path=db_path)
 access_parkinglots = AccessParkingLots(conn=connection)
 access_payments = AccessPayments(conn=connection)
 access_reservations = AccessReservations(conn=connection)
