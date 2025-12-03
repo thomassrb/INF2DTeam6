@@ -23,7 +23,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest requests bcrypt
+          pip install -r requirements.txt
+          pip install pytest
 
       - name: Start server
         working-directory: MobyPark
