@@ -4,9 +4,9 @@ import threading
 from typing import Optional, Dict, Any
 from MobyPark.api.Models.User import User
 
-_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))    # Geeft het absolute pad van de directory terug  waar het scriptbestand staat
-_DATA_DIR = os.path.join(_SCRIPT_DIR, '..', '..', 'data')   # Bepaalt het pad naar de data-directory
-_SESSIONS_FILE = os.path.join(_DATA_DIR, 'sessions.json')   # Zorgt ervoor het pad naar de sessions.json
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))    # Absolute pad van de directory waar dit script staat
+_DATA_DIR = os.environ.get('MOBYPARK_DATA_DIR') or os.path.join(_SCRIPT_DIR, '..', '..', 'MobyPark-api-data', 'pdata')
+_SESSIONS_FILE = os.path.join(_DATA_DIR, 'sessions.json')
 
 _LOCK = threading.Lock()                                    # Maakt een lock voor thread sync.
 

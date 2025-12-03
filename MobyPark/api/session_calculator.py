@@ -1,11 +1,13 @@
 from typing import List, Dict, Any
 from datetime import datetime
-from storage_utils import load_payment_data
 from hashlib import md5
-from Models.User import User
-from Models.ParkingLot import ParkingLot
 import math
 import uuid
+
+from MobyPark.api.storage_utils import load_payment_data
+from MobyPark.api.Models.User import User
+from MobyPark.api.Models.ParkingLot import ParkingLot
+
 
 def calculate_price(parkinglot, session: User):
     # Deze functie berekent de prijs op basis van je start en end tijd.

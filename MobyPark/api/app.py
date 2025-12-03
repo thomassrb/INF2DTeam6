@@ -22,12 +22,19 @@ from MobyPark.api.DataAccess.AccessVehicles import AccessVehicles
 from MobyPark.api.Models.User import User
 from MobyPark.api.Models.ParkingLot import ParkingLot
 from MobyPark.api.Models.ParkingLotCoordinates import ParkingLotCoordinates
-
 from MobyPark.api import session_manager
 
 import os
 
-db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "MobyParkData.db")
+# Gebruik dezelfde data directory als de rest van het project
+DATA_DIR = (
+    os.environ.get("MOBYPARK_DB_DIR")
+    or os.environ.get("MOBYPARK_DATA_DIR")
+    or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "MobyPark-api-data", "pdata")
+)
+os.makedirs(DATA_DIR, exist_ok=True)
+
+db_path = os.path.join(DATA_DIR, "MobyParkData.db")
 connection = DBConnection(database_path=db_path)
 access_parkinglots = AccessParkingLots(conn=connection)
 access_payments = AccessPayments(conn=connection)
