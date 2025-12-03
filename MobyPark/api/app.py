@@ -7,8 +7,9 @@ project_root = str(pathlib.Path(__file__).resolve().parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from fastapi import FastAPI, Depends, HTTPException, Request, status
+from fastapi import FastAPI, Depends, HTTPException, Request, status, responses
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from MobyPark.api.DBConnection import DBConnection
@@ -150,9 +151,9 @@ def require_roles(*roles: str):
     return dependency
 
 
-@app.get("/")
+@app.get("/", response_class=PlainTextResponse)
 async def root():
-    return {"message": "MobyPark FastAPI is running"}
+    return "👍 200 OK - MobyPark API is running"
 
 
 @app.post("/register", status_code=status.HTTP_201_CREATED)

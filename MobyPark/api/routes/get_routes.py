@@ -73,13 +73,10 @@ class get_routes:
 
 
     def _handle_index(self):
-        self.send_json_response(200, "text/html; charset=utf-8", 
-            "<html><head><title>MobyPark API</title></head>"
-            "<body>"
-            "<h1>MobyPark API is running</h1>"
-            "<p>Try endpoints like <code>/parking-lots</code>, <code>/profile</code> (requires Authorization), etc.</p>"
-            "</body></html>"
-        )
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write("👍 200 OK - MobyPark API is running".encode('utf-8'))
 
 
     def _handle_favicon(self):
