@@ -31,18 +31,22 @@ jobs:
           mkdir -p MobyPark/api/data
           touch MobyPark/api/data/MobyParkData.db
 
+      - name: Install uvicorn
+        run: |
+          pip install uvicorn
+
       - name: Start server
         working-directory: MobyPark
         run: |
-          # Start server in background and log output
-          python -u api/server.py > server.log 2>&1 &
+          # Start FastAPI server with uvicorn in background
+          python -m uvicorn api.app:app --host 0.0.0.0 --port 8000 > server.log 2>&1 &
           SERVER_PID=$!
-          echo "Started server.py with PID $SERVER_PID"
+          echo "Started FastAPI server with uvicorn (PID: $SERVER_PID)"
 
           # Wait for server to be ready, but also check if it crashes
           for i in {1..30}; do
-            if curl -sS http://127.0.0.1:8000/index >/dev/null 2>&1; then
-              echo "Server is up"
+            if curl -sS http://127.0.0.1:8000/ >/dev/null 2>&1; then
+              echo "Server is up and running"
               exit 0
             fi
 
@@ -50,18 +54,18 @@ jobs:
             if ! ps -p $SERVER_PID >/dev/null 2>&1; then
               echo "Server process died before we could connect"
               echo "==== server.log ===="
-              cat server.log || true
-              echo "pipeline failed: server crashed" > result.txt
+              cat server.log
               exit 1
             fi
 
-            echo "waiting for server..."
             sleep 1
           done
 
-          echo "Server did not become ready in time"
+          # If we get here, server didn't come up in time
+          echo "Timed out waiting for server to start"
           echo "==== server.log ===="
-          cat server.log || true
+          cat server.log
+          kill $SERVER_PID 2>/dev/null || true
           echo "pipeline failed: server did not start in time" > result.txt
           exit 1
 
