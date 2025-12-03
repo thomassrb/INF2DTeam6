@@ -163,8 +163,10 @@ async def register(body: RegisterRequest):
 
     from datetime import datetime
     import hashlib
+    import uuid
 
     new_user = User(
+        id=str(uuid.uuid4()),
         username=body.username,
         password=hashlib.sha256(body.password.encode("utf-8")).hexdigest(),
         name=body.name,
