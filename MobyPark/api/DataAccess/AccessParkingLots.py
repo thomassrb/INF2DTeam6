@@ -12,12 +12,11 @@ class AccessParkingLots:
 
     def get_all_parking_lots(self):
         query = """
-        SELECT p.*, c.*
-        FROM parking_lots p
-        JOIN parking_lots_coordinates c ON c.id = p.id;
+        SELECT id FROM parking_lots;
         """
         self.cursor.execute(query)
-        parking_lots = self.cursor.fetchall()
+        parking_lot_ids = self.cursor.fetchall()
+        parking_lots = list(map(lambda id: self.get_parking_lot(id=id["id"]), parking_lot_ids))
 
         return parking_lots
     

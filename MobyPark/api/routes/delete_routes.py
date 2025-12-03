@@ -29,16 +29,16 @@ class delete_routes:
     def _handle_delete_reservation(self, session_user: User):
         rid = self.path.replace("/reservations/", "")
         reservation = access_reservations.get_reservation(id=rid)
+        parking_lots = access_parkinglots.get_all_parking_lots()
 
         if not rid:
             if session_user.role == "ADMIN":
-                for res_id, reservation in list(reservations.items()):
-                    pid = reservation["parkinglot"]
-                    if parking_lots[pid]["reserved"] > 0:
-                        parking_lots[pid]["reserved"] -= 1
-                reservations.clear()
-                save_reservation_data(reservations)
-                save_parking_lot_data(parking_lots)
+                connection.cursor.execute("TRUNCATE TABLE reservations")
+
+                for parking_lot in parking_lots:
+                    parking_lot.reserved = 0
+                    access_parkinglots.update_parking_lot(parkinglot=parking_lot)
+                
                 self.audit_logger.audit(session_user, action="delete_all_reservations_by_admin")
                 self.send_json_response(200, "application/json", {"status": "All reservations deleted by admin"})
                 return
@@ -47,84 +47,64 @@ class delete_routes:
                 if not user_reservations_to_delete:
                     self.send_json_response(404, "application/json", {"error": "No reservations found for this user"})
                     return
-                for res_id in user_reservations_to_delete:
-                    reservation = reservations[res_id]
-                    pid = reservation["parkinglot"]
-                    if parking_lots[pid]["reserved"] > 0:
-                        parking_lots[pid]["reserved"] -= 1
-                    del reservations[res_id]
-                save_reservation_data(reservations)
-                save_parking_lot_data(parking_lots)
+                for reservation in user_reservations_to_delete:
+                    parking_lot = reservation.parking_lot
+                    parking_lot.reserved -= 1
+                    access_parkinglots.update_parking_lot(parkinglot=parking_lot)
+                    access_reservations.delete_reservation(reservation=reservation)
                 self.audit_logger.audit(session_user, action="delete_all_user_reservations")
                 self.send_json_response(200, "application/json", {"status": "All user reservations deleted"})
                 return
 
-        if rid not in reservations:
+        if not reservation:
             self.send_json_response(404, "application/json", {"error": "Reservation not found"})
             return
 
-        if not (session_user["role"] == "ADMIN") and not session_user["username"] == reservations[rid].get("user"):
+        if not (session_user.role == "ADMIN") and not session_user == reservation.user:
             self.send_json_response(403, "application/json", {"error": "Access denied"})
             return
 
-        reservation_to_delete = reservations[rid]
-        pid = reservation_to_delete["parkinglot"]
-
-        if parking_lots[pid]["reserved"] > 0:
-            parking_lots[pid]["reserved"] -= 1
+        parking_lot = reservation.parking_lot
+        if parking_lot.reserved > 0:
+            parking_lot.reserved -= 1
         else:
             self.send_json_response(400, "application/json", {"error": "Parking lot reserved count is already zero"})
             return
 
-        del reservations[rid]
-        save_reservation_data(reservations)
-        save_parking_lot_data(parking_lots)
+        access_parkinglots.update_parking_lot(parkinglot=parking_lot)
+        access_reservations.delete_reservation(reservation=reservation)
         self.send_json_response(200, "application/json", {"status": "Deleted"})
 
     @login_required
     def _handle_delete_vehicle(self, session_user):
         vid = self.path.replace("/vehicles/", "")
+        vehicle = access_vehicles.get_vehicle(id=vid)
 
-        vehicles = load_vehicles_data()
-        user_vehicles = vehicles.get(session_user["username"], [])
-
-        if not user_vehicles:
-            self.send_json_response(404, "application/json", {"error": "User vehicles not found"})
-            return
-
-        original_len = len(user_vehicles)
-        user_vehicles = [v for v in user_vehicles if v.get('id') != vid]
-
-        if len(user_vehicles) == original_len:
+        if not vehicle:
             self.send_json_response(404, "application/json", {"error": "Vehicle not found"})
             return
+        else:
+            if session_user.role != "ADMIN" and session_user != vehicle.user:
+                self.send_json_response(403, "application/json", {"error": "Access denied"})
+                return
 
-        vehicles[session_user["username"]] = user_vehicles
-        save_vehicles_data(vehicles)
+        access_vehicles.delete_vehicle(vehicle=vehicle)
         self.audit_logger.audit(session_user, action="delete_vehicle", target=vid)
         self.send_json_response(200, "application/json", {"status": "Deleted"})
 
     @roles_required(['ADMIN'])
     def _handle_delete_session(self, session_user):
-        lid = self.path.split("/")[2]
-        parking_lot = access_parkinglots.get_parking_lot(id=lid)
-        
-        if not parking_lot:
-            self.send_json_response(404, "application/json", {"error": "Parking lot not found"})
-            return
-        
-        sessions = load_json(f'pdata/p{lid}-sessions.json')
-        sid = self.path.split("/")[-1]
+        sid = self.path.split("/")[2]
+        session = access_sessions.get_session(id=sid)
         
         if not sid.isnumeric():
             self.send_json_response(400, "application/json", {"error": "Session ID is required, cannot delete all sessions"})
             return
                 
-        if sid not in sessions:
+        if not session:
             self.send_json_response(404, "application/json", {"error": "Session not found"})
             return
         
-        del sessions[sid]
-        save_data(f'pdata/p{lid}-sessions.json', sessions)
+        access_sessions.delete_session(session=session)
         self.audit_logger.audit(session_user, action="delete_session", target={"parking_lot": lid, "session": sid})
         self.send_json_response(200, "application/json", {"message": "Session deleted"})
