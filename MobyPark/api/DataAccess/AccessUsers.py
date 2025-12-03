@@ -1,7 +1,6 @@
-# from server import DBConnection
 import sqlite3
-from DBConnection import DBConnection
-from Models.User import User
+from MobyPark.api.DBConnection import DBConnection
+from MobyPark.api.Models.User import User
 from datetime import datetime
 
 class AccessUsers:

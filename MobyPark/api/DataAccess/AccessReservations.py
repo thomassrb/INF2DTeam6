@@ -1,10 +1,10 @@
 import sqlite3
-from DBConnection import DBConnection
-from Models.Reservation import Reservation
-from Models.User import User
-from DataAccess.AccessUsers import AccessUsers
-from DataAccess.AccessVehicles import AccessVehicles
-from DataAccess.AccessParkingLots import AccessParkingLots
+from MobyPark.api.DBConnection import DBConnection
+from MobyPark.api.Models.Reservation import Reservation
+from MobyPark.api.Models.User import User
+from MobyPark.api.DataAccess.AccessUsers import AccessUsers
+from MobyPark.api.DataAccess.AccessVehicles import AccessVehicles
+from MobyPark.api.DataAccess.AccessParkingLots import AccessParkingLots
 from datetime import datetime
 
 class AccessReservations:
