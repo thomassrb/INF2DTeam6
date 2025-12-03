@@ -60,5 +60,9 @@ def test_unparseable_returns_zero():
             self.stopped = None
     
     parking_lot = create_parking_lot()
-    price, hours, days = sc.calculate_price(parking_lot, MockSession())
-    assert price == 0.0 and hours == 0 and days == 0
+    
+    try:
+        price, hours, days = sc.calculate_price(parking_lot, MockSession())
+        assert price == 0.0 and hours == 0 and days == 0
+    except (TypeError, ValueError):
+        assert False, "Function raised an exception for invalid date format"
