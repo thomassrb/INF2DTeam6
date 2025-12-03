@@ -22,5 +22,12 @@
         "started": "05-11-2025 11:08:47",
         "stopped": null,
         "user": "adminSil"
+    },
+    "5": {
+        "licenseplate": "TEST123",
+        "license_plate": "TEST123",
+        "started": "25-11-2025 11:25:00",
+        "stopped": null,
+        "user": "performanceuser"
     }
 }

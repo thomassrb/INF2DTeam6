@@ -1,25 +1,31 @@
 from datetime import datetime
+from .User import User
+from .ParkingLot import ParkingLot
+from .Session import Session
+from .TransanctionData import TransactionData
 
 class Payment:
 
     def __init__(self,
-                 transaction: str,
+                 id: str,
                  amount: float,
                  initiator: str,
-                 user_id: str, # will change to user object later on
+                 user: User,
                  created_at: datetime,
                  completed: datetime,
                  hash: str,
-                 session_id: str, # will change to session object later on
-                 parking_lot_id: str): # will change to parking_lot object later on
-            # might add t_data object to make it more compact
+                 session: Session,
+                 parking_lot: ParkingLot,
+                 t_data: TransactionData):
+                 
         
-        self.transaction = transaction
+        self.id = id
         self.amount = amount
         self.initiator = initiator
-        self.user_id = user_id
+        self.user = user
         self.created_at = created_at
         self.completed = completed
         self.hash = hash
-        self.session_id = session_id
-        self.parking_lot_id = parking_lot_id
+        self.session = session
+        self.parking_lot = parking_lot
+        self.t_data = t_data

@@ -1,0 +1,48 @@
+{
+  "test_run": "2025-11-25T11:25:01.147506",
+  "results": [
+    {
+      "endpoint": "GET /parking-lots (unauthenticated)",
+      "timestamp": "2025-11-25T11:24:59.014622",
+      "request_count": 10,
+      "successful_requests": 10,
+      "avg_response_time_ms": 210.22756099700928,
+      "min_response_time_ms": 3.6275386810302734,
+      "max_response_time_ms": 2055.8135509490967,
+      "median_response_time_ms": 4.343390464782715,
+      "p90_response_time_ms": 2055.8135509490967,
+      "status_codes": {
+        "200": 10
+      }
+    },
+    {
+      "endpoint": "GET /profile (authenticated)",
+      "timestamp": "2025-11-25T11:25:00.077086",
+      "request_count": 10,
+      "successful_requests": 10,
+      "avg_response_time_ms": 3.847789764404297,
+      "min_response_time_ms": 1.67083740234375,
+      "max_response_time_ms": 12.865781784057617,
+      "median_response_time_ms": 2.670884132385254,
+      "p90_response_time_ms": 12.865781784057617,
+      "status_codes": {
+        "200": 10
+      }
+    },
+    {
+      "endpoint": "POST /parking-lots/{id}/sessions/start",
+      "timestamp": "2025-11-25T11:25:01.147506",
+      "request_count": 10,
+      "successful_requests": 1,
+      "avg_response_time_ms": 5.683040618896484,
+      "min_response_time_ms": 2.469301223754883,
+      "max_response_time_ms": 17.047643661499023,
+      "median_response_time_ms": 3.4525394439697266,
+      "p90_response_time_ms": 17.047643661499023,
+      "status_codes": {
+        "200": 1,
+        "409": 9
+      }
+    }
+  ]
+}

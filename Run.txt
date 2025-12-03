@@ -1,0 +1,3 @@
+Om de code te runnen:
+Open een terminal in je IDE, gebruik vervolgens het volgende command;
+python -m uvicorn MobyPark.api.app:app --reload

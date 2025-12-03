@@ -13,6 +13,8 @@ def test_non_admin_cannot_view_other_users_billing_returns_403(server_process, m
     r = requests.get(f"{BASE}/billing/{u2}", headers={"Authorization": f"Bearer {tok1}"}, timeout=5)
     assert r.status_code == 403
 
+
+
 def test_create_parking_lot_without_capacity_returns_400(server_process, admin_token):
     payload = {
         "name": "NoCapLot",
@@ -55,3 +57,58 @@ def test_start_session_without_license_plate_returns_400(server_process, admin_t
         timeout=5,
     )
     assert r.status_code == 400
+
+def test_login_missing_username_returns_400(server_process):
+    payload = {
+        # "username" bewust weggelaten
+        "password": "SomePass123!",
+    }
+    r = requests.post(f"{BASE}/login", json=payload, timeout=5)
+    assert r.status_code == 400
+    body = r.json()
+    # login handler stuurt { "error": "...", "field": "username" }
+    assert body.get("field") == "username"
+
+
+def test_login_with_invalid_credentials_returns_401(server_process, make_user_and_login):
+    # Eerst een geldige user aanmaken
+    username, _ = make_user_and_login("USER")
+
+    # Daarna proberen in te loggen met een fout wachtwoord
+    bad_login = requests.post(
+        f"{BASE}/login",
+        json={"username": username, "password": "TotallyWrongPass!"},
+        timeout=5,
+    )
+    assert bad_login.status_code == 401
+    body = bad_login.json()
+    assert body.get("error") == "Invalid credentials"
+
+
+def test_create_reservation_for_nonexistent_parking_lot_returns_404(server_process, make_user_and_login):
+    username, token = make_user_and_login("USER")
+
+    payload = {
+        # Deze parkinglot id bestaat niet in de data
+        "parkinglot": "nonexistent-lot-id",
+        "user": username,
+        "licenseplate": "RES-PLATE-404",
+    }
+
+    r = requests.post(
+        f"{BASE}/reservations",
+        json=payload,
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=5,
+    )
+    assert r.status_code == 404
+    body = r.json()
+    assert body.get("field") == "parkinglot"
+    assert body.get("error") == "Parking lot not found"
+
+
+def test_get_nonexistent_parking_lot_returns_404(server_process):
+    r = requests.get(f"{BASE}/parking-lots/nonexistent-lot-id", timeout=5)
+    assert r.status_code == 404
+    body = r.json()
+    assert body.get("error") == "Parking lot not found"
