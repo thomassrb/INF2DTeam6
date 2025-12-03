@@ -7,13 +7,15 @@ import os
 from datetime import datetime
 import session_manager
 
-from storage_utils import load_json, load_payment_data, load_reservation_data, save_data, save_payment_data, save_reservation_data, save_user_data, load_parking_lot_data, save_parking_lot_data, load_json, save_user_data
 from authentication import login_required, roles_required
 import session_calculator as sc
 from app import access_vehicles, access_parkinglots, access_payments, access_reservations, access_sessions, access_users, connection
-from Models.User import User
-from Models.ParkingLot import ParkingLot
-from Models.Reservation import Reservation
+from MobyPark.api.Models.User import User
+from MobyPark.api.Models.ParkingLot import ParkingLot
+from MobyPark.api.Models.Reservation import Reservation
+from MobyPark.api.Models.Vehicle import Vehicle
+from MobyPark.api.Models.Payment import Payment
+from MobyPark.api.Models.TransanctionData import TransactionData
 
 
 class post_routes:
@@ -42,9 +44,7 @@ class post_routes:
             salt = bcrypt.gensalt(rounds=rounds) if rounds else bcrypt.gensalt()
             hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
-        users = load_json('users.json')
-
-        if any(user['username'] == username for user in users):
+        if access_users.get_user_byusername(username=username):
             handler.send_json_response(409, "application/json", {"error": "Username already taken"})
             return
 
@@ -158,16 +158,29 @@ class post_routes:
         # toegevoegd, dit zorgt ervoor dat beide mogelijk zijn als data, hij replaced de var licenseplate dan met license_plate 
         if 'license_plate' not in data and 'licenseplate' in data:
             data['license_plate'] = data['licenseplate']
- # hier gebleven ---------------------------------------------------------------------------------------
-        data
+
+        vehicle = access_vehicles.get_vehicle_bylicenseplate(licenseplate=data['license_plate'])
+        if not vehicle:
+            self.send_json_response(404, "application/json", {"error": "Vehicle licenseplate not found"})
+            return
+
+
         new_reservation = Reservation(
-            
+            user=session_user,
+            parking_lot=parking_lot,
+            vehicle=vehicle,
+            start_time=data["start_time"],
+            end_time=data["end_time"],
+            status="confirmed",
+            created_at=datetime.now(),
+            cost=0.00
         )
-        parking_lots[data["parkinglot"]]["reserved"] += 1
-        save_reservation_data(reservations)
-        save_parking_lot_data(parking_lots)
+        parking_lot.reserved += 1
+        access_parkinglots.update_parking_lot(parkinglot=parking_lot)
+        access_reservations.add_reservation(reservation=new_reservation)
         self.send_json_response(201, "application/json", {"status": "Success", "reservation": data})
     
+
     @login_required
     def _handle_create_vehicle(self, session_user):
         data = self.get_request_data()
@@ -177,32 +190,23 @@ class post_routes:
             self.send_json_response(400, "application/json", error)
             return
         
-        vehicles = self._load_vehicles()
-        users = load_json('users.json')
-        current_user = next((u for u in users if u.get('username') == session_user['username']), None)
-        
-        if not current_user:
-            self.send_json_response(404, "application/json", {"error": "User not found"})
+        if access_vehicles.get_vehicle_bylicenseplate(licenseplate=data["licenseplate"]):
+            self.send_json_response(409, "application/json", {"error": "Vehicle already exists"})
             return
         
-        user_vehicles = vehicles.get(current_user["username"], [])
-        if any(v for v in user_vehicles if v.get('license_plate') == data['licenseplate']):
-            self.send_json_response(409, "application/json", {"error": "Vehicle already exists for this user"})
-            return
-        
-        new_vid = str(uuid.uuid4())
-        vehicle = {
-            "id": new_vid,
-            "user_id": current_user['id'],
-            "license_plate": data['licenseplate'],
-            "name": data.get("name"),
-            "created_at": datetime.now().strftime("%Y-%m-%d")
-        }
-        user_vehicles.append(vehicle)
-        vehicles[current_user["username"]] = user_vehicles
-        self._save_vehicles(vehicles)
-        self.audit_logger.audit(session_user, action="create_vehicle", target=new_vid, extra={"license_plate": data['licenseplate']})
+        vehicle = Vehicle(
+            user=session_user,
+            license_plate=data['licenseplate'],
+            make=data.get("make"),
+            model=data.get("model"),
+            color=data.get("color"),
+            year=data.get("year"),
+            created_at=datetime.now().strftime("%Y-%m-%d")
+        )
+        access_vehicles.add_vehicle(vehicle=vehicle)
+        self.audit_logger.audit(session_user, action="create_vehicle", target=vehicle.id, extra={"license_plate": data['licenseplate']})
         self.send_json_response(201, "application/json", {"status": "Success", "vehicle": vehicle})
+
 
     @login_required
     def _handle_create_payment(self, session_user):
@@ -213,22 +217,22 @@ class post_routes:
             self.send_json_response(400, "application/json", error)
             return
         
-        payments = load_payment_data()
-        
-        payment = {
-            "transaction": data['transaction'],
-            "amount": data['amount'],
-            "initiator": session_user["username"],
-            "created_at": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
-            "completed": False,
-            "completed_at": None,
-            "hash": sc.generate_transaction_validation_hash()
-        }
-        payments.append(payment)
-        save_payment_data(payments)
-        self.audit_logger.audit(session_user, action="create_payment", target=payment["transaction"],extra={"amount": payment["amount"], "coupled_to": payment.get("coupled_to")})
+        payment = Payment(
+            transaction=data['transaction'],
+            amount=data['amount'],
+            initiator=session_user,
+            created_at=datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
+            completed=None,
+            session=access_sessions.get_session(id=data["session"]),
+            parking_lot=access_parkinglots.get_parking_lot(id=data["parking_lot"]),
+            t_data=TransactionData(**data["t_data"]),
+            hash=sc.generate_transaction_validation_hash()
+        )
+        access_payments.add_payment(payment=payment)
+        self.audit_logger.audit(session_user, action="create_payment", target=payment.transaction, extra={"amount": payment["amount"], "coupled_to": payment.get("coupled_to")})
         self.send_json_response(201, "application/json", {"status": "Success", "payment": payment})
 
+# hier gebleven -----------------------------------------------------------------------------------------------------
     @login_required
     def _handle_start_session(self, session_user):
         match = re.match(r"^/parking-lots/([^/]+)/sessions/start$", self.path)

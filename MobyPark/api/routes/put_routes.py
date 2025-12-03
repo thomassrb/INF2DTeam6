@@ -1,7 +1,8 @@
 import re
-from storage_utils import load_json, save_user_data, load_parking_lot_data, save_parking_lot_data, load_reservation_data, save_reservation_data, load_payment_data, save_payment_data, load_vehicles_data, save_vehicles_data,save_vehicles_data
 from authentication import PasswordManager, login_required, roles_required
 from datetime import datetime
+from app import access_vehicles, access_parkinglots, access_payments, access_reservations, access_sessions, access_users, connection
+
 password_manager = PasswordManager()
 
 
@@ -9,9 +10,9 @@ class put_routes:
     @roles_required(['ADMIN'])
     def _handle_update_parking_lot(self, session_user):
         lid = self.path.split("/")[2]
-        parking_lots = load_parking_lot_data()
+        parking_lot = access_parkinglots.get_parking_lot(id=lid)
         
-        if lid not in parking_lots:
+        if not parking_lot:
             self.send_json_response(404, "application/json", {"error": "Parking lot not found"})
             return
     
@@ -22,11 +23,10 @@ class put_routes:
             self.send_json_response(400, "application/json", error)
             return
         
-        parking_lots[lid] = data
-        pl = parking_lots[lid]
-        pl.update(data)
-        pl["id"] = lid
-        save_parking_lot_data(parking_lots)
+        for key, value in data.items():
+            if hasattr(parking_lot, key):
+                setattr(parking_lot, key, value)
+        access_parkinglots.update_parking_lot(parkinglot=parking_lot)
         self.audit_logger.audit(session_user, action="update_parking_lot", target=lid)
         self.send_json_response(200, "application/json", {"message": "Parking lot modified"})
         
@@ -34,9 +34,9 @@ class put_routes:
     @roles_required(['ADMIN'])
     def _handle_update_parking_lot_by_id(self, session_user):
         lid = self.path.split("/")[2]
-        parking_lots = load_parking_lot_data()
+        parking_lot = access_parkinglots.get_parking_lot(id=lid)
         
-        if lid not in parking_lots:
+        if not parking_lot:
             self.send_json_response(404, "application/json", {"error": "Parking lot not found"})
             return
         parts = [p for p in self.path.split('/') if p]
@@ -49,13 +49,13 @@ class put_routes:
             self.send_json_response(400, "application/json", error)
             return
         
-        parking_lots[lid] = data
-        pl = parking_lots[lid]
-        pl.update(data)
-        pl["id"] = lid
-        save_parking_lot_data(parking_lots)
+        for key, value in data.items():
+            if hasattr(parking_lot, key):
+                setattr(parking_lot, key, value)
+        access_parkinglots.update_parking_lot(parkinglot=parking_lot)
         self.audit_logger.audit(session_user, action="update_parking_lot", target=lid)
         self.send_json_response(200, "application/json", {"message": "Parking lot modified"})
+
 
     @login_required
     def _handle_update_profile_by_id(self, session_user):
@@ -65,17 +65,15 @@ class put_routes:
             return
         
         target_user_id = match.group(1)
-        
-        users = load_json('users.json')
-        target_user = next((u for u in users if u.get('id') == target_user_id), None)
+        target_user = access_users.get_user_byid(id=target_user_id)
         
         if not target_user:
             self.send_json_response(404, "application/json", {"error": "User not found"})
             return
         
-        is_admin = session_user["role"] == "ADMIN"
+        is_admin = session_user.role == "ADMIN"
         
-        if not is_admin and session_user.get("id") != target_user_id:
+        if not is_admin and session_user.id != target_user_id:
             self.send_json_response(403, "application/json", {"error": "Access denied. You can only view your own profile."})
             return
         
@@ -88,18 +86,21 @@ class put_routes:
         if data.get("password"):
             data["password"] = password_manager.hash_password(data["password"])
         
-        target_user.update(data)
-        save_user_data(users)
+        for key, value in data.items():
+            if hasattr(target_user, key):
+                setattr(target_user, key, value)
+        access_users.update_user(user=target_user)
         self.audit_logger.audit(session_user, action="update_profile", target=target_user_id)
         self.send_json_response(200, "application/json", {"message": "User updated successfully"})
+
 
     @login_required
     def _handle_update_reservation(self, session_user):
         data = self.get_request_data()
-        reservations = load_reservation_data()
         rid = self.path.replace("/reservations/", "")
+        reservation = access_reservations.get_reservation(id=rid)
         
-        if rid not in reservations:
+        if not reservation:
             self.send_json_response(404, "application/json", {"error": "Reservation not found"})
             return
         
@@ -108,20 +109,22 @@ class put_routes:
             self.send_json_response(400, "application/json", error)
             return
         
-        if session_user["role"] == "ADMIN":
+        if session_user.role == "ADMIN":
             if "user" not in data:
-                data["user"] = session_user["username"]
-            elif data["user"] != session_user["username"]:
+                data["user"] = session_user.username
+            elif data["user"] != session_user.username:
                 self.send_json_response(403, "application/json", {"error": "Non-admin users cannot update reservations for other users"})
                 return
         else:
-            if "user" in data and data["user"] != session_user["username"]:
+            if "user" in data and data["user"] != session_user.username:
                 self.send_json_response(403, "application/json", {"error": "Non-admin users cannot update reservations for other users"})
                 return
-            data["user"] = session_user["username"]
+            data["user"] = session_user.username
         
-        reservations[rid] = data
-        save_reservation_data(reservations)
+        for key, value in data.items():
+            if hasattr(reservation, key):
+                setattr(reservation, key, value)
+        access_reservations.update_reservation(reservation=reservation)
         self.send_json_response(200, "application/json", {"status": "Updated", "reservation": data})
 
     
@@ -134,15 +137,16 @@ class put_routes:
             self.send_json_response(400, "application/json", error)
             return
         
-        vehicles = load_vehicles_data()
-        
         vid = self.path.replace("/vehicles/", "")
-        
-        user_vehicles = vehicles.get(session_user["username"], [])
-        if not user_vehicles:
-            self.send_json_response(404, "application/json", {"error": "User vehicles not found"})
+        vehicle = access_vehicles.get_vehicle(id=vid)
+ 
+        if not vehicle:
+            self.send_json_response(404, "application/json", {"error": "Vehicle not found"})
             return
         
+        if vehicle.user != session_user:
+            self.send_json_response(403, "application/json", {"error": "No access to this vehicle"})
+# hier gebleven -----------------------------------------------------------------------------------------------------------
         vehicle_found = False
         for i, vehicle in enumerate(user_vehicles):
             if vehicle.get('id') == vid:

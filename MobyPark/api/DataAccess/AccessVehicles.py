@@ -40,6 +40,17 @@ class AccessVehicles:
         vehicles = list(map(lambda id: self.get_vehicle(id=id["id"]), vehicle_ids))
 
         return vehicles
+    
+
+    def get_vehicle_bylicenseplate(self, licenseplate: str):
+        query = """
+        SELECT * FROM vehicles
+        WHERE licenseplate = ?;
+        """
+        self.cursor.execute(query, [licenseplate])
+        vehicle_dict = self.cursor.fetchone()
+        
+        return Vehicle(**vehicle_dict)
         
 
     def get_all_vehicles(self):
