@@ -14,7 +14,12 @@ def calculate_price(parkinglot, session: User):
 
     end_time = end_time or datetime.now()
 
-    duration = end_time - start_time
+    try:
+        duration = end_time - start_time
+    except Exception:
+        # Ongeldige datum → gratis + geen uren/dagen
+        return 0.0, 0, 0
+
     seconds = duration.total_seconds()
     total_hours = math.ceil(seconds / 3600)
     total_days = math.floor(seconds / 86400)
@@ -32,8 +37,6 @@ def calculate_price(parkinglot, session: User):
     return price, total_hours, total_days
 
 
-
-
 def generate_payment_hash(sid, data):
     # Hier generated die en md5 hash voor de betaling
     lp = data.licenseplate
@@ -43,13 +46,14 @@ def generate_payment_hash(sid, data):
 def generate_transaction_validation_hash():
     return str(uuid.uuid4())
 
+
 def check_payment_amount(tx_hash):
     # Deze functie returned het bedrag van een transactie
 
     payments = load_payment_data()
 
     return sum(
-        payment.get("amount", 0)                    # type: ignore
-        for payment in payments                     # type: ignore
-        if payment.get("transaction") == tx_hash    # type: ignore
+        payment.get("amount", 0)                    
+        for payment in payments                     
+        if payment.get("transaction") == tx_hash    
     )
