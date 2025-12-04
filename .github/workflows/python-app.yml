@@ -1,58 +1,40 @@
-name: Python application
+name: CI pipeline
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-permissions:
-  contents: read
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
-  test:
+  tests:
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:13
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: mobypark_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
+    env:
+      PYTHONPATH: .:./MobyPark:./MobyPark/api
+      # Use the same DB dir the e2e tests use (they override this again inside the fixture)
+      MOBYPARK_DB_DIR: tests/test_data
 
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest pytest-cov requests
-    
-    - name: Run tests
-      env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/mobypark_test
-        HOST: 0.0.0.0
-        PORT: 8000
-        BASE_URL: http://localhost:8000
-      run: |
-        python -m pytest tests/e2e/ -v --cov=./ --cov-report=xml
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        file: ./coverage.xml
-        fail_ci_if_error: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # If you have a requirements.txt, keep this:
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          # Make sure these testing/runtime deps are present:
+          pip install pytest uvicorn requests bcrypt
+
+      # No manual server start here – e2e tests start uvicorn themselves
+
+      - name: Run all tests (same as VS Code)
+        run: |
+          python -m pytest -vv tests
+
