@@ -12,8 +12,6 @@ jobs:
 
     env:
       PYTHONPATH: .:./MobyPark:./MobyPark/api
-      # 🔴 REMOVE this line if you have it:
-      # MOBYPARK_DB_DIR: tests/test_data
 
     steps:
       - name: Checkout repository
@@ -30,12 +28,8 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest uvicorn requests bcrypt
 
-      # Optional, only if your code expects this directory to exist
-      - name: Prepare default database directory
-        run: |
-          mkdir -p MobyPark/api/data
-
-      - name: Run all tests (like VS Code)
+      - name: Run all tests (same as local)
         run: |
           python -m pytest -vv tests
+
 
