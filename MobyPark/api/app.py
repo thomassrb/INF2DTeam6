@@ -4,17 +4,19 @@ from fastapi import FastAPI, Depends, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from .DBConnection import DBConnection
-from DataAccess.AccessParkingLots import AccessParkingLots
-from DataAccess.AccessPayments import AccessPayments
-from DataAccess.AccessReservations import AccessReservations
-from DataAccess.AccessSessions import AccessSessions
-from DataAccess.AccessUsers import AccessUsers
-from DataAccess.AccessVehicles import AccessVehicles
+from storage_utils import save_payment_data,load_parking_lot_data, save_parking_lot_data, load_reservation_data,save_reservation_data,load_vehicles_data,load_json,save_vehicles_data,load_payment_data
 
-from Models.User import User
-from Models.ParkingLot import ParkingLot
-from Models.ParkingLotCoordinates import ParkingLotCoordinates
+from MobyPark.api.DBConnection import DBConnection
+from MobyPark.api.DataAccess.AccessParkingLots import AccessParkingLots
+from MobyPark.api.DataAccess.AccessPayments import AccessPayments
+from MobyPark.api.DataAccess.AccessReservations import AccessReservations
+from MobyPark.api.DataAccess.AccessSessions import AccessSessions
+from MobyPark.api.DataAccess.AccessUsers import AccessUsers
+from MobyPark.api.DataAccess.AccessVehicles import AccessVehicles
+
+from MobyPark.api.Models.User import User
+from MobyPark.api.Models.ParkingLot import ParkingLot
+from MobyPark.api.Models.ParkingLotCoordinates import ParkingLotCoordinates
 
 from . import session_manager
 
