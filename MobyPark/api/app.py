@@ -497,7 +497,14 @@ async def create_reservation(body: ReservationCreate, user: User = Depends(get_c
     parking_lots = load_parking_lot_data()
 
     if body.parkinglot not in parking_lots:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parking lot not found")
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "error": "Parking lot not found",
+                "field": "parkinglot",
+            },
+        )
+
 
     data: Dict[str, Any] = body.dict()
 
