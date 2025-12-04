@@ -25,7 +25,7 @@ from MobyPark.api.Models.User import User
 from MobyPark.api.Models.ParkingLot import ParkingLot
 from MobyPark.api.Models.ParkingLotCoordinates import ParkingLotCoordinates
 from MobyPark.api import session_manager
-
+from typing import Optional
 import os
 
 # Gebruik dezelfde data directory als de rest van het project
@@ -67,9 +67,8 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
-
+    username: Optional[str] = None
+    password: Optional[str] = None
 
 class ParkingLotCreate(BaseModel):
     name: str
