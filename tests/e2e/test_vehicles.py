@@ -1,46 +1,141 @@
+import uuid
+import pytest
 import requests
+from datetime import datetime, timedelta
 
-BASE = "http://localhost:8000"
+# Test data
+TEST_VEHICLE = {
+    "licenseplate": "TEST123",
+    "name": "Test Car"
+}
 
-
-def test_vehicle_crud_and_duplicate_protection(server_process, make_user_and_login):
-    username, token = make_user_and_login("USER")
-
-    # Eerst gaan we een voertiug aanmaken
-    vpayload = {"licenseplate": "DMX-123", "name": "Amarok"}
-    rcreate = requests.post(f"{BASE}/vehicles", json=vpayload, headers={"Authorization": f"Bearer {token}"}, timeout=5)
-    assert rcreate.status_code in (200, 201), rcreate.text
-    vid = rcreate.json().get("vehicle", {}).get("id")
-
-    # License plate duplicaten voor dezelfde user, dan zou er een 409 error moeten komen
-    rdup = requests.post(f"{BASE}/vehicles", json=vpayload, headers={"Authorization": f"Bearer {token}"}, timeout=5)
-    assert rdup.status_code == 409
-
-    # list de users voertuigen
-    rlist = requests.get(f"{BASE}/vehicles", headers={"Authorization": f"Bearer {token}"}, timeout=5)
-    assert rlist.status_code == 200
-    vehicles = rlist.json()
-    assert any(v.get("id") == vid for v in vehicles)
-
-    # voertuig naam updaten
-    rupd = requests.put(
-        f"{BASE}/vehicles/{vid}",
-        json={"name": "Amarok twee"},
-        headers={"Authorization": f"Bearer {token}"},
-        timeout=5,
+def test_vehicle_lifecycle(server_process, make_user_and_login):
+    # Create a test user and get auth token
+    user, token = make_user_and_login("USER")
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    # Test 1: Create a new vehicle
+    create_response = requests.post(
+        f"http://localhost:8000/vehicles",
+        json=TEST_VEHICLE,
+        headers=headers
     )
-    assert rupd.status_code == 200
+    assert create_response.status_code == 201
+    vehicle = create_response.json()
+    assert vehicle["licenseplate"] == TEST_VEHICLE["licenseplate"]
+    assert vehicle["name"] == TEST_VEHICLE["name"]
+    
+    # Test 2: Get vehicle details
+    get_response = requests.get(
+        f"http://localhost:8000/vehicles/{vehicle['id']}",
+        headers=headers
+    )
+    assert get_response.status_code == 200
+    assert get_response.json() == vehicle
+    
+    # Test 3: List all vehicles
+    list_response = requests.get(
+        "http://localhost:8000/vehicles",
+        headers=headers
+    )
+    assert list_response.status_code == 200
+    vehicles = list_response.json()
+    assert any(v["id"] == vehicle["id"] for v in vehicles)
+    
+    # Test 4: Update vehicle
+    updated_name = "Updated Test Car"
+    update_response = requests.patch(
+        f"http://localhost:8000/vehicles/{vehicle['id']}",
+        json={"name": updated_name},
+        headers=headers
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["name"] == updated_name
+    
+    # Test 5: Get vehicle history (should be empty for new vehicle)
+    history_response = requests.get(
+        f"http://localhost:8000/vehicles/{vehicle['licenseplate']}/history",
+        headers=headers
+    )
+    assert history_response.status_code == 200
+    assert history_response.json() == []
+    
+    # Test 6: Delete vehicle
+    delete_response = requests.delete(
+        f"http://localhost:8000/vehicles/{vehicle['id']}",
+        headers=headers
+    )
+    assert delete_response.status_code == 200
+    
+    # Verify vehicle is deleted
+    get_deleted = requests.get(
+        f"http://localhost:8000/vehicles/{vehicle['id']}",
+        headers=headers
+    )
+    assert get_deleted.status_code == 404
 
-    # voertuig details getten
-    rget = requests.get(f"{BASE}/vehicles/{vid}", headers={"Authorization": f"Bearer {token}"}, timeout=5)
-    assert rget.status_code == 200
-    assert rget.json().get("vehicle", {}).get("name") == "Amarok twee"
+def test_vehicle_unauthorized_access(server_process, make_user_and_login):
+    # Create two users
+    user1, token1 = make_user_and_login("USER")
+    user2, token2 = make_user_and_login("USER")
+    
+    # User1 creates a vehicle
+    headers1 = {"Authorization": f"Bearer {token1}"}
+    create_response = requests.post(
+        "http://localhost:8000/vehicles",
+        json=TEST_VEHICLE,
+        headers=headers1
+    )
+    vehicle = create_response.json()
+    
+    # User2 tries to access user1's vehicle
+    headers2 = {"Authorization": f"Bearer {token2}"}
+    get_response = requests.get(
+        f"http://localhost:8000/vehicles/{vehicle['id']}",
+        headers=headers2
+    )
+    assert get_response.status_code == 403
 
-    # Deleten van voertuig
-    rdel = requests.delete(f"{BASE}/vehicles/{vid}", headers={"Authorization": f"Bearer {token}"}, timeout=5)
-    assert rdel.status_code == 200
+def test_vehicle_admin_access(server_process, make_user_and_login):
+    # Create admin and regular user
+    admin, admin_token = make_user_and_login("ADMIN")
+    user, user_token = make_user_and_login("USER")
+    
+    # User creates a vehicle
+    user_headers = {"Authorization": f"Bearer {user_token}"}
+    create_response = requests.post(
+        "http://localhost:8000/vehicles",
+        json=TEST_VEHICLE,
+        headers=user_headers
+    )
+    vehicle = create_response.json()
+    
+    # Admin can access user's vehicle
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+    get_response = requests.get(
+        f"http://localhost:8000/vehicles/{vehicle['id']}?username={user['username']}",
+        headers=admin_headers
+    )
+    assert get_response.status_code == 200
+    assert get_response.json()["id"] == vehicle["id"]
 
-    # Ensure dat die weg is
-    rlist2 = requests.get(f"{BASE}/vehicles", headers={"Authorization": f"Bearer {token}"}, timeout=5)
-    assert rlist2.status_code == 200
-    assert not any(v.get("id") == vid for v in rlist2.json())
+def test_vehicle_validation(server_process, make_user_and_login):
+    # Create test user
+    user, token = make_user_and_login("USER")
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    # Test missing required fields
+    response = requests.post(
+        "http://localhost:8000/vehicles",
+        json={"name": "Invalid Vehicle"},  # Missing licenseplate
+        headers=headers
+    )
+    assert response.status_code == 422  # Validation error
+    
+    # Test invalid license plate format
+    response = requests.post(
+        "http://localhost:8000/vehicles",
+        json={"licenseplate": "INVALID!@#", "name": "Invalid"},
+        headers=headers
+    )
+    assert response.status_code == 422  # Validation error
