@@ -3,6 +3,8 @@ import json
 import threading
 from typing import Optional, Dict, Any
 from MobyPark.api.Models.User import User
+from datetime import datetime
+
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))    # Absolute pad van de directory waar dit script staat
 _DATA_DIR = os.environ.get('MOBYPARK_DATA_DIR') or os.path.join(_SCRIPT_DIR, '..', '..', 'MobyPark-api-data', 'pdata')
@@ -51,11 +53,13 @@ class _FileSessionStore(_BaseSessionStore):
         with open(_SESSIONS_FILE, 'w', encoding='utf-8') as f:
             json.dump(self._sessions, f, ensure_ascii=False, indent=2)
 
-    def add(self, token: str, user: User) -> None:
+    def add(self, token: str, user: Dict[str, Any]) -> None:
         # Voegt een user toe aan de session en slaat changes op
+        # user is al een dict – NIET nog een keer __dict__ aanroepen
         with _LOCK:
-            self._sessions[token] = user.__dict__
+            self._sessions[token] = user
             self._flush()
+
 
     def remove(self, token: str) -> Optional[User]:
         # Delete een session en returned de bijbehorende user
@@ -85,11 +89,6 @@ def _create_store() -> _BaseSessionStore:
 _STORE: _BaseSessionStore = _create_store()
 
 
-def add_session(token: str, user: User) -> None:
-    # Dit voegt een session toe
-    _STORE.add(token, user)
-
-
 def remove_session(token: str) -> Optional[Dict[str, Any]]:
     # Dit delete een session
     return _STORE.remove(token)
@@ -103,3 +102,27 @@ def get_session(token: str) -> Optional[Dict[str, Any]]:
 def update_session_user(token: str, user_data: Dict[str, Any]) -> None:
     # Werkt de gegevens van een user bij in bestaande session
     _STORE.update_user(token, user_data)
+
+
+
+def add_session(token: str, user: User) -> None:
+    # Maak een kopie van de user-data als dict
+    user_data: Dict[str, Any] = dict(user.__dict__)
+
+    # Wachtwoord niet in de session opslaan
+    user_data.pop("password", None)
+
+    # created_at moet JSON-serialiseerbaar zijn
+    created_at = user_data.get("created_at")
+    if isinstance(created_at, datetime):
+        # Zet datetime om naar ISO-string
+        user_data["created_at"] = created_at.isoformat()
+    elif created_at is None:
+        # Als er helemaal geen created_at is, vul een default in
+        user_data["created_at"] = datetime.now().isoformat()
+    else:
+        # Als het al een string is, laten we het zo
+        user_data["created_at"] = str(created_at)
+
+    # Sla de session op in de onderliggende store
+    _STORE.add(token, user_data)
