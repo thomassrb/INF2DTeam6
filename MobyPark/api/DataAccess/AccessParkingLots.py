@@ -79,7 +79,9 @@ class AccessParkingLots:
             parkinglot.coordinates.id = id
             self.cursor.execute(coordinates_query, parkinglot.coordinates.__dict__)
             self.conn.commit()
+            return True
         except sqlite3.IntegrityError as e:
+            return False
             print(e)
 
 

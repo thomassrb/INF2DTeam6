@@ -56,6 +56,18 @@ class AccessSessions:
         return sessions
 
 
+    def get_pending_session_bylicenseplate(self, licenseplate: str):
+        query = """
+        SELECT id FROM sessions
+        WHERE stopped = ?
+        AND licenseplate = ?;
+        """
+        self.cursor.execute(query, [None, licenseplate])
+        id = self.cursor.fetchone()
+
+        return self.get_session(id=id["id"])
+    
+
     def add_session(self, session: Session):
         query = """
         INSERT INTO sessions

@@ -16,6 +16,7 @@ from MobyPark.api.Models.Reservation import Reservation
 from MobyPark.api.Models.Vehicle import Vehicle
 from MobyPark.api.Models.Payment import Payment
 from MobyPark.api.Models.TransanctionData import TransactionData
+from MobyPark.api.Models.Session import Session
 
 
 class post_routes:
@@ -241,29 +242,32 @@ class post_routes:
             return
         lid = match.group(1)
         data = self.get_request_data()
+        parking_lot = access_parkinglots.get_parking_lot(id=lid)
 
         lp = data.get('license_plate') or data.get('licenseplate')
         if not isinstance(lp, str) or not lp.strip():
             self.send_json_response(400, "application/json", {"error": "Missing or invalid field: license_plate", "field": "license_plate"})
             return
 
-        sessions = load_json(f'pdata/p{lid}-sessions.json')
-        filtered = {key: value for key, value in sessions.items() if (value.get("license_plate") == lp or value.get("licenseplate") == lp) and not value.get('stopped')}
-
-        if len(filtered) > 0:
+        session = Session(
+            parking_lot=parking_lot,
+            session_id=None,
+            vehicle=None,
+            user=session_user,
+            duration_minutes=None,
+            cost=None,
+            payment_status="pending",
+            license_plate=lp,
+            started=datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
+            stopped=None,
+            username=session_user.username
+        )
+        if not access_sessions.add_session(session=session):
             self.send_json_response(409, "application/json", {"error": "Cannot start a session when another session for this license plate is already started."})
             return 
 
-        session = {
-            "license_plate": lp,
-            "started": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
-            "stopped": None,
-            "user": session_user["username"]
-        }
-        sessions[str(len(sessions) + 1)] = session
-        save_data(f'pdata/p{lid}-sessions.json', sessions)
-        self.send_json_response(200, "application/json", {"Server message": f"Session started for: {lp}"})
-
+        self.send_json_response(200, "application/json", {"Server message": f"Session started for: {lp} under id: {session.id}"})
+            
     @login_required
     def _handle_stop_session(self, session_user):
         match = re.match(r"^/parking-lots/([^/]+)/sessions/stop$", self.path)
@@ -272,50 +276,24 @@ class post_routes:
             return
         lid = match.group(1)
         data = self.get_request_data()
+        parking_lot = access_parkinglots.get_parking_lot(id=lid)
         
         valid, error = self.data_validator.validate_data(data)
         if not valid:
             self.send_json_response(400, "application/json", error)
             return
         
-        sessions = load_json(f'pdata/p{lid}-sessions.json')
         lp = data.get('license_plate') or data.get('licenseplate')
-        filtered = {key: value for key, value in sessions.items() if (value.get("license_plate") == lp or value.get("licenseplate") == lp) and not value.get('stopped')}
-        
-        if len(filtered) == 0:
+        session = access_sessions.get_pending_session_bylicenseplate(licenseplate=lp)
+        if not session:
             self.send_json_response(409, "application/json", {"error": "Cannot stop a session when there is no session for this license plate."})
             return
         
-        sid = next(iter(filtered))
-        sessions[sid]["stopped"] = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-        save_data(f'pdata/p{lid}-sessions.json', sessions)
-        self.audit_logger.audit(session_user, action="stop_session", target=sid, extra={"license_plate": lp, "parking_lot": lid})
+        session.stopped = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+        access_sessions.update_session(session=session)
+        self.audit_logger.audit(session_user, action="stop_session", target=session.id, extra={"license_plate": lp, "parking_lot": lid})
         self.send_json_response(200, "application/json", {"Server message": f"Session stopped for: {lp}"})
 
-    @roles_required(['ADMIN'])
-    def _handle_refund_payment(self, session_user):
-        data = self.get_request_data()
-        
-        valid, error = self.data_validator.validate_data(data)
-        if not valid:
-            self.send_json_response(400, "application/json", error)
-            return
-        
-        payments = load_payment_data()
-        refund_txn = data.get("transaction") if data.get("transaction") else str(uuid.uuid4())
-        payment = {
-            "transaction": refund_txn,
-            "amount": -abs(data['amount']),
-            "coupled_to": data.get("coupled_to"),
-            "processed_by": session_user["username"],
-            "created_at": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
-            "completed": False,
-            "completed_at": None,
-            "hash": sc.generate_transaction_validation_hash()
-        }
-        payments.append(payment)
-        save_payment_data(payments)
-        self.send_json_response(201, "application/json", {"status": "Success", "payment": payment})
 
     @roles_required(['ADMIN'])
     def _handle_refund_payment(self, session_user):
@@ -325,37 +303,26 @@ class post_routes:
         if not valid:
             self.send_json_response(400, "application/json", error)
             return
-        
-        payments = load_payment_data()
+# dit gaat niet werken maar dat deed het toch al niet
         refund_txn = data.get("transaction") if data.get("transaction") else str(uuid.uuid4())
-        payment = {
-            "transaction": refund_txn,
-            "amount": -abs(data['amount']),
-            "coupled_to": data.get("coupled_to"),
-            "processed_by": session_user["username"],
-            "created_at": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
-            "completed": False,
-            "completed_at": None,
-            "hash": sc.generate_transaction_validation_hash()
-        }
-        payments.append(payment)
-        save_payment_data(payments)
+        payment = Payment(
+            id=refund_txn,
+            amount=-abs(data['amount']),
+            processed_by=session_user, # dit is helemaal geen kolom
+            created_at=datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
+            completed=False,
+            completed_at=None,
+            hash=sc.generate_transaction_validation_hash()
+            # t data mist helemaal (cooked)
+        )
+        access_payments.add_payment(payment=payment)
         self.send_json_response(201, "application/json", {"status": "Success", "payment": payment})
+
  
     @roles_required(['ADMIN'])
     def _handle_debug_reset(self, session_user):
-        # Cleared de users data
-        save_user_data([])
-        # Cleared parking lots data
-        save_parking_lot_data({})
-        # Cleared reserveringen data
-        save_reservation_data({})
-        # Cleared payment data
-        save_payment_data([])
-        # Cleared de voertuigen data
-        self._save_vehicles({})
-        # Cleared de huidige sessions
-        self.session_manager.active_sessions.clear()
+        # ik hoop dat dit nooit gebruikt wordt
+        connection.cursor.execute("TRUNCATE TABLE users, parking_lots, reservations, payments, t_data, vehicles, sessions")
 
         self.audit_logger.audit(session_user, action="debug_reset", target="all_data")
         self.send_json_response(200, "application/json", {"Server message": "All data reset successfully"})
