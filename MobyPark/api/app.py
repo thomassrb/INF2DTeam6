@@ -11,7 +11,7 @@ from fastapi import FastAPI, Depends, HTTPException, Request, status, responses
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse, JSONResponse
 from pydantic import BaseModel
-
+from fastapi.responses import JSONResponse
 from MobyPark.api.DBConnection import DBConnection
 from MobyPark.api.DataAccess.AccessParkingLots import AccessParkingLots
 from MobyPark.api.DataAccess.AccessPayments import AccessPayments
@@ -184,8 +184,7 @@ async def register(body: RegisterRequest):
 
 @app.post("/login")
 async def login(body: LoginRequest):
-    # Explicit validation so we control status code and JSON shape
-
+    # Validation the tests expect
     if not body.username:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -227,8 +226,10 @@ async def login(body: LoginRequest):
         except Exception:
             password_ok = False
     else:
-        hashed_password_input = hashlib.sha256(body.password.encode("utf-8")).hexdigest()
-        password_ok = hashed_password_input == stored_password
+        hashed_password_input = hashlib.sha256(
+            body.password.encode("utf-8")
+        ).hexdigest()
+        password_ok = (hashed_password_input == stored_password)
 
     if not password_ok:
         return JSONResponse(
