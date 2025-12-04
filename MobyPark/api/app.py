@@ -9,7 +9,7 @@ if project_root not in sys.path:
 
 from fastapi import FastAPI, Depends, HTTPException, Request, status, responses
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, JSONResponse
 from pydantic import BaseModel
 
 from MobyPark.api.DBConnection import DBConnection
@@ -19,6 +19,7 @@ from MobyPark.api.DataAccess.AccessReservations import AccessReservations
 from MobyPark.api.DataAccess.AccessSessions import AccessSessions
 from MobyPark.api.DataAccess.AccessUsers import AccessUsers
 from MobyPark.api.DataAccess.AccessVehicles import AccessVehicles
+from MobyPark.api.storage_utils import load_parking_lot_data
 
 from MobyPark.api.Models.User import User
 from MobyPark.api.Models.ParkingLot import ParkingLot
@@ -184,9 +185,32 @@ async def register(body: RegisterRequest):
 
 @app.post("/login")
 async def login(body: LoginRequest):
+    # Explicit validation so we control status code and JSON shape
+
+    if not body.username:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": "Missing or invalid field: username",
+                "field": "username",
+            },
+        )
+
+    if not body.password:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": "Missing or invalid field: password",
+                "field": "password",
+            },
+        )
+
     user = access_users.get_user_byusername(username=body.username)
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"error": "Invalid credentials"},
+        )
 
     import hashlib
     import bcrypt
@@ -197,7 +221,10 @@ async def login(body: LoginRequest):
 
     if stored_password.startswith("$2b$"):
         try:
-            password_ok = bcrypt.checkpw(body.password.encode("utf-8"), stored_password.encode("utf-8"))
+            password_ok = bcrypt.checkpw(
+                body.password.encode("utf-8"),
+                stored_password.encode("utf-8"),
+            )
         except Exception:
             password_ok = False
     else:
@@ -205,7 +232,10 @@ async def login(body: LoginRequest):
         password_ok = hashed_password_input == stored_password
 
     if not password_ok:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"error": "Invalid credentials"},
+        )
 
     token = str(uuid.uuid4())
     session_manager.add_session(token, user)
@@ -327,7 +357,10 @@ async def create_parking_lot(body: ParkingLotCreate, user: User = Depends(requir
 async def get_parking_lot_details(lid: str):
     parking_lots = load_parking_lot_data()
     if lid not in parking_lots:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parking lot not found")
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"error": "Parking lot not found"},
+        )
     return parking_lots[lid]
 
 
