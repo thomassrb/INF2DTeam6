@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PYTHONPATH: .:./MobyPark:./MobyPark/api
-      MOBYPARK_DB_DIR: MobyPark/api/data   # all code uses this DB dir
+      MOBYPARK_DB_DIR: MobyPark/api/data
 
     steps:
       - name: Checkout repository
@@ -28,46 +28,44 @@ jobs:
           pip install -r requirements.txt
           pip install pytest uvicorn
 
-      - name: Create database directory and file
+      - name: Prepare default database directory
         run: |
           mkdir -p MobyPark/api/data
-          touch MobyPark/api/data/MobyParkData.db
 
-      # ⚠️ No manual server start here!
-      # e2e tests start uvicorn themselves via tests/e2e/conftest.py
-
-      - name: Run unit tests
+      # 👇 This is the important part: same folder as VS Code
+      - name: Run tests (same folder as VS Code)
         run: |
-          set +e
-          pytest -v tests/unit
-          STATUS=$?
-          set -e
-          if [ $STATUS -ne 0 ]; then
-            echo "pipeline failed: some unit tests did not pass" > result.txt
-            exit 1
-          fi
+          python -m pytest -v tests/unit
+          # ^ change to "tests" or "tests/e2e" if that's what you configured
 
-      - name: Run endpoint (e2e) tests
-        run: |
-          set +e
-          pytest -v tests/e2e
-          STATUS=$?
-          set -e
-          if [ $STATUS -ne 0 ]; then
-            echo "pipeline failed: some endpoint tests did not pass" > result.txt
-            exit 1
-          fi
+      - name: Upload failure reason
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-reason
+          path: result.txt
+          if-no-files-found: ignore
 
-      - name: Run integration tests
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
         run: |
-          set +e
-          pytest -v tests/integration
-          STATUS=$?
-          set -e
-          if [ $STATUS -ne 0 ]; then
-            echo "pipeline failed: some integration tests did not pass" > result.txt
-            exit 1
-          fi
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest uvicorn
+
+      # (Optional) create a default DB dir for non-e2e tests if they use it
+      - name: Prepare default database directory
+        run: |
+          mkdir -p MobyPark/api/data
+
+      - name: Run tests (like VS Code Testing)
+        run: |
+          python -m pytest -v
 
       - name: Upload failure reason
         if: failure()
