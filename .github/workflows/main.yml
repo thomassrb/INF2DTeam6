@@ -28,7 +28,7 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest uvicorn requests bcrypt
 
-      - name: Debug: show login snippet
+      - name: Debug show login snippet
         run: |
           sed -n '1,160p' MobyPark/api/app.py
 
