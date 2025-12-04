@@ -2,7 +2,7 @@ import re
 from authentication import PasswordManager, login_required, roles_required
 from datetime import datetime
 from app import access_vehicles, access_parkinglots, access_payments, access_reservations, access_sessions, access_users, connection
-
+from MobyPark.api.Models.TransanctionData import TransactionData
 password_manager = PasswordManager()
 
 
@@ -146,28 +146,18 @@ class put_routes:
         
         if vehicle.user != session_user:
             self.send_json_response(403, "application/json", {"error": "No access to this vehicle"})
-# hier gebleven -----------------------------------------------------------------------------------------------------------
-        vehicle_found = False
-        for i, vehicle in enumerate(user_vehicles):
-            if vehicle.get('id') == vid:
-                user_vehicles[i]["name"] = data["name"]
-                user_vehicles[i]["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                vehicle_found = True
-                break
         
-        if not vehicle_found:
-            self.send_json_response(404, "application/json", {"error": "Vehicle not found"})
-            return
-        
-        vehicles[session_user["username"]] = user_vehicles
-        save_vehicles_data(vehicles)
+        for key, value in data.items():
+            if hasattr(vehicle, key):
+                setattr(vehicle, key, value)
+        access_vehicles.update_vehicle(vehicle=vehicle)
         self.audit_logger.audit(session_user, action="update_vehicle", target=vid, extra={"name": data["name"]})
-        self.send_json_response(200, "application/json", {"status": "Success", "vehicle": next(v for v in user_vehicles if v.get('id') == vid)})
+        self.send_json_response(200, "application/json", {"status": "Success", "vehicle": vid})
 
     @login_required
     def _handle_update_payment(self, session_user):
         pid = self.path.replace("/payments/", "")
-        payments = load_payment_data()
+        payment = access_payments.get_payment(id=pid)
         data = self.get_request_data()
         
         valid, error = self.data_validator.validate_data(data)
@@ -175,20 +165,22 @@ class put_routes:
             self.send_json_response(400, "application/json", error)
             return
         
-        payment = next((p for p in payments if p["transaction"] == pid), None)
-        
         if not payment:
             self.send_json_response(404, "application/json", {"error": "Payment not found!"})
             return
         
-        if payment["hash"] != data['validation']:
+        if payment.hash != data['validation']:
             self.send_json_response(401, "application/json", {"error": "Validation failed", "info": "The validation of the security hash could not be validated for this transaction."})
             return
+        
+        for key, value in data['t_data'].items():
+            if hasattr(payment.t_data, key):
+                setattr(payment.t_data, key, value)
 
         payment["completed"] = True
         payment["completed_at"] = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-        payment["t_data"] = data['t_data']
-        save_payment_data(payments)
+
+        access_payments.update_payment(payment=payment)
         self.audit_logger.audit(session_user, action="update_payment", target=pid)
         self.send_json_response(200, "application/json", {"status": "Success", "payment": payment})
 
