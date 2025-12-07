@@ -4,11 +4,11 @@ import sys
 import pathlib
 from .storage_utils import load_json, save_user_data
 import hashlib
-
+from MobyPark.api import authentication
 project_root = str(pathlib.Path(__file__).resolve().parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-from authentication import get_current_user, require_roles
+
 from fastapi import FastAPI, Depends, HTTPException, Request, status, responses
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse, JSONResponse
@@ -21,7 +21,7 @@ from MobyPark.api.DataAccess.AccessReservations import AccessReservations
 from MobyPark.api.DataAccess.AccessSessions import AccessSessions
 from MobyPark.api.DataAccess.AccessUsers import AccessUsers
 from MobyPark.api.DataAccess.AccessVehicles import AccessVehicles
-from MobyPark.api.storage_utils import load_parking_lot_data,load_reservation_data,save_parking_lot_data,save_reservation_data,load_vehicles_data,save_vehicles_data,load_user_data,save_user_data,load_session_data,save_session_data,load_payment_data,save_payment_data
+from MobyPark.api.storage_utils import load_parking_lot_data,load_reservation_data,save_parking_lot_data,save_reservation_data,load_vehicles_data,save_vehicles_data,load_user_data,save_user_data,load_payment_data,save_payment_data
 
 from MobyPark.api.Models.User import User
 from MobyPark.api.Models.ParkingLot import ParkingLot
@@ -29,7 +29,8 @@ from MobyPark.api.Models.ParkingLotCoordinates import ParkingLotCoordinates
 from MobyPark.api import session_manager
 from typing import Optional
 import os
-
+get_current_user = authentication.get_current_user 
+require_roles = authentication.require_roles
 # Gebruik dezelfde data directory als de rest van het project
 DATA_DIR = (
     os.environ.get("MOBYPARK_DB_DIR")
