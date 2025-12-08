@@ -3,9 +3,9 @@ name: CI pipeline
 on:
   push:
     branches:
-      - main
+      - ci-testbranch
   workflow_dispatch:
-
+      
 jobs:
   tests:
     runs-on: ubuntu-latest

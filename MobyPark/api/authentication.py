@@ -9,6 +9,72 @@ from datetime import datetime
 
 from MobyPark.api.storage_utils import load_json, save_user_data
 from MobyPark.api import session_manager
+# MobyPark/api/authentication.py
+
+from typing import Optional
+from fastapi import Header, HTTPException, status, Depends
+from .session_manager import get_session
+from .Models.User import User
+
+
+def extract_bearer_token(auth_header: Optional[str]) -> Optional[str]:
+    """
+    Extract 'token' from headers like: 'Bearer token'.
+    This must keep the behaviour your unit tests expect.
+    """
+    if not auth_header:
+        return None
+
+    parts = auth_header.split()
+    if len(parts) != 2:
+        return None
+
+    scheme, token = parts
+    if scheme.lower() != "bearer":
+        return None
+
+    return token
+
+
+def get_current_user(authorization: Optional[str] = Header(None)) -> User:
+    """
+    Resolve the current user from the Authorization header.
+    Returns 401 for missing/invalid/expired tokens instead of 500.
+    """
+    token = extract_bearer_token(authorization)
+    if not token:
+        # This behaviour already gives you 401 for profile_without_token -> that test passes.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or invalid authorization token",
+        )
+
+    user = get_session(token)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired session",
+        )
+
+    return user
+
+
+def require_roles(*roles: str):
+    """
+    Dependency factory to guard endpoints by role.
+    Example: Depends(require_roles("ADMIN"))
+    - if user.role not in roles -> 403
+    """
+    def _dependency(user: User = Depends(get_current_user)) -> User:
+        if roles and user.role not in roles:
+            # This is what test_non_admin_cannot_view_other_users_billing_returns_403 expects.
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden",
+            )
+        return user
+
+    return _dependency
 
 
 def login_required(func):
