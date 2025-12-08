@@ -8,7 +8,7 @@ from MobyPark.api import authentication
 project_root = str(pathlib.Path(__file__).resolve().parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-
+from typing import Any
 from fastapi import FastAPI, Depends, HTTPException, Request, status, responses
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse, JSONResponse
@@ -840,28 +840,55 @@ async def update_reservation(rid: str, body: ReservationUpdate, user: User = Dep
     return {"status": "Updated", "reservation": current}
 
 
+
+
 @app.delete("/reservations/{rid}")
-async def delete_reservation(rid: str, user: User = Depends(get_current_user)):
+async def delete_reservation(rid: str, user: Any = Depends(get_current_user)):
     reservations = load_reservation_data()
     parking_lots = load_parking_lot_data()
 
+    # Normalise reservations into a dict: {id: reservation_dict}
+    if isinstance(reservations, list):
+        tmp: dict[str, dict] = {}
+        for res in reservations:
+            if not isinstance(res, dict):
+                continue
+            res_id = res.get("id")
+            if res_id is None:
+                res_id = str(len(tmp) + 1)
+            tmp[res_id] = res
+        reservations = tmp
+
     if rid not in reservations:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reservation not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Reservation not found",
+        )
 
     res = reservations[rid]
-    if user.get("role") != "ADMIN" and res.get("user") != user.get("username"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
-    pid = res["parkinglot"]
-    if pid in parking_lots and parking_lots[pid].get("reserved", 0) > 0:
+    role = _user_attr(user, "role")
+    username = _user_attr(user, "username")
+
+    # Only owner or admin may delete
+    if role != "ADMIN" and res.get("user") != username:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied",
+        )
+
+    pid = res.get("parkinglot")
+    # Be tolerant: only decrement if it makes sense, never 400 here
+    if pid and pid in parking_lots and parking_lots[pid].get("reserved", 0) > 0:
         parking_lots[pid]["reserved"] -= 1
-    elif pid in parking_lots:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Parking lot reserved count is already zero")
 
+    # Remove reservation and persist
     del reservations[rid]
     save_reservation_data(reservations)
     save_parking_lot_data(parking_lots)
-    return {"status": "Deleted"}
+
+    return {"status": "Deleted", "id": rid}
+
 
 
 @app.delete("/reservations")
