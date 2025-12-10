@@ -218,3 +218,12 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 MobyPark-api-data/pdata/MobyParkData.db
+MobyPark-api-data/MobyParkData.db
+MobyPark-api-data/corrupt_vehicles.json
+MobyPark-api-data/MobyParkData.db
+MobyPark-api-data/corrupt_vehicle_logs.txt
+MobyPark-api-data/corrupt_users.json
+MobyPark-api-data/corrupt_user_logs.txt
+MobyPark-api-data/corrupt_payment_logs.txt
+MobyPark-api-data/MobyParkData.db
+MobyPark-api-data/MobyParkData.db
