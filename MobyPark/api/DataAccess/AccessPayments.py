@@ -1,10 +1,11 @@
 import sqlite3
-from DBConnection import DBConnection
-from Models.Payment import Payment
-from Models.TransanctionData import TransactionData
-from DataAccess.AccessUsers import AccessUsers
-from DataAccess.AccessParkingLots import AccessParkingLots
-from DataAccess.AccessSessions import AccessSessions
+from MobyPark.api.DBConnection import DBConnection
+from MobyPark.api.Models.Payment import Payment
+from MobyPark.api.Models.TransanctionData import TransactionData
+from MobyPark.api.Models.User import User
+from MobyPark.api.DataAccess.AccessUsers import AccessUsers
+from MobyPark.api.DataAccess.AccessParkingLots import AccessParkingLots
+from MobyPark.api.DataAccess.AccessSessions import AccessSessions
 from datetime import datetime
 
 class AccessPayments:
@@ -50,8 +51,31 @@ class AccessPayments:
         del payment_dict["parking_lot_id"]
 
         return Payment(**payment_dict)
+    
+
+    def get_all_payments(self):
+        query = """"
+        SELECT p.*, t.* FROM payments p
+        JOIN t_data t ON t.id = p.id;
+        """
+        self.cursor.execute(query)
+        payments = self.cursor.fetchall()
+
+        return payments
 
 
+    def get_payments_by_user(self, user:User) -> list[Payment]:
+        query = """
+        SELECT id FROM payments
+        WHERE user_id = ?;
+        """
+        self.cursor.execute(query, [user.id])
+        ids = self.cursor.fetchall()
+        payments = list(map(lambda id: self.get_payment(id["id"]), ids))
+
+        return payments
+    
+    
     def add_payment(self, payment: Payment):
         query = """
         INSERT INTO payments

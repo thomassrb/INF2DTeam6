@@ -3,15 +3,32 @@ import uuid
 import hashlib
 import bcrypt
 import os
-
 from datetime import datetime
-import session_manager
-import authentication
 
-
-from storage_utils import load_json, load_payment_data, load_reservation_data, save_data, save_payment_data, save_reservation_data, save_user_data, load_parking_lot_data, save_parking_lot_data, load_json, save_user_data, load_vehicles_data, save_vehicles_data
-from authentication import login_required, roles_required
-import session_calculator as sc
+from MobyPark.api import session_manager
+from MobyPark.api.storage_utils import (
+    load_json,
+    load_payment_data,
+    load_reservation_data,
+    save_reservation_data,
+    load_parking_lot_data,
+    save_parking_lot_data,
+    save_user_data,
+)
+from MobyPark.api.authentication import login_required, roles_required
+from MobyPark.api import session_calculator as sc
+from MobyPark.api.app import (
+    access_vehicles,
+    access_parkinglots,
+    access_payments,
+    access_reservations,
+    access_sessions,
+    access_users,
+    connection,
+)
+from MobyPark.api.Models.User import User
+from MobyPark.api.Models.ParkingLot import ParkingLot
+from MobyPark.api.Models.Reservation import Reservation
 
 
 class post_routes:
@@ -46,22 +63,20 @@ class post_routes:
             handler.send_json_response(409, "application/json", {"error": "Username already taken"})
             return
 
-        new_id = str(max(int(u.get("id", 0)) for u in users) + 1) if users else "1"
-        new_user = {
-            'id': new_id,
-            'username': username,
-            'password': hashed_password,
-            'name': name,
-            'phone': phone_number,
-            'email': email,
-            'birth_year': birth_year,
-            'role': data.get('role', 'USER'),
-            'active': True,
-            'created_at': datetime.now().strftime("%Y-%m-%d")
-        }
-        users.append(new_user)
-        save_user_data(users)
+        new_user = User(
+            username = username,
+            password = hashed_password,
+            name = name,
+            phone = phone_number,
+            email = email,
+            birth_year = birth_year,
+            role = data.get('role', 'USER'),
+            active = True,
+            created_at = datetime.now().strftime("%Y-%m-%d")
+        )
+        access_users.add_user(user=new_user)
         handler.send_json_response(201, "application/json", {"message": "User created"})
+
 
     def handle_login(handler):
         data = handler.get_request_data()
@@ -75,43 +90,26 @@ class post_routes:
         username = data['username']
         password = data['password']
 
-        users = load_json('users.json')
-        user_to_authenticate = None
-        DEBUG_LOGS = os.environ.get('DEBUG_LOGS') == '1'
-        if DEBUG_LOGS:
-            print(f"DEBUG: Searching for user '{username}' in users list of type {type(users)}")
-        for u in users:
-            if DEBUG_LOGS:
-                print(f"DEBUG: Checking user: {u.get('username')}")
-            if u.get("username") == username:
-                user_to_authenticate = u
-                if DEBUG_LOGS:
-                    print(f"DEBUG: Found user {username}: {user_to_authenticate}")
-                break
+        user_to_authenticate = access_users.get_user_byusername(username=username)
 
         # COMMENTS TOEVOEGEN VOOR ONDERSTAAND STATEMENT
         if user_to_authenticate:
-            if user_to_authenticate.get("password", "").startswith("$2b$"):
+            if user_to_authenticate.password.startswith("$2b$"):
                 if bcrypt.checkpw(password.encode('utf-8'), user_to_authenticate["password"].encode('utf-8')):
-                    if DEBUG_LOGS:
-                        print(f"DEBUG: Bcrypt match for user {username}")
                     token = str(uuid.uuid4())
                     session_manager.add_session(token, user_to_authenticate)
                     handler.send_json_response(200, "application/json", {"message": "User logged in", "session_token": token})
                     return
             else:
                 hashed_password_input = hashlib.sha256(password.encode('utf-8')).hexdigest()
-                if hashed_password_input == user_to_authenticate.get("password", ""):
-                    if DEBUG_LOGS:
-                        print(f"DEBUG: SHA256 match for user {username}")
+                if hashed_password_input == user_to_authenticate.password:
                     token = str(uuid.uuid4())
                     session_manager.add_session(token, user_to_authenticate)
                     handler.send_json_response(200, "application/json", {"message": "User logged in", "session_token": token})
                     return
 
-        if DEBUG_LOGS:
-            print(f"DEBUG: Login failed for username: {username}. Provided password: {password}. Stored user: {user_to_authenticate}")
         handler.send_json_response(401, "application/json", {"error": "Invalid credentials"})
+
 
     def _handle_create_parking_lot(self):
         data = self.get_request_data()
@@ -123,73 +121,51 @@ class post_routes:
                 self.send_json_response(400, "application/json", {"error": f"Missing or invalid field: {field}", "field": field})
                 return
 
+            parking_lot = ParkingLot(
+                name = data['name'],
+                location = data['location'],
+                capacity = data['capacity'],
+                hourly_rate = data['tariff'],
+                day_rate = data['daytariff'],
+                address = data['address'],
+                coordinates = data['coordinates'],
+                reserved = 0
+            )
+            access_parkinglots.add_parking_lot(parkinglot=parking_lot)
+            self.send_json_response(201, "application/json", {"Server message": f"Parking lot saved under ID: {parking_lot.id}"})
 
-        for sf in ['name', 'location', 'address']:
-            if not isinstance(data.get(sf), str) or not data.get(sf, '').strip():
-                self.send_json_response(400, "application/json", {"error": f"Missing or invalid field: {sf}", "field": sf})
-                return
-
-
-        if not isinstance(data['capacity'], int) or data['capacity'] <= 0:
-            self.send_json_response(400, "application/json", {"error": "Capacity must be a positive integer", "field": "capacity"})
-            return
-        if not isinstance(data['tariff'], (int, float)) or data['tariff'] < 0:
-            self.send_json_response(400, "application/json", {"error": "Tariff must be a non-negative number", "field": "tariff"})
-            return
-        if not isinstance(data['daytariff'], (int, float)) or data['daytariff'] < 0:
-            self.send_json_response(400, "application/json", {"error": "Day tariff must be a non-negative number", "field": "daytariff"})
-            return
-        if not isinstance(data['coordinates'], list) or not all(isinstance(coord, (int, float)) for coord in data['coordinates']) or len(data['coordinates']) != 2:
-            self.send_json_response(400, "application/json", {"error": "Coordinates must be a list of two numbers", "field": "coordinates"})
-            return
-
-
-        parking_lots = load_parking_lot_data()
-        new_lid = str(len(parking_lots) + 1)
-        parking_lots[new_lid] = {
-            "id": new_lid,
-            "name": data['name'],
-            "location": data['location'],
-            "capacity": data['capacity'],
-            "hourly_rate": data['tariff'],
-            "day_rate": data['daytariff'],
-            "address": data['address'],
-            "coordinates": data['coordinates'],
-            "reserved": 0
-        }
-        save_parking_lot_data(parking_lots)
-        self.send_json_response(201, "application/json", {"message": f"Parking lot saved under ID: {new_lid}"})
 
     @login_required
-    def _handle_create_reservation(self, session_user):
+    def _handle_create_reservation(self, session_user: User):
         data = self.get_request_data()
-        
+        parking_lot = access_parkinglots.get_parking_lot(id=data['parkinglot'])
         valid, error = self.data_validator.validate_data(data)
         if not valid:
             self.send_json_response(400, "application/json", error)
             return
         
-        reservations = load_reservation_data()
-        parking_lots = load_parking_lot_data()
-        
-        if data['parkinglot'] not in parking_lots:
+        if not parking_lot:
             self.send_json_response(404, "application/json", {"error": "Parking lot not found", "field": "parkinglot"})
             return
         
-        if not (session_user["role"] == "ADMIN"):
+        if not (session_user.role == "ADMIN"):
             if "user" not in data:
-                data["user"] = session_user["username"]
-            elif data["user"] != session_user["username"]:
+                data["user"] = session_user.username
+            elif data["user"] != session_user.username:
                 self.send_json_response(403, "application/json", {"error": "Non-admin users cannot create reservations for other users"})
                 return
         else:
             if "user" not in data:
                 data["user"] = None
 
-
-        rid = str(len(reservations) + 1)
-        reservations[rid] = data
-        data["id"] = rid
+        # toegevoegd, dit zorgt ervoor dat beide mogelijk zijn als data, hij replaced de var licenseplate dan met license_plate 
+        if 'license_plate' not in data and 'licenseplate' in data:
+            data['license_plate'] = data['licenseplate']
+ # hier gebleven ---------------------------------------------------------------------------------------
+        data
+        new_reservation = Reservation(
+            
+        )
         parking_lots[data["parkinglot"]]["reserved"] += 1
         save_reservation_data(reservations)
         save_parking_lot_data(parking_lots)

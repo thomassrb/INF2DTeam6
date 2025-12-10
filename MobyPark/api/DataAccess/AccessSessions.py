@@ -1,12 +1,12 @@
 import sqlite3
-from DBConnection import DBConnection
-from Models.Session import Session
-from Models.User import User
-from Models.ParkingLot import ParkingLot
-from Models.Vehicle import Vehicle
-from .AccessUsers import AccessUsers
-from .AccessParkingLots import AccessParkingLots
-from .AccessVehicles import AccessVehicles
+from MobyPark.api.DBConnection import DBConnection
+from MobyPark.api.Models.Session import Session
+from MobyPark.api.Models.User import User
+from MobyPark.api.Models.ParkingLot import ParkingLot
+from MobyPark.api.Models.Vehicle import Vehicle
+from MobyPark.api.DataAccess.AccessUsers import AccessUsers
+from MobyPark.api.DataAccess.AccessParkingLots import AccessParkingLots
+from MobyPark.api.DataAccess.AccessVehicles import AccessVehicles
 from datetime import datetime
 
 class AccessSessions:
@@ -42,6 +42,18 @@ class AccessSessions:
         del session_dict["vehicle_id"]
 
         return Session(**session_dict)
+    
+
+    def get_sessions_byuser(self, user: User):
+        query = """
+        SELECT id FROM sessions
+        WHERE user_id = ?;
+        """
+        self.cursor.execute(query, [user.id])
+        ids = self.cursor.fetchall()
+        sessions = list(map(lambda id: self.get_session(id=id["id"]), ids))
+
+        return sessions
 
 
     def add_session(self, session: Session):

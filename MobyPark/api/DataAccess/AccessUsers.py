@@ -1,7 +1,6 @@
-# from server import DBConnection
 import sqlite3
-from DBConnection import DBConnection
-from Models.User import User
+from MobyPark.api.DBConnection import DBConnection
+from MobyPark.api.Models.User import User
 from datetime import datetime
 
 class AccessUsers:
@@ -22,8 +21,8 @@ class AccessUsers:
             return None
         else:
             result = dict(result)
-            result["created_at"] = datetime.strptime(result["created_at"], "%Y-%m-%d %H:%M:%S")
-            return User(**result)
+        result["created_at"] = datetime.strptime(result["created_at"], "%Y-%m-%d") 
+        return User(**result)
         
 
     def get_user_byid(self, id):
@@ -37,8 +36,18 @@ class AccessUsers:
             return None
         else:
             result = dict(result)
-            result["created_at"] = datetime.strptime(result["created_at"], "%Y-%m-%d %H:%M:%S")
+            result["created_at"] = datetime.strptime(result["created_at"], "%Y-%m-%d")
             return User(**result)
+        
+
+    def get_all_users(self):
+        query = """"
+        SELECT * FROM users
+        """
+        self.cursor.execute(query)
+        users = self.cursor.fetchall()
+
+        return users
 
     
     def add_user(self, user: User):

@@ -1,12 +1,13 @@
 from datetime import datetime
-from .Vehicle import Vehicle
-from .ParkingLot import ParkingLot
-from .User import User
+from MobyPark.api.Models.Vehicle import Vehicle
+from MobyPark.api.Models.ParkingLot import ParkingLot
+from MobyPark.api.Models.User import User
 
 class Session:
 
     def __init__(self,
-                 id: str,
+                 id: int,
+                 session_id: int,
                  parking_lot: ParkingLot,
                  vehicle: Vehicle,
                  licenseplate: str,
@@ -19,6 +20,7 @@ class Session:
                  payment_status: str):
         
         self.id = id
+        self.session_id = session_id
         self.parking_lot = parking_lot
         self.vehicle = vehicle
         self.licenseplate = licenseplate
@@ -29,4 +31,8 @@ class Session:
         self.duration_minutes = duration_minutes
         self.cost = cost
         self.payment_status = payment_status
+
+
+    def __repr__(self):
+        return self.__dict__
         

@@ -1,8 +1,9 @@
 import sqlite3
-from DBConnection import DBConnection
+from MobyPark.api.DBConnection import DBConnection
 from datetime import datetime
-from .AccessUsers import AccessUsers
-from Models.Vehicle import Vehicle
+from MobyPark.api.DataAccess.AccessUsers import AccessUsers
+from MobyPark.api.Models.Vehicle import Vehicle
+from MobyPark.api.Models.User import User
 
 class AccessVehicles:
 
@@ -27,6 +28,28 @@ class AccessVehicles:
             vehicle_dict["user"] = self.accessusers.get_user_byid(id=vehicle_dict["user_id"])
             del vehicle_dict["user_id"]
             return Vehicle(**vehicle_dict)
+        
+
+    def get_vehicles_byuser(self, user: User):
+        query = """
+        SELECT id FROM users
+        WHERE user_id = ?;
+        """
+        self.cursor.execute(query, [user.id])
+        vehicle_ids = self.cursor.fetchall()
+        vehicles = list(map(lambda id: self.get_vehicle(id=id["id"]), vehicle_ids))
+
+        return vehicles
+        
+
+    def get_all_vehicles(self):
+        query = """"
+        SELECT * FROM vehicles
+        """
+        self.cursor.execute(query)
+        vehicles = self.cursor.fetchall()
+
+        return vehicles
 
 
     def add_vehicle(self, vehicle: Vehicle):

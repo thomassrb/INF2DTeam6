@@ -1,8 +1,8 @@
 from datetime import datetime
-from .User import User
-from .ParkingLot import ParkingLot
-from .Session import Session
-from .TransanctionData import TransactionData
+from MobyPark.api.Models.User import User
+from MobyPark.api.Models.ParkingLot import ParkingLot
+from MobyPark.api.Models.Session import Session
+from MobyPark.api.Models.TransanctionData import TransactionData
 
 class Payment:
 
@@ -29,3 +29,7 @@ class Payment:
         self.session = session
         self.parking_lot = parking_lot
         self.t_data = t_data
+
+    
+    def __repr__(self):
+        return self.__dict__
