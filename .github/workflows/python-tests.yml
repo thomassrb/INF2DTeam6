@@ -36,6 +36,20 @@ jobs:
         pip install -r requirements.txt
         if [ -f test-requirements.txt ]; then pip install -r test-requirements.txt; fi
     
+    - name: Install additional dependencies
+      run: |
+        pip install uvicorn
+        pip install -e .
+
+    - name: Start server in background
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+        TESTING: "True"
+      run: |
+        uvicorn MobyPark.api.app:app --host 0.0.0.0 --port 8000 &
+        echo "Waiting for server to start..."
+        sleep 5
+        
     - name: Run tests
       env:
         DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
