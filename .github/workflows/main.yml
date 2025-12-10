@@ -39,6 +39,7 @@ jobs:
           
       - name: Notify Uptime Kuma (tests success)
         if: ${{ success() }}
+        continue-on-error: true
         run: |
           curl --retry 3 --max-time 60 --connect-timeout 10 "https://team6.hoofr.dev/api/push/sJnSlUyzvb?status=up&msg=OK&ping="
 
