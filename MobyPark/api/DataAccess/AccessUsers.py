@@ -21,7 +21,14 @@ class AccessUsers:
             return None
         else:
             result = dict(result)
-            result["created_at"] = datetime.strptime(result["created_at"], "%Y-%m-%d %H:%M:%S")
+            created_at = result["created_at"]
+            try:
+                result["created_at"] = datetime.strptime(created_at, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                try:
+                    result["created_at"] = datetime.strptime(created_at, "%Y-%m-%d")
+                except ValueError:
+                    result["created_at"] = datetime.now()
             return User(**result)
         
 
