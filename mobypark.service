@@ -1,0 +1,14 @@
+[Unit]
+Description=MobyPark Service
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/mobypark/current
+Environment="PATH=/var/www/mobypark/current/venv/bin"
+ExecStart=/var/www/mobypark/current/venv/bin/gunicorn -w 4 -k uvicorn.workers.UvicornWorker MobyPark.api.app:app --bind 0.0.0.0:8000
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

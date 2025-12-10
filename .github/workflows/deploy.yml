@@ -1,0 +1,36 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up SSH
+      uses: webfactory/ssh-agent@v0.9.0
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+        
+    - name: Copy files and deploy
+      env:
+        SERVER_IP: ${{ secrets.SERVER_IP }}
+        SERVER_USER: ${{ secrets.SERVER_USER }}
+      run: |
+        # Make the deploy script executable
+        chmod +x deploy.sh
+        
+        # Run the deployment script
+        ./deploy.sh
+        
+        # Clean up old deployments (keep last 5)
+        ssh $SERVER_USER@$SERVER_IP "
+          ls -dt /var/www/mobypark/2* | tail -n +6 | xargs -r rm -rf
+        "
