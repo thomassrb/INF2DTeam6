@@ -32,34 +32,52 @@ jobs:
         SERVER_IP: 145.24.223.87
         SERVER_USER: ubuntu-1056396
       run: |
+        # Test SSH connection first
+        echo "Testing SSH connection..."
+        if ! ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP "echo SSH Connection successful"; then
+          echo "SSH connection test failed. Please check:"
+          echo "1. Server is running and accessible"
+          echo "2. Firewall allows incoming connections on port 22"
+          echo "3. SSH service is running on the server"
+          exit 1
+        fi
+
         # Create deployment directory
         DEPLOY_DIR="mobypark-$(date +%Y%m%d%H%M%S)"
         
-        # Copy files using SCP
-        echo "Copying files to server..."
-        scp -r . $SERVER_USER@$SERVER_IP:~/$DEPLOY_DIR
-        
+        # Copy files using rsync (more reliable than scp)
+        echo "Copying files to server using rsync..."
+        rsync -avz -e "ssh -o StrictHostKeyChecking=no" --exclude='.git' --exclude='.github' ./ $SERVER_USER@$SERVER_IP:~/$DEPLOY_DIR/ || {
+          echo "Failed to copy files to server"
+          exit 1
+        }
+
         # Run deployment commands
-        echo "Running deployment..."
-        ssh $SERVER_USER@$SERVER_IP "
-          # Create symlink to the new deployment
+        echo "Running deployment commands..."
+        ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP "
+          set -e  # Exit on error
+          
+          echo 'Creating symlink...'
           ln -nfs ~/$DEPLOY_DIR ~/mobypark-current
           
-          # Navigate to the deployment directory
+          echo 'Changing to deployment directory...'
           cd ~/mobypark-current
           
-          # Make deploy script executable and run it
           if [ -f deploy.sh ]; then
+            echo 'Running deploy.sh...'
             chmod +x deploy.sh
             ./deploy.sh
           else
-            echo "Error: deploy.sh not found!"
+            echo 'Error: deploy.sh not found in the repository root!'
+            ls -la
             exit 1
           fi
           
-          # Clean up old deployments (keep last 5)
           echo 'Cleaning up old deployments...'
           ls -dt ~/mobypark-* 2>/dev/null | tail -n +6 | xargs -r rm -rf
-        "
+        " || {
+          echo "Deployment failed"
+          exit 1
+        }
         
         echo "Deployment completed successfully!"
