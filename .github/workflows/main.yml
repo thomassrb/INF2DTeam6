@@ -66,7 +66,18 @@ jobs:
           )
           ''')
           
-          # Create other necessary tables
+          # Create sessions table
+          cursor.execute('''
+          CREATE TABLE IF NOT EXISTS sessions (
+              token TEXT PRIMARY KEY,
+              user_id TEXT NOT NULL,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              expires_at TIMESTAMP,
+              FOREIGN KEY (user_id) REFERENCES users(id)
+          )
+          ''')
+          
+          # Create parking_lots table
           cursor.execute('''
           CREATE TABLE IF NOT EXISTS parking_lots (
               id TEXT PRIMARY KEY,
@@ -80,10 +91,71 @@ jobs:
           )
           ''')
           
-          # Add any other tables needed for your application
+          # Create vehicles table
+          cursor.execute('''
+          CREATE TABLE IF NOT EXISTS vehicles (
+              id TEXT PRIMARY KEY,
+              user_id TEXT NOT NULL,
+              license_plate TEXT NOT NULL,
+              brand TEXT,
+              model TEXT,
+              color TEXT,
+              created_at TEXT NOT NULL,
+              FOREIGN KEY (user_id) REFERENCES users(id)
+          )
+          ''')
+          
+          # Create reservations table
+          cursor.execute('''
+          CREATE TABLE IF NOT EXISTS reservations (
+              id TEXT PRIMARY KEY,
+              user_id TEXT NOT NULL,
+              parking_lot_id TEXT NOT NULL,
+              vehicle_id TEXT NOT NULL,
+              start_time TEXT NOT NULL,
+              end_time TEXT NOT NULL,
+              status TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              FOREIGN KEY (user_id) REFERENCES users(id),
+              FOREIGN KEY (parking_lot_id) REFERENCES parking_lots(id),
+              FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
+          )
+          ''')
+          
+          # Create parking_sessions table
+          cursor.execute('''
+          CREATE TABLE IF NOT EXISTS parking_sessions (
+              id TEXT PRIMARY KEY,
+              user_id TEXT NOT NULL,
+              vehicle_id TEXT NOT NULL,
+              parking_lot_id TEXT NOT NULL,
+              start_time TEXT NOT NULL,
+              end_time TEXT,
+              total_cost REAL,
+              status TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              FOREIGN KEY (user_id) REFERENCES users(id),
+              FOREIGN KEY (vehicle_id) REFERENCES vehicles(id),
+              FOREIGN KEY (parking_lot_id) REFERENCES parking_lots(id)
+          )
+          ''')
+          
+          # Create billing table
+          cursor.execute('''
+          CREATE TABLE IF NOT EXISTS billing (
+              id TEXT PRIMARY KEY,
+              user_id TEXT NOT NULL,
+              amount REAL NOT NULL,
+              description TEXT NOT NULL,
+              status TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              paid_at TEXT,
+              FOREIGN KEY (user_id) REFERENCES users(id)
+          )
+          ''')
           
           conn.connection.commit()
-          print('Database initialized successfully')
+          print('Database schema initialized successfully')
           print(f'Database file created at: {db_path}')
           "
 
