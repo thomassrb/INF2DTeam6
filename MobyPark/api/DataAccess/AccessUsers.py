@@ -21,8 +21,8 @@ class AccessUsers:
             return None
         else:
             result = dict(result)
-        result["created_at"] = datetime.strptime(result["created_at"], "%Y-%m-%d") 
-        return User(**result)
+            result["created_at"] = datetime.strptime(result["created_at"], "%Y-%m-%d %H:%M:%S")
+            return User(**result)
         
 
     def get_user_byid(self, id):
@@ -36,7 +36,7 @@ class AccessUsers:
             return None
         else:
             result = dict(result)
-            result["created_at"] = datetime.strptime(result["created_at"], "%Y-%m-%d")
+            result["created_at"] = datetime.strptime(result["created_at"], "%Y-%m-%d %H:%M:%S")
             return User(**result)
         
 
