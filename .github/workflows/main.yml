@@ -40,4 +40,4 @@ jobs:
       - name: Notify Uptime Kuma (tests success)
         if: ${{ success() }}
         run: |
-          curl -fsS --retry 3 "https://team6.hoofr.dev/api/push/sJnSlUyzvb?status=up&msg=OK&ping="
+          curl -fsS --retry 3 "https://team6.hoofr.dev/api/push/sJnSlUyzvb?status=up&msg=OK&ping=" || echo "Kuma notification failed (exit code: $?)"
