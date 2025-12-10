@@ -13,7 +13,6 @@ jobs:
 
     env:
       PYTHONPATH: .:./MobyPark:./MobyPark/api
-      DATABASE_URL: sqlite:////tmp/test_mobypark.db
       PYTHONUNBUFFERED: 1
       LOG_LEVEL: DEBUG
 
@@ -32,153 +31,24 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest pytest-cov requests httpx pytest-asyncio
 
-      - name: Initialize test database
-        run: |
-          # Create directory for test database
-          mkdir -p /tmp
-          
-          # Initialize the database with schema
-          python -c "
-          from MobyPark.api.DBConnection import DBConnection
-          import os
-          
-          # Set the database path
-          db_path = '/tmp/test_mobypark.db'
-          os.environ['DATABASE_URL'] = f'sqlite:///{db_path}'
-          
-          # Initialize DBConnection with the path
-          conn = DBConnection(database_path=db_path)
-          cursor = conn.cursor
-          
-          # Create users table
-          cursor.execute('''
-          CREATE TABLE IF NOT EXISTS users (
-              id TEXT PRIMARY KEY,
-              username TEXT UNIQUE NOT NULL,
-              name TEXT NOT NULL,
-              email TEXT UNIQUE NOT NULL,
-              password TEXT NOT NULL,
-              created_at TEXT NOT NULL,
-              phone TEXT,
-              birth_year TEXT,
-              role TEXT NOT NULL,
-              active BOOLEAN DEFAULT TRUE
-          )
-          ''')
-          
-          # Create sessions table
-          cursor.execute('''
-          CREATE TABLE IF NOT EXISTS sessions (
-              token TEXT PRIMARY KEY,
-              user_id TEXT NOT NULL,
-              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-              expires_at TIMESTAMP,
-              FOREIGN KEY (user_id) REFERENCES users(id)
-          )
-          ''')
-          
-          # Create parking_lots table
-          cursor.execute('''
-          CREATE TABLE IF NOT EXISTS parking_lots (
-              id TEXT PRIMARY KEY,
-              name TEXT NOT NULL,
-              location TEXT NOT NULL,
-              capacity INTEGER,
-              tariff REAL NOT NULL,
-              daytariff REAL NOT NULL,
-              address TEXT NOT NULL,
-              coordinates TEXT NOT NULL
-          )
-          ''')
-          
-          # Create vehicles table
-          cursor.execute('''
-          CREATE TABLE IF NOT EXISTS vehicles (
-              id TEXT PRIMARY KEY,
-              user_id TEXT NOT NULL,
-              license_plate TEXT NOT NULL,
-              brand TEXT,
-              model TEXT,
-              color TEXT,
-              created_at TEXT NOT NULL,
-              FOREIGN KEY (user_id) REFERENCES users(id)
-          )
-          ''')
-          
-          # Create reservations table
-          cursor.execute('''
-          CREATE TABLE IF NOT EXISTS reservations (
-              id TEXT PRIMARY KEY,
-              user_id TEXT NOT NULL,
-              parking_lot_id TEXT NOT NULL,
-              vehicle_id TEXT NOT NULL,
-              start_time TEXT NOT NULL,
-              end_time TEXT NOT NULL,
-              status TEXT NOT NULL,
-              created_at TEXT NOT NULL,
-              FOREIGN KEY (user_id) REFERENCES users(id),
-              FOREIGN KEY (parking_lot_id) REFERENCES parking_lots(id),
-              FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
-          )
-          ''')
-          
-          # Create parking_sessions table
-          cursor.execute('''
-          CREATE TABLE IF NOT EXISTS parking_sessions (
-              id TEXT PRIMARY KEY,
-              user_id TEXT NOT NULL,
-              vehicle_id TEXT NOT NULL,
-              parking_lot_id TEXT NOT NULL,
-              start_time TEXT NOT NULL,
-              end_time TEXT,
-              total_cost REAL,
-              status TEXT NOT NULL,
-              created_at TEXT NOT NULL,
-              FOREIGN KEY (user_id) REFERENCES users(id),
-              FOREIGN KEY (vehicle_id) REFERENCES vehicles(id),
-              FOREIGN KEY (parking_lot_id) REFERENCES parking_lots(id)
-          )
-          ''')
-          
-          # Create billing table
-          cursor.execute('''
-          CREATE TABLE IF NOT EXISTS billing (
-              id TEXT PRIMARY KEY,
-              user_id TEXT NOT NULL,
-              amount REAL NOT NULL,
-              description TEXT NOT NULL,
-              status TEXT NOT NULL,
-              created_at TEXT NOT NULL,
-              paid_at TEXT,
-              FOREIGN KEY (user_id) REFERENCES users(id)
-          )
-          ''')
-          
-          conn.connection.commit()
-          print('Database schema initialized successfully')
-          print(f'Database file created at: {db_path}')
-          "
-
       - name: Start FastAPI server with debug
         run: |
           # Show Python and pip versions
           python --version
           pip --version
-          pip list
           
-          # Start server in background with debug logging
-          nohup python -m uvicorn MobyPark.api.app:app --host 0.0.0.0 --port 8000 --log-level debug > server.log 2>&1 & 
+          # Start server with debug output
+          nohup python -m uvicorn MobyPark.api.app:app --host 0.0.0.0 --port 8000 --reload > server.log 2>&1 &
           
-          # Give server time to start
+          echo "Waiting for server to start..."
           sleep 5
           
-          # Show server logs
-          echo "Server logs after startup:"
-          cat server.log
-          
           # Check if server is running
-          echo "Checking server status..."
+          echo "Server status:"
           ps aux | grep uvicorn
+          
+          echo "Server logs:"
+          cat server.log
           
           # Health check with verbose output
           echo "Testing server health..."
