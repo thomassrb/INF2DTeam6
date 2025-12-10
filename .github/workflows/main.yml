@@ -13,7 +13,7 @@ jobs:
 
     env:
       PYTHONPATH: .:./MobyPark:./MobyPark/api
-      DATABASE_URL: sqlite:///tmp/test_mobypark.db
+      DATABASE_URL: sqlite:////tmp/test_mobypark.db
       PYTHONUNBUFFERED: 1
       LOG_LEVEL: DEBUG
 
@@ -32,14 +32,67 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest pytest-cov requests httpx pytest-asyncio
 
+      - name: Initialize test database
+        run: |
+          # Create directory for test database
+          mkdir -p /tmp
+          
+          # Initialize the database with schema
+          python -c "
+          from MobyPark.api.DBConnection import DBConnection
+          import os
+          
+          # Ensure we're using the test database
+          os.environ['DATABASE_URL'] = 'sqlite:////tmp/test_mobypark.db'
+          
+          conn = DBConnection()
+          cursor = conn.cursor
+          
+          # Create users table
+          cursor.execute('''
+          CREATE TABLE IF NOT EXISTS users (
+              id TEXT PRIMARY KEY,
+              username TEXT UNIQUE NOT NULL,
+              name TEXT NOT NULL,
+              email TEXT UNIQUE NOT NULL,
+              password TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              phone TEXT,
+              birth_year TEXT,
+              role TEXT NOT NULL,
+              active BOOLEAN DEFAULT TRUE
+          )
+          ''')
+          
+          # Create other necessary tables
+          cursor.execute('''
+          CREATE TABLE IF NOT EXISTS parking_lots (
+              id TEXT PRIMARY KEY,
+              name TEXT NOT NULL,
+              location TEXT NOT NULL,
+              capacity INTEGER,
+              tariff REAL NOT NULL,
+              daytariff REAL NOT NULL,
+              address TEXT NOT NULL,
+              coordinates TEXT NOT NULL
+          )
+          ''')
+          
+          # Add any other tables needed for your application
+          
+          conn.connection.commit()
+          print('Database initialized successfully')
+          "
+
       - name: Start FastAPI server with debug
         run: |
           # Show Python and pip versions
           python --version
           pip --version
           
-          # Create directory for test database
-          mkdir -p /tmp
+          # Verify database file was created
+          echo "Database file:"
+          ls -la /tmp/test_mobypark.db || echo "Database file not found"
           
           # Start server with debug output
           nohup python -m uvicorn MobyPark.api.app:app --host 0.0.0.0 --port 8000 --reload > server.log 2>&1 &
@@ -61,7 +114,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           # Show test database
-          echo "Test database location:"
+          echo "Test database location and content:"
           ls -la /tmp/test_mobypark.db || true
           
           # Run tests with increased verbosity
