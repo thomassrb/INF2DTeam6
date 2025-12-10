@@ -38,24 +38,28 @@ jobs:
         echo "Pinging server..."
         ping -c 4 $SERVER_IP || echo "Ping failed"
         
-        echo -e "\n=== SSH Connection Test ==="
-        ssh -v -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP "echo SSH Connection successful" || {
+        # 2. Test SSH connection with explicit username
+        echo -e "\n=== Testing SSH Connection ==="
+        ssh -v -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no \
+            ubuntu-1056396@$SERVER_IP "echo SSH Connection successful" || {
           echo -e "\n=== SSH Connection Failed ==="
           echo "Possible issues:"
-          echo "1. Server firewall blocking port 22"
-          echo "2. Server not running SSH service"
-          echo "3. Network restrictions (security groups, NACLs, etc.)"
-          echo "4. Server IP might be incorrect or not publicly accessible"
+          echo "1. SSH key authentication failed"
+          echo "2. Server firewall blocking port 22"
+          echo "3. SSH service not running"
           echo -e "\n=== Debug Info ==="
           echo "Current public IP: $(curl -s ifconfig.me)"
+          echo "SSH Key Fingerprint:"
+          ssh-keygen -lf <(echo "${{ secrets.SSH_PRIVATE_KEY }}" | ssh-keygen -m PEM -f /dev/stdin -e -m PKCS8 2>/dev/null || 
+                          echo "${{ secrets.SSH_PRIVATE_KEY }}" | ssh-keygen -lf -)
           exit 1
         }
 
-        # 2. Proceed with deployment if SSH test passes
+        # 3. Proceed with deployment if SSH test passes
         echo -e "\n=== Starting Deployment ==="
         DEPLOY_DIR="mobypark-$(date +%Y%m%d%H%M%S)"
         
-        # 3. Copy files using rsync
+        # 4. Copy files using rsync with explicit username
         echo "Copying files to server using rsync..."
         rsync -avz -e "ssh -o StrictHostKeyChecking=no" \
           --exclude='.git' \
@@ -63,14 +67,14 @@ jobs:
           --exclude='.gitignore' \
           --exclude='.vscode' \
           --exclude='__pycache__' \
-          ./ $SERVER_USER@$SERVER_IP:~/$DEPLOY_DIR/ || {
+          ./ ubuntu-1056396@$SERVER_IP:~/$DEPLOY_DIR/ || {
           echo "Failed to copy files to server"
           exit 1
         }
 
-        # 4. Run deployment commands
+        # 5. Run deployment commands
         echo "Running deployment commands..."
-        ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP "
+        ssh -o StrictHostKeyChecking=no ubuntu-1056396@$SERVER_IP "
           set -e  # Exit on error
           
           echo 'Creating symlink...'
