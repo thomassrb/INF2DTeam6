@@ -164,23 +164,21 @@ jobs:
           # Show Python and pip versions
           python --version
           pip --version
+          pip list
           
-          # Verify database file was created
-          echo "Database file:"
-          ls -la /tmp/test_mobypark.db || echo "Database file not found"
+          # Start server in background with debug logging
+          nohup python -m uvicorn MobyPark.api.app:app --host 0.0.0.0 --port 8000 --log-level debug > server.log 2>&1 & 
           
-          # Start server with debug output
-          nohup python -m uvicorn MobyPark.api.app:app --host 0.0.0.0 --port 8000 --reload > server.log 2>&1 &
-          
-          echo "Waiting for server to start..."
+          # Give server time to start
           sleep 5
           
-          # Check if server is running
-          echo "Server status:"
-          ps aux | grep uvicorn
-          
-          echo "Server logs:"
+          # Show server logs
+          echo "Server logs after startup:"
           cat server.log
+          
+          # Check if server is running
+          echo "Checking server status..."
+          ps aux | grep uvicorn
           
           # Health check with verbose output
           echo "Testing server health..."
@@ -188,10 +186,6 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          # Show test database
-          echo "Test database location and content:"
-          ls -la /tmp/test_mobypark.db || true
-          
           # Run tests with increased verbosity
           python -m pytest -vvv --cov=MobyPark --cov-report=xml tests/
           
