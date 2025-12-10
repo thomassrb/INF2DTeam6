@@ -1,7 +1,7 @@
 import sqlite3
 from datetime import datetime
-from Models.ParkingLot import ParkingLot
-from Models.ParkingLotCoordinates import ParkingLotCoordinates
+from MobyPark.api.Models.ParkingLot import ParkingLot
+from MobyPark.api.Models.ParkingLotCoordinates import ParkingLotCoordinates
 
 class AccessParkingLots:
 

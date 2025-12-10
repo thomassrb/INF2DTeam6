@@ -2206,5 +2206,65 @@
     "role": "USER",
     "active": true,
     "created_at": "2025-11-19"
+  },
+  "b830e14a-b0a6-43d2-afa4-ae3e35451f49": {
+    "id": "265",
+    "username": "performanceuser",
+    "password": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+    "name": "Performance dhr",
+    "phone": "06123456578",
+    "email": "performance@example.com",
+    "birth_year": "1992",
+    "role": "USER",
+    "active": true,
+    "created_at": "2025-11-25"
+  },
+  "26e08bd9-7e9c-405e-a93a-cbc290230162": {
+    "id": "265",
+    "username": "performanceuser",
+    "password": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+    "name": "Performance dhr",
+    "phone": "06123456578",
+    "email": "performance@example.com",
+    "birth_year": "1992",
+    "role": "USER",
+    "active": true,
+    "created_at": "2025-11-25"
+  },
+  "b392f0e0-ad11-40b4-8394-61e470b09e99": {
+    "id": "265",
+    "username": "performanceuser",
+    "password": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+    "name": "Performance dhr",
+    "phone": "06123456578",
+    "email": "performance@example.com",
+    "birth_year": "1992",
+    "role": "USER",
+    "active": true,
+    "created_at": "2025-11-25"
+  },
+  "1d2c2a3f-ebe6-4403-8edb-a8915acc3367": {
+    "id": "265",
+    "username": "performanceuser",
+    "password": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+    "name": "Performance dhr",
+    "phone": "06123456578",
+    "email": "performance@example.com",
+    "birth_year": "1992",
+    "role": "USER",
+    "active": true,
+    "created_at": "2025-11-25"
+  },
+  "6a4afed3-560c-44fa-b3c4-f42a4c82d0d6": {
+    "id": "265",
+    "username": "performanceuser",
+    "password": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+    "name": "Performance dhr",
+    "phone": "06123456578",
+    "email": "performance@example.com",
+    "birth_year": "1992",
+    "role": "USER",
+    "active": true,
+    "created_at": "2025-11-25"
   }
 }

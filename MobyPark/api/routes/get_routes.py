@@ -1,10 +1,19 @@
 import re
-from app import access_vehicles, access_parkinglots, access_payments, access_reservations, access_sessions, access_users
-from authentication import extract_bearer_token, login_required, roles_required
-import session_calculator as sc
-import authentication
 
-from Models.User import User
+from MobyPark.api.app import (
+    access_vehicles,
+    access_parkinglots,
+    access_payments,
+    access_reservations,
+    access_sessions,
+    access_users,
+)
+from MobyPark.api.authentication import extract_bearer_token, login_required, roles_required
+from MobyPark.api import session_calculator as sc
+from MobyPark.api import authentication
+
+from MobyPark.api.Models.User import User
+
 
 
 class get_routes:
@@ -64,13 +73,10 @@ class get_routes:
 
 
     def _handle_index(self):
-        self.send_json_response(200, "text/html; charset=utf-8", 
-            "<html><head><title>MobyPark API</title></head>"
-            "<body>"
-            "<h1>MobyPark API is running</h1>"
-            "<p>Try endpoints like <code>/parking-lots</code>, <code>/profile</code> (requires Authorization), etc.</p>"
-            "</body></html>"
-        )
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write("👍 200 OK - MobyPark API is running".encode('utf-8'))
 
 
     def _handle_favicon(self):

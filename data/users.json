@@ -2986,5 +2986,17 @@
         "role": "USER",
         "active": true,
         "created_at": "2025-11-19"
+    },
+    {
+        "id": "265",
+        "username": "performanceuser",
+        "password": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+        "name": "Performance dhr",
+        "phone": "06123456578",
+        "email": "performance@example.com",
+        "birth_year": "1992",
+        "role": "USER",
+        "active": true,
+        "created_at": "2025-11-25"
     }
 ]

@@ -1,7 +1,7 @@
 from datetime import datetime
-from Models.Vehicle import Vehicle
-from Models.ParkingLot import ParkingLot
-from Models.User import User
+from MobyPark.api.Models.Vehicle import Vehicle
+from MobyPark.api.Models.ParkingLot import ParkingLot
+from MobyPark.api.Models.User import User
 
 class Reservation:
 

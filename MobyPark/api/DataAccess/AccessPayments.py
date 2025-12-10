@@ -1,11 +1,11 @@
 import sqlite3
-from DBConnection import DBConnection
-from Models.Payment import Payment
-from Models.TransanctionData import TransactionData
-from Models.User import User
-from DataAccess.AccessUsers import AccessUsers
-from DataAccess.AccessParkingLots import AccessParkingLots
-from DataAccess.AccessSessions import AccessSessions
+from MobyPark.api.DBConnection import DBConnection
+from MobyPark.api.Models.Payment import Payment
+from MobyPark.api.Models.TransanctionData import TransactionData
+from MobyPark.api.Models.User import User
+from MobyPark.api.DataAccess.AccessUsers import AccessUsers
+from MobyPark.api.DataAccess.AccessParkingLots import AccessParkingLots
+from MobyPark.api.DataAccess.AccessSessions import AccessSessions
 from datetime import datetime
 
 class AccessPayments:

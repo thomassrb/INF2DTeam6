@@ -1,9 +1,9 @@
 import sqlite3
-from DBConnection import DBConnection
+from MobyPark.api.DBConnection import DBConnection
 from datetime import datetime
-from .AccessUsers import AccessUsers
-from Models.Vehicle import Vehicle
-from Models.User import User
+from MobyPark.api.DataAccess.AccessUsers import AccessUsers
+from MobyPark.api.Models.Vehicle import Vehicle
+from MobyPark.api.Models.User import User
 
 class AccessVehicles:
 

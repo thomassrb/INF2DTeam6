@@ -4,13 +4,16 @@ on:
   push:
     branches:
       - main
+      - ci-testbranch
   workflow_dispatch:
-
+      
 jobs:
-  pipeline-job-definition:
+  tests:
     runs-on: ubuntu-latest
+
     env:
       PYTHONPATH: .:./MobyPark:./MobyPark/api
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -23,87 +26,18 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest requests bcrypt
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pytest uvicorn requests bcrypt
 
-      - name: Start server
-        working-directory: MobyPark
+      - name: Debug show login snippet
         run: |
-          # Start server in background and log output
-          python -u api/server.py > server.log 2>&1 &
-          SERVER_PID=$!
-          echo "Started server.py with PID $SERVER_PID"
+          sed -n '1,160p' MobyPark/api/app.py
 
-          # Wait for server to be ready, but also check if it crashes
-          for i in {1..30}; do
-            if curl -sS http://127.0.0.1:8000/index >/dev/null 2>&1; then
-              echo "Server is up"
-              exit 0
-            fi
-
-            # If process died, show log and fail immediately
-            if ! ps -p $SERVER_PID >/dev/null 2>&1; then
-              echo "Server process died before we could connect"
-              echo "==== server.log ===="
-              cat server.log || true
-              echo "pipeline failed: server crashed" > result.txt
-              exit 1
-            fi
-
-            echo "waiting for server..."
-            sleep 1
-          done
-
-          echo "Server did not become ready in time"
-          echo "==== server.log ===="
-          cat server.log || true
-          echo "pipeline failed: server did not start in time" > result.txt
-          exit 1
-
-      - name: Run unit tests
+      - name: Run all tests (same as local)
         run: |
-          set +e
-          pytest -v tests/unit
-          STATUS=$?
-          set -e
-          if [ $STATUS -ne 0 ]; then
-            echo "pipeline failed: some unit tests did not pass" > result.txt
-            exit 1
-          fi
-
-      - name: Run endpoint tests
+          python -m pytest -vv tests
+          
+      - name: Notify Uptime Kuma (tests success)
+        if: ${{ success() }}
         run: |
-          set +e
-          pytest -v tests/e2e
-          STATUS=$?
-          set -e
-          if [ $STATUS -ne 0 ]; then
-            echo "pipeline failed: some endpoint tests did not pass" > result.txt
-            exit 1
-          fi
-
-      - name: Run integration tests
-        run: |
-          set +e
-          pytest -v tests/integration
-          STATUS=$?
-          set -e
-          if [ $STATUS -ne 0 ]; then
-            echo "pipeline failed: some integration tests did not pass" > result.txt
-            exit 1
-          fi
-
-      - name: Upload server log
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: server-log
-          path: MobyPark/server.log
-          if-no-files-found: warn
-
-      - name: Upload failure reason
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: failure-reason
-          path: MobyPark/result.txt
-          if-no-files-found: ignore
+          curl -fsS --retry 3 "https://team6.hoofr.dev/api/push/sJnSlUyzvb?status=up&msg=OK&ping="

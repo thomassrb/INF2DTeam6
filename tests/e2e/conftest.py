@@ -2,14 +2,18 @@ import os
 import subprocess
 import sys
 import time
+import signal
 from pathlib import Path
 
 import pytest
 import requests
 
 BASE_URL = os.environ.get("BASE_URL", "http://localhost:8000")
-SERVER_ENTRY = Path(__file__).resolve().parents[2] / "MobyPark" / "api" / "server.py" # verkeerd path..
-DATA_DIR = Path(__file__).resolve().parents[2] / "MobyPark-api-data"
+APP_MODULE = "MobyPark.api.app:app"
+TEST_DATA_DIR = Path(__file__).resolve().parents[2] / "test_data"
+TEST_DB_PATH = TEST_DATA_DIR / "test.db"
+
+TEST_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 #  ---
 def wait_for_server(url: str, timeout_sec: int = 20) -> None:
@@ -28,26 +32,35 @@ def wait_for_server(url: str, timeout_sec: int = 20) -> None:
 
 @pytest.fixture(scope="session", autouse=True)
 def server_process():
-    # API starten als subprocess op de achtergrond
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    (DATA_DIR / "pdata").mkdir(parents=True, exist_ok=True)
-
     env = os.environ.copy()
-    env["MOBYPARK_DATA_DIR"] = str(DATA_DIR)
-
+    env["MOBYPARK_DB_DIR"] = str(TEST_DATA_DIR)
+    
     proc = subprocess.Popen(
-        [sys.executable, "-u", str(SERVER_ENTRY)],
+        [
+            sys.executable, "-m", "uvicorn",
+            "--host", "0.0.0.0",
+            "--port", "8000",
+            "--reload",
+            APP_MODULE
+        ],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
-        cwd=str(SERVER_ENTRY.parent),
         env=env,
     )
+    
     try:
         wait_for_server(f"{BASE_URL}/")
         yield proc
     finally:
-        # Terminate de server
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        
+        if TEST_DB_PATH.exists():
+            os.remove(TEST_DB_PATH)
         proc.terminate()
         try:
             proc.wait(timeout=5)
