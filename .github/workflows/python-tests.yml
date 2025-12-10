@@ -9,6 +9,13 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+
+    env:
+      # So imports like "from MobyPark.api.app import app" work
+      PYTHONPATH: .:./MobyPark:./MobyPark/api
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+      TESTING: "True"
+
     services:
       postgres:
         image: postgres:13
@@ -23,44 +30,42 @@ jobs:
           --health-retries 5
 
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        if [ -f test-requirements.txt ]; then pip install -r test-requirements.txt; fi
-    
-    - name: Install additional dependencies
-      run: |
-        pip install uvicorn
-        pip install -e .
+      - uses: actions/checkout@v3
 
-    - name: Start server in background
-      env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-        TESTING: "True"
-      run: |
-        uvicorn MobyPark.api.app:app --host 0.0.0.0 --port 8000 &
-        echo "Waiting for server to start..."
-        sleep 5
-        
-    - name: Run tests
-      env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-        TESTING: "True"
-      run: |
-        python -m pytest -v
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-    - name: Upload test results
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-results
-        path: test-results.xml
-        if-no-files-found: ignore
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          if [ -f test-requirements.txt ]; then pip install -r test-requirements.txt; fi
+          pip install uvicorn
+
+      # (Optional) create test_db database if your code doesn't auto-create it
+      - name: Create test database
+        run: |
+          psql -h localhost -U postgres -c "CREATE DATABASE test_db;" || echo "DB already exists"
+        env:
+          PGPASSWORD: postgres
+
+      - name: Start server in background
+        run: |
+          uvicorn MobyPark.api.app:app --host 0.0.0.0 --port 8000 &
+          echo "Waiting for server to start..."
+          sleep 5
+
+      - name: Run tests
+        run: |
+          python -m pytest -v --junitxml=test-results.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results.xml
+          if-no-files-found: ignore
+
