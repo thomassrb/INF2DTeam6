@@ -47,11 +47,6 @@ jobs:
           echo "1. SSH key authentication failed"
           echo "2. Server firewall blocking port 22"
           echo "3. SSH service not running"
-          echo -e "\n=== Debug Info ==="
-          echo "Current public IP: $(curl -s ifconfig.me)"
-          echo "SSH Key Fingerprint:"
-          ssh-keygen -lf <(echo "${{ secrets.SSH_PRIVATE_KEY }}" | ssh-keygen -m PEM -f /dev/stdin -e -m PKCS8 2>/dev/null || 
-                          echo "${{ secrets.SSH_PRIVATE_KEY }}" | ssh-keygen -lf -)
           exit 1
         }
 
