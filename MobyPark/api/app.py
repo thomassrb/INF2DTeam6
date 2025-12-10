@@ -15,17 +15,17 @@ from pydantic import BaseModel
 
 # Locale imports
 from . import authentication, session_manager
-from MobyPark.api.DBConnection import DBConnection
-from MobyPark.api.DataAccess.AccessParkingLots import AccessParkingLots
-from MobyPark.api.DataAccess.AccessPayments import AccessPayments
-from MobyPark.api.DataAccess.AccessReservations import AccessReservations
-from MobyPark.api.DataAccess.AccessSessions import AccessSessions
-from MobyPark.api.DataAccess.AccessUsers import AccessUsers
-from MobyPark.api.DataAccess.AccessVehicles import AccessVehicles
-from MobyPark.api.Models.ParkingLot import ParkingLot
-from MobyPark.api.Models.ParkingLotCoordinates import ParkingLotCoordinates
-from MobyPark.api.Models.User import User
-from MobyPark.api.storage_utils import (
+from .DBConnection import DBConnection
+from .DataAccess.AccessParkingLots import AccessParkingLots
+from .DataAccess.AccessPayments import AccessPayments
+from .DataAccess.AccessReservations import AccessReservations
+from .DataAccess.AccessSessions import AccessSessions
+from .DataAccess.AccessUsers import AccessUsers
+from .DataAccess.AccessVehicles import AccessVehicles
+from .Models.ParkingLot import ParkingLot
+from .Models.ParkingLotCoordinates import ParkingLotCoordinates
+from .Models.User import User
+from .storage_utils import (
     load_json, save_user_data, load_parking_lot_data, load_reservation_data,
     save_parking_lot_data, save_reservation_data, load_vehicles_data,
     save_vehicles_data, load_user_data, load_payment_data, save_payment_data

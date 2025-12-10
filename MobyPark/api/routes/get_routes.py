@@ -1,6 +1,6 @@
 import re
 
-from MobyPark.api.app import (
+from ..app import (
     access_vehicles,
     access_parkinglots,
     access_payments,
@@ -8,11 +8,11 @@ from MobyPark.api.app import (
     access_sessions,
     access_users,
 )
-from MobyPark.api.authentication import extract_bearer_token, login_required, roles_required
-from MobyPark.api import session_calculator as sc
-from MobyPark.api import authentication
+from ..authentication import extract_bearer_token, login_required, roles_required
+from .. import session_calculator as sc
+from .. import authentication
 
-from MobyPark.api.Models.User import User
+from ..Models.User import User
 
 
 
