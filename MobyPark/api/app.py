@@ -1,19 +1,20 @@
-from typing import Optional, Dict, Any
-import os
-import sys
-import pathlib
-from .storage_utils import load_json, save_user_data
+# Standaard imports
 import hashlib
-from MobyPark.api import authentication
-project_root = str(pathlib.Path(__file__).resolve().parent.parent.parent)
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-from typing import Any
-from fastapi import FastAPI, Depends, HTTPException, Request, status, responses
+import glob as _glob
+import os
+import pathlib
+import sys
+from datetime import datetime
+from typing import Any, Dict, Optional
+
+# 3rd part
+from fastapi import Depends, FastAPI, HTTPException, Request, responses, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse, JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
-from fastapi.responses import JSONResponse
+
+# Locale imports
+from MobyPark.api import authentication, session_manager
 from MobyPark.api.DBConnection import DBConnection
 from MobyPark.api.DataAccess.AccessParkingLots import AccessParkingLots
 from MobyPark.api.DataAccess.AccessPayments import AccessPayments
@@ -21,17 +22,24 @@ from MobyPark.api.DataAccess.AccessReservations import AccessReservations
 from MobyPark.api.DataAccess.AccessSessions import AccessSessions
 from MobyPark.api.DataAccess.AccessUsers import AccessUsers
 from MobyPark.api.DataAccess.AccessVehicles import AccessVehicles
-from MobyPark.api.storage_utils import load_parking_lot_data,load_reservation_data,save_parking_lot_data,save_reservation_data,load_vehicles_data,save_vehicles_data,load_user_data,save_user_data,load_payment_data,save_payment_data
-
-from MobyPark.api.Models.User import User
 from MobyPark.api.Models.ParkingLot import ParkingLot
 from MobyPark.api.Models.ParkingLotCoordinates import ParkingLotCoordinates
-from MobyPark.api import session_manager
-from typing import Optional
+from MobyPark.api.Models.User import User
+from MobyPark.api.storage_utils import (
+    load_json, save_user_data, load_parking_lot_data, load_reservation_data,
+    save_parking_lot_data, save_reservation_data, load_vehicles_data,
+    save_vehicles_data, load_user_data, load_payment_data, save_payment_data
+)
+
+# project root path
+project_root = str(pathlib.Path(__file__).resolve().parent.parent.parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from MobyPark.middleware.performance_tracer import PerformanceTracer
 import os
 get_current_user = authentication.get_current_user 
 require_roles = authentication.require_roles
-# Gebruik dezelfde data directory als de rest van het project
 DATA_DIR = (
     os.environ.get("MOBYPARK_DB_DIR")
     or os.environ.get("MOBYPARK_DATA_DIR")
@@ -48,7 +56,12 @@ access_sessions = AccessSessions(conn=connection)
 access_users = AccessUsers(conn=connection)
 access_vehicles = AccessVehicles(conn=connection)
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from middleware.performance_tracer import PerformanceTracer
+
 app = FastAPI(title="MobyPark API", version="1.0.0")
+
+app.add_middleware(PerformanceTracer)
 
 app.add_middleware(
     CORSMiddleware,
@@ -61,7 +74,6 @@ app.add_middleware(
 from fastapi.responses import JSONResponse
 from typing import Any
 
-# Simple in-memory index so we can reliably detect active sessions per lot+license plate
 ACTIVE_SESSION_KEYS: set[str] = set()
 
 BILLING_DATA: dict[str, list[dict]] = {}
@@ -398,7 +410,6 @@ async def create_parking_lot(
             },
         )
 
-    # Use the JSON-based storage that the rest of the code (reservations/billing) already uses
     parking_lots = load_parking_lot_data()
 
     # Maak een nieuw uniek ID
@@ -419,7 +430,6 @@ async def create_parking_lot(
 
     save_parking_lot_data(parking_lots)
 
-    # Tests use response.json()["id"], so return the full lot dict
     return parking_lots[lot_id]
 
 
@@ -502,7 +512,6 @@ async def start_session_for_lot(
 
     lp = (body.license_plate or body.licenseplate or "").strip()
     if not lp:
-        # Alt-flow test expects 400 when license plate missing
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Missing or invalid field: license_plate",
@@ -511,14 +520,12 @@ async def start_session_for_lot(
     username = _user_attr(user, "username")
     key = f"{lid}:{lp}"
 
-    # If there is already an active session for this lot+plate => 409 (this is test_session_start_stop_flow)
     if key in ACTIVE_SESSION_KEYS:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot start a session when another session for this license plate is already started.",
         )
 
-    # Try to load existing sessions from disk, but never crash if something is off
     try:
         sessions = load_json(f"pdata/p{lid}-sessions.json")
         if not isinstance(sessions, dict):
@@ -574,7 +581,6 @@ async def stop_session_for_lot(
     key = f"{lid}:{lp}"
     username = _user_attr(user, "username")
 
-    # Try to load sessions; if it fails, we still try to behave gracefully
     try:
         sessions = load_json(f"pdata/p{lid}-sessions.json")
         if not isinstance(sessions, dict):
@@ -584,7 +590,6 @@ async def stop_session_for_lot(
     except Exception:
         sessions = {}
 
-    # Find active session in file (best effort)
     active_sid = None
     for sid, sess in sessions.items():
         if (sess.get("licenseplate") == lp or sess.get("license_plate") == lp) and not sess.get("stopped"):
@@ -603,21 +608,17 @@ async def stop_session_for_lot(
                 "started": sess.get("started"),
                 "stopped": sess.get("stopped"),
             },
-            "amount": 0.0,  # tests only check presence, not value
+            "amount": 0.0,
         }
         BILLING_DATA.setdefault(username, []).append(billing_item)
         return {"message": f"Session stopped for: {lp}", "session_id": active_sid}
 
-    # No active session in file.
-    # If we never saw a start for this key => 409 (true "no session" situation)
     if key not in ACTIVE_SESSION_KEYS:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot stop a session when there is no session for this license plate.",
         )
 
-    # We *have* seen a start in-memory but the file does not reflect it (edge cases).
-    # For the billing happy-path test, we treat this as success and still add a billing item.
     ACTIVE_SESSION_KEYS.discard(key)
     billing_item = {
         "session": {
@@ -654,7 +655,6 @@ async def list_parking_lot_sessions(lid: str, user: User = Depends(get_current_u
 async def list_reservations(user: Any = Depends(get_current_user)):
     reservations = load_reservation_data()
 
-    # Normalise to dict: {id: reservation_dict}
     if isinstance(reservations, list):
         tmp = {}
         for res in reservations:
@@ -670,10 +670,8 @@ async def list_reservations(user: Any = Depends(get_current_user)):
     username = _user_attr(user, "username")
 
     if role == "ADMIN":
-        # Tests expect something JSON-serialisable; dict is fine
         return reservations
 
-    # Normal user: only own reservations
     user_reservations = {
         rid: res for rid, res in reservations.items()
         if isinstance(res, dict) and res.get("user") == username
@@ -689,12 +687,9 @@ async def create_reservation(
     reservations = load_reservation_data()
     parking_lots = load_parking_lot_data()
 
-    # Sometimes parking_lots may be a list (from DB) – convert to dict that
-    # matches what the tests expect: {id: lot_dict}
     if isinstance(parking_lots, list):
         parking_lots = {pl.get("id"): pl for pl in parking_lots if isinstance(pl, dict)}
 
-    # Alt-flow: parking lot does not exist → 404
     if body.parkinglot not in parking_lots:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -706,19 +701,16 @@ async def create_reservation(
 
     data: Dict[str, Any] = body.dict()
 
-    # Normalise start/end fields (tests use start_time / end_time)
     if not data.get("start") and data.get("start_time"):
         data["start"] = data["start_time"]
     if not data.get("end") and data.get("end_time"):
         data["end"] = data["end_time"]
 
-    # Helper for user data (dict or User model)
     def _u(attr: str) -> Optional[str]:
         if isinstance(user, dict):
             return user.get(attr)
         return getattr(user, attr, None)
 
-    # Ownership rules
     if _u("role") != "ADMIN":
         if not data.get("user"):
             data["user"] = _u("username")
@@ -731,16 +723,13 @@ async def create_reservation(
         if not data.get("user"):
             data["user"] = None
 
-    # Normalise license plate key
     if "license_plate" not in data and data.get("licenseplate"):
         data["license_plate"] = data["licenseplate"]
 
-    # Create reservation id and persist
     rid = str(len(reservations) + 1)
     data["id"] = rid
     reservations[rid] = data
 
-    # Increase reserved count on lot, but be robust
     lot = parking_lots.get(data["parkinglot"])
     if isinstance(lot, dict):
         lot["reserved"] = lot.get("reserved", 0) + 1
@@ -784,7 +773,6 @@ async def create_reservation(
 async def get_reservation_details(rid: str, user: Any = Depends(get_current_user)):
     reservations = load_reservation_data()
 
-    # Normalise to dict: {id: reservation_dict}
     if isinstance(reservations, list):
         tmp = {}
         for res in reservations:
@@ -847,7 +835,6 @@ async def delete_reservation(rid: str, user: Any = Depends(get_current_user)):
     reservations = load_reservation_data()
     parking_lots = load_parking_lot_data()
 
-    # Normalise reservations into a dict: {id: reservation_dict}
     if isinstance(reservations, list):
         tmp: dict[str, dict] = {}
         for res in reservations:
@@ -870,7 +857,6 @@ async def delete_reservation(rid: str, user: Any = Depends(get_current_user)):
     role = _user_attr(user, "role")
     username = _user_attr(user, "username")
 
-    # Only owner or admin may delete
     if role != "ADMIN" and res.get("user") != username:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -878,11 +864,9 @@ async def delete_reservation(rid: str, user: Any = Depends(get_current_user)):
         )
 
     pid = res.get("parkinglot")
-    # Be tolerant: only decrement if it makes sense, never 400 here
     if pid and pid in parking_lots and parking_lots[pid].get("reserved", 0) > 0:
         parking_lots[pid]["reserved"] -= 1
 
-    # Remove reservation and persist
     del reservations[rid]
     save_reservation_data(reservations)
     save_parking_lot_data(parking_lots)
@@ -933,7 +917,6 @@ async def list_vehicles(user: User = Depends(get_current_user)):
     try:
         vehicles_data = load_vehicles_data()
     except Exception:
-        # If file is missing/corrupt, behave as "no vehicles" instead of 500
         vehicles_data = {}
 
     username = user.get("username") if isinstance(user, dict) else getattr(user, "username", None)
@@ -945,7 +928,6 @@ async def list_vehicles(user: User = Depends(get_current_user)):
             all_vehicles.extend(user_v_list)
         return all_vehicles
 
-    # Normal user: only their own vehicles
     return vehicles_data.get(username, [])
 
 
@@ -963,14 +945,12 @@ async def create_vehicle(body: VehicleCreate, user: User = Depends(get_current_u
 
     vehicles = load_vehicles_data()
 
-    # user from session_manager is stored as a dict
     username = user.get("username") if isinstance(user, dict) else getattr(user, "username", None)
     if not username:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user in session")
 
     user_vehicles = vehicles.get(username, [])
 
-    # Duplicate protection: same user + same licenseplate
     for v in user_vehicles:
         lp = v.get("license_plate") or v.get("licenseplate")
         if lp == body.licenseplate:
@@ -992,7 +972,6 @@ async def create_vehicle(body: VehicleCreate, user: User = Depends(get_current_u
     vehicles[username] = user_vehicles
     save_vehicles_data(vehicles)
 
-    # Shape expected by tests: response.json()["vehicle"]["id"]
     return {"vehicle": vehicle}
 
 
@@ -1021,7 +1000,6 @@ async def get_vehicle_details(
     found_vehicle = None
     owner_username = None
 
-    # vehicles_data may be dict(username -> list[vehicle]) or a plain list
     if isinstance(vehicles_data, dict):
         for uname, vlist in vehicles_data.items():
             if not isinstance(vlist, list):
@@ -1041,7 +1019,6 @@ async def get_vehicle_details(
                 continue
             if v.get("id") == vid:
                 found_vehicle = v
-                # no clear owner; assume current user
                 owner_username = requester_username
                 break
 
@@ -1051,7 +1028,6 @@ async def get_vehicle_details(
             detail="Vehicle not found",
         )
 
-    # Permission check
     if requester_role != "ADMIN":
         if owner_username and owner_username != requester_username:
             raise HTTPException(
@@ -1081,7 +1057,6 @@ async def update_vehicle(
     owner_username = None
     idx = None
 
-    # Find vehicle in any user's list
     for uname, vlist in vehicles.items():
         if not isinstance(vlist, list):
             continue
@@ -1137,7 +1112,6 @@ async def delete_vehicle(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vehicle not found")
 
     del vehicles[owner_username][idx]
-    # Clean up empty lists just in case
     if not vehicles[owner_username]:
         vehicles[owner_username] = []
 
@@ -1332,17 +1306,30 @@ async def get_billing(user: Any = Depends(get_current_user)):
 
 @app.post("/debug/reset")
 async def debug_reset(user: User = Depends(require_roles("ADMIN"))):
-    """Dangerous debug endpoint that clears all user, parking, reservation, payment, vehicle data, and sessions."""
-    from .storage_utils import save_user_data, save_parking_lot_data, save_reservation_data, save_payment_data, save_vehicles_data
-    from . import session_manager as sm
-
+    """Dangerous debug endpoint that clears all user, parking, reservation, 
+    payment, vehicle data, and sessions, including in-memory state.
+    """
+    
     save_user_data([])
     save_parking_lot_data({})
     save_reservation_data({})
     save_payment_data([])
     save_vehicles_data({})
-
-    return {"Server message": "All data reset successfully"}
+    
+    global BILLING_DATA, ACTIVE_SESSION_KEYS
+    BILLING_DATA.clear()
+    ACTIVE_SESSION_KEYS.clear()
+    
+    try:
+        for session_file in _glob.glob("pdata/p*-sessions.json"):
+            try:
+                os.remove(session_file)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    
+    return {"status": "success", "message": "All data and sessions have been reset"}
 
 @app.get("/billing/{username}")
 async def get_user_billing(username: str, user: Any = Depends(require_roles("ADMIN"))):
