@@ -35,4 +35,8 @@ jobs:
       - name: Run all tests (same as local)
         run: |
           python -m pytest -vv tests
-
+          
+      - name: Notify Uptime Kuma (tests success)
+        if: ${{ success() }}
+        run: |
+          curl -fsS --retry 3 "${{ secrets.UPTIME_KUMA_PUSH_URL }}?status=up&msg=Tests+OK"
