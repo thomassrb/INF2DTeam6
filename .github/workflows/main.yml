@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - ci-testbranch
   workflow_dispatch:
       
 jobs:
