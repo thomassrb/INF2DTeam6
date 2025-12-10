@@ -19,18 +19,45 @@ jobs:
       with:
         ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
         
-    - name: Copy files and deploy
-      env:
-        SERVER_IP: ${{ secrets.SERVER_IP }}
-        SERVER_USER: ${{ secrets.SERVER_USER }}
+    - name: Add known hosts
       run: |
-        # Make the deploy script executable
-        chmod +x deploy.sh
+        mkdir -p ~/.ssh
+        ssh-keyscan -H 145.24.223.87 >> ~/.ssh/known_hosts
+        chmod 600 ~/.ssh/known_hosts
         
-        # Run the deployment script
-        ./deploy.sh
+    - name: Deploy to server
+      env:
+        SERVER_IP: 145.24.223.87
+        SERVER_USER: ubuntu-1056396
+      run: |
+        # Create deployment directory
+        DEPLOY_DIR="mobypark-$(date +%Y%m%d%H%M%S)"
         
-        # Clean up old deployments (keep last 5)
+        # Copy files using SCP
+        echo "Copying files to server..."
+        scp -r . $SERVER_USER@$SERVER_IP:~/$DEPLOY_DIR
+        
+        # Run deployment commands
+        echo "Running deployment..."
         ssh $SERVER_USER@$SERVER_IP "
-          ls -dt /var/www/mobypark/2* | tail -n +6 | xargs -r rm -rf
+          # Create symlink to the new deployment
+          ln -nfs ~/$DEPLOY_DIR ~/mobypark-current
+          
+          # Navigate to the deployment directory
+          cd ~/mobypark-current
+          
+          # Make deploy script executable and run it
+          if [ -f deploy.sh ]; then
+            chmod +x deploy.sh
+            ./deploy.sh
+          else
+            echo "Error: deploy.sh not found!"
+            exit 1
+          fi
+          
+          # Clean up old deployments (keep last 5)
+          echo 'Cleaning up old deployments...'
+          ls -dt ~/mobypark-* 2>/dev/null | tail -n +6 | xargs -r rm -rf
         "
+        
+        echo "Deployment completed successfully!"
