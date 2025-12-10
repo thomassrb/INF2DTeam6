@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 
 # Locale imports
-from MobyPark.api import authentication, session_manager
+from . import authentication, session_manager
 from MobyPark.api.DBConnection import DBConnection
 from MobyPark.api.DataAccess.AccessParkingLots import AccessParkingLots
 from MobyPark.api.DataAccess.AccessPayments import AccessPayments
