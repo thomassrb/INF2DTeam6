@@ -42,10 +42,12 @@ jobs:
           from MobyPark.api.DBConnection import DBConnection
           import os
           
-          # Ensure we're using the test database
-          os.environ['DATABASE_URL'] = 'sqlite:////tmp/test_mobypark.db'
+          # Set the database path
+          db_path = '/tmp/test_mobypark.db'
+          os.environ['DATABASE_URL'] = f'sqlite:///{db_path}'
           
-          conn = DBConnection()
+          # Initialize DBConnection with the path
+          conn = DBConnection(database_path=db_path)
           cursor = conn.cursor
           
           # Create users table
@@ -82,6 +84,7 @@ jobs:
           
           conn.connection.commit()
           print('Database initialized successfully')
+          print(f'Database file created at: {db_path}')
           "
 
       - name: Start FastAPI server with debug
