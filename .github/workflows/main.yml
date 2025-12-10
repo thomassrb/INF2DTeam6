@@ -13,6 +13,7 @@ jobs:
 
     env:
       PYTHONPATH: .:./MobyPark:./MobyPark/api
+      DATABASE_URL: sqlite:///home/runner/work/INF2DTeam6/INF2DTeam6/MobyPark/api/data/MobyParkData.db
 
     steps:
       - name: Checkout repository
@@ -27,19 +28,30 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install pytest uvicorn requests bcrypt
+          pip install pytest pytest-cov requests httpx pytest-asyncio
 
-      - name: Debug show login snippet
+      - name: Start FastAPI server in background
         run: |
-          sed -n '1,160p' MobyPark/api/app.py
+          python -m uvicorn MobyPark.api.app:app --host 0.0.0.0 --port 8000 &
+          echo "Server starting in background..."
+          sleep 5  # Give server time to start
+          # Simple health check
+          curl --retry 5 --retry-delay 2 --retry-connrefused http://localhost:8000/ || true
 
-      - name: Run all tests (same as local)
+      - name: Run tests with coverage
         run: |
-          python -m pytest -vv tests
-          
+          python -m pytest -vv --cov=MobyPark --cov-report=xml tests/
+          # Kill the server after tests
+          pkill -f "uvicorn MobyPark.api.app:app"
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+
       - name: Notify Uptime Kuma (tests success)
         if: ${{ success() }}
         continue-on-error: true
         run: |
           curl --retry 3 --max-time 60 --connect-timeout 10 "https://team6.hoofr.dev/api/push/sJnSlUyzvb?status=up&msg=OK&ping="
-
