@@ -13,7 +13,9 @@ jobs:
 
     env:
       PYTHONPATH: .:./MobyPark:./MobyPark/api
-      DATABASE_URL: sqlite:///home/runner/work/INF2DTeam6/INF2DTeam6/MobyPark/api/data/MobyParkData.db
+      DATABASE_URL: sqlite:///tmp/test_mobypark.db
+      PYTHONUNBUFFERED: 1
+      LOG_LEVEL: DEBUG
 
     steps:
       - name: Checkout repository
@@ -30,19 +32,47 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest pytest-cov requests httpx pytest-asyncio
 
-      - name: Start FastAPI server in background
+      - name: Start FastAPI server with debug
         run: |
-          python -m uvicorn MobyPark.api.app:app --host 0.0.0.0 --port 8000 &
-          echo "Server starting in background..."
-          sleep 5  # Give server time to start
-          # Simple health check
-          curl --retry 5 --retry-delay 2 --retry-connrefused http://localhost:8000/ || true
+          # Show Python and pip versions
+          python --version
+          pip --version
+          
+          # Create directory for test database
+          mkdir -p /tmp
+          
+          # Start server with debug output
+          nohup python -m uvicorn MobyPark.api.app:app --host 0.0.0.0 --port 8000 --reload > server.log 2>&1 &
+          
+          echo "Waiting for server to start..."
+          sleep 5
+          
+          # Check if server is running
+          echo "Server status:"
+          ps aux | grep uvicorn
+          
+          echo "Server logs:"
+          cat server.log
+          
+          # Health check with verbose output
+          echo "Testing server health..."
+          curl -v http://localhost:8000/ || true
 
       - name: Run tests with coverage
         run: |
-          python -m pytest -vv --cov=MobyPark --cov-report=xml tests/
-          # Kill the server after tests
-          pkill -f "uvicorn MobyPark.api.app:app"
+          # Show test database
+          echo "Test database location:"
+          ls -la /tmp/test_mobypark.db || true
+          
+          # Run tests with increased verbosity
+          python -m pytest -vvv --cov=MobyPark --cov-report=xml tests/
+          
+          # Show server logs if tests fail
+          echo "Final server logs:"
+          cat server.log || true
+          
+          # Clean up
+          pkill -f "uvicorn MobyPark.api.app:app" || true
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
