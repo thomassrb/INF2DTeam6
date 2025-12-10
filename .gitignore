@@ -1,5 +1,15 @@
 # Data
 MobyPark/api/data/
+MobyPark-api-data/pdata/MobyParkData.db
+MobyPark-api-data/MobyParkData.db
+MobyPark-api-data/corrupt_vehicles.json
+MobyPark-api-data/MobyParkData.db
+MobyPark-api-data/corrupt_vehicle_logs.txt
+MobyPark-api-data/corrupt_users.json
+MobyPark-api-data/corrupt_user_logs.txt
+MobyPark-api-data/corrupt_payment_logs.txt
+MobyPark-api-data/MobyParkData.db
+MobyPark-api-data/MobyParkData.db
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
