@@ -22,8 +22,10 @@ jobs:
     - name: Add known hosts
       run: |
         mkdir -p ~/.ssh
-        ssh-keyscan -H 145.24.223.87 >> ~/.ssh/known_hosts
+        touch ~/.ssh/known_hosts
         chmod 600 ~/.ssh/known_hosts
+        ssh-keyscan -v -H 145.24.223.87 >> ~/.ssh/known_hosts 2>&1 || echo "ssh-keyscan failed, but continuing..."
+        cat ~/.ssh/known_hosts
         
     - name: Deploy to server
       env:
