@@ -21,11 +21,19 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Add known hosts
+      - name: Add known hosts (non-fatal) + check port 22
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          ssh-keyscan -H "$SERVER_IP" >> ~/.ssh/known_hosts
+      
+          echo "Checking TCP 22 reachability..."
+          timeout 5 bash -c 'cat < /dev/null > /dev/tcp/'"$SERVER_IP"'/22' \
+            && echo "Port 22 reachable" \
+            || (echo "Port 22 NOT reachable from GitHub runner" && exit 1)
+          ssh-keyscan -T 5 -H "$SERVER_IP" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          echo "known_hosts updated:"
+          tail -n 5 ~/.ssh/known_hosts
 
       - name: Upload code (rsync)
         run: |
