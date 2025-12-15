@@ -7,6 +7,9 @@ class DBConnection:
         self.connection.row_factory = sqlite3.Row
         self.cursor = self.connection.cursor()
         
+        self.cursor.execute("PRAGMA foreign_keys = ON")
+        self.connection.commit()
+        
         self.create_database_and_tables()
 
 
@@ -25,23 +28,23 @@ class DBConnection:
             active BOOL NOT NULL
         );
 
-        CREATE TABLE IF NOT EXISTS parking_lots(
-            id INTEGER PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            location VARCHAR(255) NOT NULL,
-            address VARCHAR(255) NOT NULL UNIQUE,
+        CREATE TABLE IF NOT EXISTS parking_lots (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            location TEXT,
+            address TEXT,
             capacity INTEGER NOT NULL,
-            reserved INTEGER NOT NULL,
-            tariff DECIMAL(10,2) NOT NULL,
-            daytariff DECIMAL(10,2) NOT NULL,
-            created_at DATETIME NOT NULL
+            reserved INTEGER DEFAULT 0,
+            tariff REAL NOT NULL,
+            daytariff REAL NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
-        CREATE TABLE IF NOT EXISTS parking_lots_coordinates(
-            id INTEGER PRIMARY KEY,
-            lng FLOAT NOT NULL,
-            lat FLOAT NOT NULL,
-            FOREIGN KEY (id) REFERENCES parking_lots(id)
+        CREATE TABLE IF NOT EXISTS parking_lots_coordinates (
+            id TEXT PRIMARY KEY,
+            lat REAL NOT NULL,
+            lng REAL NOT NULL,
+            FOREIGN KEY (id) REFERENCES parking_lots (id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS vehicles(

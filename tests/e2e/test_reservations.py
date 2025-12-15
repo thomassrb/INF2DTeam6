@@ -14,12 +14,14 @@ def test_user_can_create_and_view_and_delete_reservation(server_process, make_us
         "address": "Wijnhaven 106",
         "coordinates": [4.0, 5.0],
     }
-    cr = requests.post(f"{BASE}/parking-lots", json=payload, headers={"Authorization": f"Bearer {admin_token}"}, timeout=5)
+    cr = requests.post(
+        f"{BASE}/parking-lots", 
+        json=payload, 
+        headers={"Authorization": f"Bearer {admin_token}"}, 
+        timeout=5
+    )
     assert cr.status_code in (200, 201)
-
-    lots = requests.get(f"{BASE}/parking-lots", timeout=5).json()
-    lot_id = next((lid for lid, lot in lots.items() if lot.get("name") == "Gereserveerdeparking"), None)
-    assert lot_id
+    lot_id = cr.json()["id"]
 
     username, token = make_user_and_login("USER")
 
