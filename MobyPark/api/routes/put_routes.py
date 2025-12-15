@@ -1,185 +1,251 @@
-import re
+from typing import Dict, Any, Optional
 from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, status, Path, Body
+from pydantic import BaseModel
+
+from MobyPark.api.authentication import get_current_user, require_roles
+from MobyPark.api.Models.User import User
+from MobyPark.api.DataAccess.AccessParkingLots import AccessParkingLots
+from MobyPark.api.DataAccess.AccessUsers import AccessUsers
+from MobyPark.api.DataAccess.AccessReservations import AccessReservations
+from MobyPark.api.DataAccess.AccessVehicles import AccessVehicles
+from MobyPark.api.DataAccess.AccessPayments import AccessPayments
+from MobyPark.api.password_utils import PasswordManager
+
+# Initialize router
+router = APIRouter(prefix="/api", tags=["put_routes"])
+
+# Initialize data access objects
+access_parkinglots = AccessParkingLots()
+access_users = AccessUsers()
+access_reservations = AccessReservations()
+access_vehicles = AccessVehicles()
+access_payments = AccessPayments()
 password_manager = PasswordManager()
 
+# Request models
+class ParkingLotUpdate(BaseModel):
+    name: Optional[str] = None
+    location: Optional[str] = None
+    capacity: Optional[int] = None
+    tariff: Optional[float] = None
+    daytariff: Optional[float] = None
+    address: Optional[str] = None
+    coordinates: Optional[list[float]] = None
 
+class ProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    password: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
 
-class put_routes: 
-    @roles_required(['ADMIN'])
-    def _handle_update_parking_lot(self, session_user):
-        lid = self.path.split("/")[2]
-        parking_lot = access_parkinglots.get_parking_lot(id=lid)
-        
-        if not parking_lot:
-            self.send_json_response(404, "application/json", {"error": "Parking lot not found"})
-            return
+class ReservationUpdate(BaseModel):
+    parkinglot: Optional[str] = None
+    start: Optional[str] = None
+    end: Optional[str] = None
+    license_plate: Optional[str] = None
+    licenseplate: Optional[str] = None
+    user: Optional[str] = None
+
+class VehicleUpdate(BaseModel):
+    name: Optional[str] = None
+    licenseplate: Optional[str] = None
+
+class PaymentUpdate(BaseModel):
+    validation: str
+    t_data: Dict[str, Any]
+
+# Routes
+@router.put("/parking-lots/{lid}")
+async def update_parking_lot(
+    lid: str = Path(..., description="The ID of the parking lot to update"),
+    update_data: ParkingLotUpdate = Body(...),
+    current_user: User = Depends(require_roles(["ADMIN"]))
+):
+    """
+    Update a parking lot's information. Admin only.
+    """
+    parking_lot = access_parkinglots.get_parking_lot(id=lid)
     
-        data = self.get_request_data()
-        
-        valid, error = self.data_validator.validate_data(data)
-        if not valid:
-            self.send_json_response(400, "application/json", error)
-            return
-        
-        for key, value in data.items():
-            if hasattr(parking_lot, key):
-                setattr(parking_lot, key, value)
-        access_parkinglots.update_parking_lot(parkinglot=parking_lot)
-        self.audit_logger.audit(session_user, action="update_parking_lot", target=lid)
-        self.send_json_response(200, "application/json", {"message": "Parking lot modified"})
-        
-
-    @roles_required(['ADMIN'])
-    def _handle_update_parking_lot_by_id(self, session_user):
-        lid = self.path.split("/")[2]
-        parking_lot = access_parkinglots.get_parking_lot(id=lid)
-        
-        if not parking_lot:
-            self.send_json_response(404, "application/json", {"error": "Parking lot not found"})
-            return
-        parts = [p for p in self.path.split('/') if p]
-        if len(parts) < 2: return self.send_json_response(400, "application/json", {"error": "id missing"})
-        lid = str(parts[1])
-        data = self.get_request_data()
-        
-        valid, error = self.data_validator.validate_data(data)
-        if not valid:
-            self.send_json_response(400, "application/json", error)
-            return
-        
-        for key, value in data.items():
-            if hasattr(parking_lot, key):
-                setattr(parking_lot, key, value)
-        access_parkinglots.update_parking_lot(parkinglot=parking_lot)
-        self.audit_logger.audit(session_user, action="update_parking_lot", target=lid)
-        self.send_json_response(200, "application/json", {"message": "Parking lot modified"})
-
-
-    @login_required
-    def _handle_update_profile_by_id(self, session_user):
-        match = re.match(r"^/profile/([^/]+)$", self.path)
-        if not match:
-            self.send_json_response(400, "application/json", {"error": "Invalid URL format"})
-            return
-        
-        target_user_id = match.group(1)
-        target_user = access_users.get_user_byid(id=target_user_id)
-        
-        if not target_user:
-            self.send_json_response(404, "application/json", {"error": "User not found"})
-            return
-        
-        is_admin = session_user.role == "ADMIN"
-        
-        if not is_admin and session_user.id != target_user_id:
-            self.send_json_response(403, "application/json", {"error": "Access denied. You can only view your own profile."})
-            return
-        
-        data = self.get_request_data()
-        valid, error = self.data_validator.validate_data(data)
-        if not valid:
-            self.send_json_response(400, "application/json", error)
-            return
-
-        if data.get("password"):
-            data["password"] = password_manager.hash_password(data["password"])
-        
-        for key, value in data.items():
-            if hasattr(target_user, key):
-                setattr(target_user, key, value)
-        access_users.update_user(user=target_user)
-        self.audit_logger.audit(session_user, action="update_profile", target=target_user_id)
-        self.send_json_response(200, "application/json", {"message": "User updated successfully"})
-
-
-    @login_required
-    def _handle_update_reservation(self, session_user):
-        data = self.get_request_data()
-        rid = self.path.replace("/reservations/", "")
-        reservation = access_reservations.get_reservation(id=rid)
-        
-        if not reservation:
-            self.send_json_response(404, "application/json", {"error": "Reservation not found"})
-            return
-        
-        valid, error = self.data_validator.validate_data(data)
-        if not valid:
-            self.send_json_response(400, "application/json", error)
-            return
-        
-        if session_user.role == "ADMIN":
-            if "user" not in data:
-                data["user"] = session_user.username
-            elif data["user"] != session_user.username:
-                self.send_json_response(403, "application/json", {"error": "Non-admin users cannot update reservations for other users"})
-                return
-        else:
-            if "user" in data and data["user"] != session_user.username:
-                self.send_json_response(403, "application/json", {"error": "Non-admin users cannot update reservations for other users"})
-                return
-            data["user"] = session_user.username
-        
-        for key, value in data.items():
-            if hasattr(reservation, key):
-                setattr(reservation, key, value)
-        access_reservations.update_reservation(reservation=reservation)
-        self.send_json_response(200, "application/json", {"status": "Updated", "reservation": data})
-
+    if not parking_lot:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Parking lot not found"
+        )
     
-    @login_required
-    def _handle_update_vehicle(self, session_user):
-        data = self.get_request_data()
+    # Update only provided fields
+    update_data_dict = update_data.dict(exclude_unset=True)
+    for key, value in update_data_dict.items():
+        if hasattr(parking_lot, key):
+            setattr(parking_lot, key, value)
+    
+    access_parkinglots.update_parking_lot(parkinglot=parking_lot)
+    # TODO: Add audit logging
+    
+    return {"message": "Parking lot updated successfully"}
         
-        valid, error = self.data_validator.validate_data(data)
-        if not valid:
-            self.send_json_response(400, "application/json", error)
-            return
-        
-        vid = self.path.replace("/vehicles/", "")
-        vehicle = access_vehicles.get_vehicle(id=vid)
- 
-        if not vehicle:
-            self.send_json_response(404, "application/json", {"error": "Vehicle not found"})
-            return
-        
-        if vehicle.user != session_user:
-            self.send_json_response(403, "application/json", {"error": "No access to this vehicle"})
-        
-        for key, value in data.items():
-            if hasattr(vehicle, key):
-                setattr(vehicle, key, value)
-        access_vehicles.update_vehicle(vehicle=vehicle)
-        self.audit_logger.audit(session_user, action="update_vehicle", target=vid, extra={"name": data["name"]})
-        self.send_json_response(200, "application/json", {"status": "Success", "vehicle": vid})
 
-    @login_required
-    def _handle_update_payment(self, session_user):
-        pid = self.path.replace("/payments/", "")
-        payment = access_payments.get_payment(id=pid)
-        data = self.get_request_data()
-        
-        valid, error = self.data_validator.validate_data(data)
-        if not valid:
-            self.send_json_response(400, "application/json", error)
-            return
-        
-        if not payment:
-            self.send_json_response(404, "application/json", {"error": "Payment not found!"})
-            return
-        
-        if payment.hash != data['validation']:
-            self.send_json_response(401, "application/json", {"error": "Validation failed", "info": "The validation of the security hash could not be validated for this transaction."})
-            return
-        
-        for key, value in data['t_data'].items():
-            if hasattr(payment.t_data, key):
-                setattr(payment.t_data, key, value)
+@router.put("/profile/{user_id}")
+async def update_profile_by_id(
+    user_id: str = Path(..., description="The ID of the user to update"),
+    update_data: ProfileUpdate = Body(...),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Update a user's profile. Users can update their own profile, admins can update any profile.
+    """
+    target_user = access_users.get_user_byid(id=user_id)
+    
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Check permissions
+    is_admin = current_user.role == "ADMIN"
+    if not is_admin and current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. You can only update your own profile."
+        )
+    
+    # Update only provided fields
+    update_data_dict = update_data.dict(exclude_unset=True)
+    
+    # Hash password if provided
+    if 'password' in update_data_dict and update_data_dict['password']:
+        update_data_dict['password'] = password_manager.hash_password(update_data_dict['password'])
+    
+    for key, value in update_data_dict.items():
+        if hasattr(target_user, key):
+            setattr(target_user, key, value)
+    
+    access_users.update_user(user=target_user)
+    # TODO: Add audit logging
+    
+    return {"message": "User updated successfully"}
 
-        payment["completed"] = True
-        payment["completed_at"] = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+@router.put("/reservations/{reservation_id}")
+async def update_reservation(
+    reservation_id: str = Path(..., description="The ID of the reservation to update"),
+    update_data: ReservationUpdate = Body(...),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Update a reservation. Users can update their own reservations, admins can update any reservation.
+    """
+    reservation = access_reservations.get_reservation(id=reservation_id)
+    
+    if not reservation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Reservation not found"
+        )
+    
+    # Check permissions
+    is_admin = current_user.role == "ADMIN"
+    if not is_admin and reservation.user != current_user.username:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. You can only update your own reservations."
+        )
+    
+    # Update only provided fields
+    update_data_dict = update_data.dict(exclude_unset=True)
+    
+    # For non-admin users, ensure they can't change the user field
+    if not is_admin and 'user' in update_data_dict and update_data_dict['user'] != current_user.username:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only update your own reservations."
+        )
+    
+    for key, value in update_data_dict.items():
+        if hasattr(reservation, key):
+            setattr(reservation, key, value)
+    
+    access_reservations.update_reservation(reservation=reservation)
+    # TODO: Add audit logging
+    
+    return {"status": "Updated", "reservation": update_data_dict}
 
-        access_payments.update_payment(payment=payment)
-        self.audit_logger.audit(session_user, action="update_payment", target=pid)
-        self.send_json_response(200, "application/json", {"status": "Success", "payment": payment})
+@router.put("/vehicles/{vehicle_id}")
+async def update_vehicle(
+    vehicle_id: str = Path(..., description="The ID of the vehicle to update"),
+    update_data: VehicleUpdate = Body(...),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Update a vehicle. Users can update their own vehicles.
+    """
+    vehicle = access_vehicles.get_vehicle(id=vehicle_id)
+    
+    if not vehicle:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Vehicle not found"
+        )
+    
+    # Check if the current user owns the vehicle
+    if vehicle.user != current_user.id and current_user.role != "ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. You can only update your own vehicles."
+        )
+    
+    # Update only provided fields
+    update_data_dict = update_data.dict(exclude_unset=True)
+    
+    for key, value in update_data_dict.items():
+        if hasattr(vehicle, key):
+            setattr(vehicle, key, value)
+    
+    access_vehicles.update_vehicle(vehicle=vehicle)
+    # TODO: Add audit logging
+    
+    return {"status": "Success", "vehicle_id": vehicle_id}
+
+@router.put("/payments/{payment_id}")
+async def update_payment(
+    payment_id: str = Path(..., description="The ID of the payment to update"),
+    update_data: PaymentUpdate = Body(...),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Update a payment. This is typically used to mark a payment as completed.
+    """
+    payment = access_payments.get_payment(id=payment_id)
+    
+    if not payment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Payment not found"
+        )
+    
+    # Validate the payment hash
+    if payment.hash != update_data.validation:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error": "Validation failed",
+                "info": "The validation of the security hash could not be validated for this transaction."
+            }
+        )
+    
+    # Update transaction data
+    for key, value in update_data.t_data.items():
+        if hasattr(payment.t_data, key):
+            setattr(payment.t_data, key, value)
+    
+    # Mark as completed
+    payment.completed = True
+    payment.completed_at = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+    
+    access_payments.update_payment(payment=payment)
+    # TODO: Add audit logging
+    
+    return {"status": "Success", "payment_id": payment_id}
+
 
 

@@ -1,340 +1,448 @@
-import re
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import BaseModel, Field, EmailStr, validator
+from typing import Optional, Dict, Any, List
+from datetime import datetime
 import uuid
+import re
 import hashlib
 import bcrypt
 import os
-from datetime import datetime
 
-from MobyPark.api import session_manager
-from MobyPark.api.storage_utils import (
-    load_json,
-    load_payment_data,
-    load_reservation_data,
-    save_reservation_data,
-    load_parking_lot_data,
-    save_parking_lot_data,
-    save_user_data,
-)
-from MobyPark.api.authentication import login_required, roles_required
-from MobyPark.api import session_calculator as sc
-from MobyPark.api.app import (
+from .. import session_manager, session_calculator
+from ..authentication import get_current_user, require_roles
+from ..Models.User import User
+from ..Models.ParkingLot import ParkingLot
+from ..Models.Reservation import Reservation
+from ..Models.Payment import Payment
+from ..Models.Session import Session
+from ..Models.Vehicle import Vehicle
+
+# Import data access objects
+from ..app import (
     access_vehicles,
     access_parkinglots,
     access_payments,
     access_reservations,
     access_sessions,
     access_users,
-    connection,
+    connection
 )
-from MobyPark.api.Models.User import User
-from MobyPark.api.Models.ParkingLot import ParkingLot
-from MobyPark.api.Models.Reservation import Reservation
 
+# Create router
+router = APIRouter()
 
-class post_routes:
-    def handle_register(handler):
-        data = handler.get_request_data()
+# ============================================
+# Request/Response Models
+# ============================================
 
-        required_fields = ['username', 'password', 'name', 'phone', 'email', 'birth_year']
-        for field in required_fields:
-            if field not in data or not isinstance(data[field], str) or not data[field].strip():
-                handler.send_json_response(400, "application/json", {"error": f"Missing or invalid field: {field}", "field": field})
-                return
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    name: str
+    phone: str
+    email: EmailStr
+    birth_year: str
+    role: str = "USER"
 
-        username = data['username']
-        password = data['password']
-        name = data['name']
-        phone_number = data['phone']
-        email = data['email']
-        birth_year = data['birth_year']
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
-        TEST_MODE = os.environ.get('TEST_MODE') == '1'
-        if TEST_MODE:
-            # In tests, store fast SHA256 to minimize hashing cost
-            hashed_password = hashlib.sha256(password.encode('utf-8')).hexdigest()
-        else:
-            rounds = None
-            salt = bcrypt.gensalt(rounds=rounds) if rounds else bcrypt.gensalt()
-            hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+class LoginResponse(BaseModel):
+    message: str
+    session_token: str
 
-        if access_users.get_user_byusername(username=username):
-            handler.send_json_response(409, "application/json", {"error": "Username already taken"})
-            return
+class SessionStartRequest(BaseModel):
+    license_plate: Optional[str] = None
+    licenseplate: Optional[str] = None
 
-        new_user = User(
-            username = username,
-            password = hashed_password,
-            name = name,
-            phone = phone_number,
-            email = email,
-            birth_year = birth_year,
-            role = data.get('role', 'USER'),
-            active = True,
-            created_at = datetime.now().strftime("%Y-%m-%d")
+class SessionStopRequest(BaseModel):
+    license_plate: Optional[str] = None
+    licenseplate: Optional[str] = None
+
+class VehicleCreate(BaseModel):
+    licenseplate: str
+    make: Optional[str] = None
+    model: Optional[str] = None
+    color: Optional[str] = None
+    year: Optional[str] = None
+
+class PaymentCreate(BaseModel):
+    transaction: str
+    amount: float
+    t_data: Dict[str, Any]
+
+class RefundCreate(BaseModel):
+    amount: float
+    transaction: Optional[str] = None
+    coupled_to: Optional[str] = None
+
+class ParkingLotCreate(BaseModel):
+    name: str
+    location: str
+    capacity: int
+    tariff: float
+    daytariff: float
+    address: str
+    coordinates: List[float]
+
+class ReservationCreate(BaseModel):
+    parkinglot: str
+    user: Optional[str] = None
+    start_time: str
+    end_time: str
+    license_plate: Optional[str] = None
+    licenseplate: Optional[str] = None
+
+# ============================================
+# Helper Functions
+# ============================================
+
+def validate_license_plate(license_plate: Optional[str], licenseplate: Optional[str]) -> str:
+    """Helper to handle both license_plate and licenseplate fields."""
+    lp = license_plate or licenseplate
+    if not lp or not isinstance(lp, str) or not lp.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="License plate is required"
         )
-        access_users.add_user(user=new_user)
-        handler.send_json_response(201, "application/json", {"message": "User created"})
+    return lp
 
+# ============================================
+# Authentication Routes
+# ============================================
 
-    def handle_login(handler):
-        data = handler.get_request_data()
-
-        required_fields = ['username', 'password']
-        for field in required_fields:
-            if field not in data or not isinstance(data[field], str) or not data[field].strip():
-                handler.send_json_response(400, "application/json", {"error": f"Missing or invalid field: {field}", "field": field})
-                return
-
-        username = data['username']
-        password = data['password']
-
-        user_to_authenticate = access_users.get_user_byusername(username=username)
-
-        # COMMENTS TOEVOEGEN VOOR ONDERSTAAND STATEMENT
-        if user_to_authenticate:
-            if user_to_authenticate.password.startswith("$2b$"):
-                if bcrypt.checkpw(password.encode('utf-8'), user_to_authenticate["password"].encode('utf-8')):
-                    token = str(uuid.uuid4())
-                    session_manager.add_session(token, user_to_authenticate)
-                    handler.send_json_response(200, "application/json", {"message": "User logged in", "session_token": token})
-                    return
-            else:
-                hashed_password_input = hashlib.sha256(password.encode('utf-8')).hexdigest()
-                if hashed_password_input == user_to_authenticate.password:
-                    token = str(uuid.uuid4())
-                    session_manager.add_session(token, user_to_authenticate)
-                    handler.send_json_response(200, "application/json", {"message": "User logged in", "session_token": token})
-                    return
-
-        handler.send_json_response(401, "application/json", {"error": "Invalid credentials"})
-
-
-    def _handle_create_parking_lot(self):
-            data = self.get_request_data()
-
-            required_fields = ['name', 'location', 'capacity', 'tariff', 'daytariff', 'address', 'coordinates']
-            for field in required_fields:
-                if field not in data or not isinstance(data[field], str) or not data[field].strip():
-                    self.send_json_response(400, "application/json", {"error": f"Missing or invalid field: {field}", "field": field})
-                    return
-
-            if not isinstance(data['capacity'], int) or data['capacity'] <= 0:
-                self.send_json_response(400, "application/json", {"error": "Capacity must be a positive integer", "field": "capacity"})
-                return
-            if not isinstance(data['tariff'], (int, float)) or data['tariff'] < 0:
-                self.send_json_response(400, "application/json", {"error": "Tariff must be a non-negative number", "field": "tariff"})
-                return
-            if not isinstance(data['daytariff'], (int, float)) or data['daytariff'] < 0:
-                self.send_json_response(400, "application/json", {"error": "Day tariff must be a non-negative number", "field": "daytariff"})
-                return
-            if not isinstance(data['coordinates'], list) or not all(isinstance(coord, (int, float)) for coord in data['coordinates']) or len(data['coordinates']) != 2:
-                self.send_json_response(400, "application/json", {"error": "Coordinates must be a list of two numbers", "field": "coordinates"})
-                return
-
-            parking_lot = ParkingLot(
-                name = data['name'],
-                location = data['location'],
-                capacity = data['capacity'],
-                hourly_rate = data['tariff'],
-                day_rate = data['daytariff'],
-                address = data['address'],
-                coordinates = data['coordinates'],
-                reserved = 0
-            )
-            access_parkinglots.add_parking_lot(parkinglot=parking_lot)
-            self.send_json_response(201, "application/json", {"Server message": f"Parking lot saved under ID: {parking_lot.id}"})
-
-
-    @login_required
-    def _handle_create_reservation(self, session_user: User):
-        data = self.get_request_data()
-        parking_lot = access_parkinglots.get_parking_lot(id=data['parkinglot'])
-        valid, error = self.data_validator.validate_data(data)
-        if not valid:
-            self.send_json_response(400, "application/json", error)
-            return
-        
-        if not parking_lot:
-            self.send_json_response(404, "application/json", {"error": "Parking lot not found", "field": "parkinglot"})
-            return
-        
-        if not (session_user.role == "ADMIN"):
-            if "user" not in data:
-                data["user"] = session_user.username
-            elif data["user"] != session_user.username:
-                self.send_json_response(403, "application/json", {"error": "Non-admin users cannot create reservations for other users"})
-                return
-        else:
-            if "user" not in data:
-                data["user"] = None
-
-        # toegevoegd, dit zorgt ervoor dat beide mogelijk zijn als data, hij replaced de var licenseplate dan met license_plate 
-        if 'license_plate' not in data and 'licenseplate' in data:
-            data['license_plate'] = data['licenseplate']
-
-        vehicle = access_vehicles.get_vehicle_bylicenseplate(licenseplate=data['license_plate'])
-        if not vehicle:
-            self.send_json_response(404, "application/json", {"error": "Vehicle licenseplate not found"})
-            return
-
-
-        new_reservation = Reservation(
-            user=session_user,
-            parking_lot=parking_lot,
-            vehicle=vehicle,
-            start_time=data["start_time"],
-            end_time=data["end_time"],
-            status="confirmed",
-            created_at=datetime.now(),
-            cost=0.00
+@router.post("/register", status_code=status.HTTP_201_CREATED)
+async def register(
+    register_data: RegisterRequest,
+    current_user: User = Depends(require_roles(["ADMIN"]))
+):
+    """Register a new user (admin only)."""
+    # Check if username already exists
+    if access_users.get_user_byusername(username=register_data.username):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Username already taken"
         )
-        parking_lot.reserved += 1
-        access_parkinglots.update_parking_lot(parkinglot=parking_lot)
-        access_reservations.add_reservation(reservation=new_reservation)
-        self.send_json_response(201, "application/json", {"status": "Success", "reservation": data})
     
+    # Hash password
+    TEST_MODE = os.environ.get('TEST_MODE') == '1'
+    if TEST_MODE:
+        # In tests, use faster hashing
+        hashed_password = hashlib.sha256(register_data.password.encode('utf-8')).hexdigest()
+    else:
+        salt = bcrypt.gensalt()
+        hashed_password = bcrypt.hashpw(register_data.password.encode('utf-8'), salt).decode('utf-8')
 
-    @login_required
-    def _handle_create_vehicle(self, session_user):
-        data = self.get_request_data()
-        
-        valid, error = self.data_validator.validate_data(data)
-        if not valid:
-            self.send_json_response(400, "application/json", error)
-            return
-        
-        if access_vehicles.get_vehicle_bylicenseplate(licenseplate=data["licenseplate"]):
-            self.send_json_response(409, "application/json", {"error": "Vehicle already exists"})
-            return
-        
-        vehicle = Vehicle(
-            user=session_user,
-            license_plate=data['licenseplate'],
-            make=data.get("make"),
-            model=data.get("model"),
-            color=data.get("color"),
-            year=data.get("year"),
-            created_at=datetime.now().strftime("%Y-%m-%d")
+    # Create new user
+    new_user = User(
+        username=register_data.username,
+        password=hashed_password,
+        name=register_data.name,
+        phone=register_data.phone,
+        email=register_data.email,
+        birth_year=register_data.birth_year,
+        role=register_data.role,
+        active=True,
+        created_at=datetime.now().strftime("%Y-%m-%d")
+    )
+    
+    # Save user to database
+    access_users.add_user(user=new_user)
+    
+    return {"message": "User created"}
+
+@router.post("/login", response_model=LoginResponse)
+async def login(login_data: LoginRequest):
+    """Authenticate user and return session token."""
+    user = access_users.get_user_byusername(username=login_data.username)
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials"
         )
-        access_vehicles.add_vehicle(vehicle=vehicle)
-        self.audit_logger.audit(session_user, action="create_vehicle", target=vehicle.id, extra={"license_plate": data['licenseplate']})
-        self.send_json_response(201, "application/json", {"status": "Success", "vehicle": vehicle})
+    
+    # Check password
+    if user.password.startswith("$2b$"):
+        # Bcrypt hash
+        if not bcrypt.checkpw(login_data.password.encode('utf-8'), user.password.encode('utf-8')):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid credentials"
+            )
+    else:
+        # Legacy SHA256 hash (for testing)
+        hashed_input = hashlib.sha256(login_data.password.encode('utf-8')).hexdigest()
+        if hashed_input != user.password:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid credentials"
+            )
+    
+    # Create session
+    token = str(uuid.uuid4())
+    session_manager.add_session(token, user)
+    
+    return {
+        "message": "User logged in",
+        "session_token": token
+    }
 
+@router.post("/logout")
+async def logout(
+    request: Request,
+    current_user: User = Depends(get_current_user)
+):
+    """Invalidate the current session."""
+    auth_header = request.headers.get("Authorization")
+    if auth_header:
+        token = auth_header.split(" ")[1] if " " in auth_header else auth_header
+        session_manager.remove_session(token)
+    
+    return {"message": "User logged out successfully"}
 
-    @login_required
-    def _handle_create_payment(self, session_user):
-        data = self.get_request_data()
-        
-        valid, error = self.data_validator.validate_data(data)
-        if not valid:
-            self.send_json_response(400, "application/json", error)
-            return
-        
-        payment = Payment(
-            transaction=data['transaction'],
-            amount=data['amount'],
-            initiator=session_user,
-            created_at=datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
-            completed=None,
-            session=access_sessions.get_session(id=data["session"]),
-            parking_lot=access_parkinglots.get_parking_lot(id=data["parking_lot"]),
-            t_data=TransactionData(**data["t_data"]),
-            hash=sc.generate_transaction_validation_hash()
+# ============================================
+# Parking Lot Routes
+# ============================================
+
+@router.post("/parking-lots", status_code=status.HTTP_201_CREATED)
+async def create_parking_lot(
+    parking_data: ParkingLotCreate,
+    current_user: User = Depends(require_roles(["ADMIN"]))
+):
+    """Create a new parking lot (admin only)."""
+    # Validate coordinates
+    if len(parking_data.coordinates) != 2 or \
+       not all(isinstance(coord, (int, float)) for coord in parking_data.coordinates):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Coordinates must be a list of two numbers"
         )
-        access_payments.add_payment(payment=payment)
-        self.audit_logger.audit(session_user, action="create_payment", target=payment.transaction, extra={"amount": payment["amount"], "coupled_to": payment.get("coupled_to")})
-        self.send_json_response(201, "application/json", {"status": "Success", "payment": payment})
+    
+    # Create parking lot
+    parking_lot = ParkingLot(
+        name=parking_data.name,
+        location=parking_data.location,
+        capacity=parking_data.capacity,
+        hourly_rate=parking_data.tariff,
+        day_rate=parking_data.daytariff,
+        address=parking_data.address,
+        coordinates=parking_data.coordinates,
+        reserved=0
+    )
+    
+    access_parkinglots.add_parking_lot(parkinglot=parking_lot)
+    
+    return {"Server message": f"Parking lot saved under ID: {parking_lot.id}"}
 
-# hier gebleven -----------------------------------------------------------------------------------------------------
-    @login_required
-    def _handle_start_session(self, session_user):
-        match = re.match(r"^/parking-lots/([^/]+)/sessions/start$", self.path)
-        if not match:
-            self.send_json_response(400, "application/json", {"error": "Invalid URL format for starting session"})
-            return
-        lid = match.group(1)
-        data = self.get_request_data()
-        parking_lot = access_parkinglots.get_parking_lot(id=lid)
+# ============================================
+# Session Routes
+# ============================================
 
-        lp = data.get('license_plate') or data.get('licenseplate')
-        if not isinstance(lp, str) or not lp.strip():
-            self.send_json_response(400, "application/json", {"error": "Missing or invalid field: license_plate", "field": "license_plate"})
-            return
-
-        session = Session(
-            parking_lot=parking_lot,
-            session_id=None,
-            vehicle=None,
-            user=session_user,
-            duration_minutes=None,
-            cost=None,
-            payment_status="pending",
-            license_plate=lp,
-            started=datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
-            stopped=None,
-            username=session_user.username
+@router.post("/parking-lots/{lid}/sessions/start")
+async def start_session(
+    lid: str,
+    session_data: SessionStartRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """Start a new parking session."""
+    # Get parking lot
+    parking_lot = access_parkinglots.get_parking_lot(id=lid)
+    if not parking_lot:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Parking lot not found"
         )
-        if not access_sessions.add_session(session=session):
-            self.send_json_response(409, "application/json", {"error": "Cannot start a session when another session for this license plate is already started."})
-            return 
-
-        self.send_json_response(200, "application/json", {"Server message": f"Session started for: {lp} under id: {session.id}"})
-            
-    @login_required
-    def _handle_stop_session(self, session_user):
-        match = re.match(r"^/parking-lots/([^/]+)/sessions/stop$", self.path)
-        if not match:
-            self.send_json_response(400, "application/json", {"error": "Invalid URL format for stopping session"})
-            return
-        lid = match.group(1)
-        data = self.get_request_data()
-        parking_lot = access_parkinglots.get_parking_lot(id=lid)
-        
-        valid, error = self.data_validator.validate_data(data)
-        if not valid:
-            self.send_json_response(400, "application/json", error)
-            return
-        
-        lp = data.get('license_plate') or data.get('licenseplate')
-        session = access_sessions.get_pending_session_bylicenseplate(licenseplate=lp)
-        if not session:
-            self.send_json_response(409, "application/json", {"error": "Cannot stop a session when there is no session for this license plate."})
-            return
-        
-        session.stopped = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-        access_sessions.update_session(session=session)
-        self.audit_logger.audit(session_user, action="stop_session", target=session.id, extra={"license_plate": lp, "parking_lot": lid})
-        self.send_json_response(200, "application/json", {"Server message": f"Session stopped for: {lp}"})
-
-
-    @roles_required(['ADMIN'])
-    def _handle_refund_payment(self, session_user):
-        data = self.get_request_data()
-        
-        valid, error = self.data_validator.validate_data(data)
-        if not valid:
-            self.send_json_response(400, "application/json", error)
-            return
-# dit gaat niet werken maar dat deed het toch al niet
-        refund_txn = data.get("transaction") if data.get("transaction") else str(uuid.uuid4())
-        payment = Payment(
-            id=refund_txn,
-            amount=-abs(data['amount']),
-            processed_by=session_user, # dit is helemaal geen kolom
-            created_at=datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
-            completed=False,
-            completed_at=None,
-            hash=sc.generate_transaction_validation_hash()
-            # t data mist helemaal (cooked)
+    
+    # Validate license plate
+    license_plate = validate_license_plate(
+        session_data.license_plate, 
+        session_data.licenseplate
+    )
+    
+    # Create session
+    session = Session(
+        parking_lot=parking_lot,
+        user=current_user,
+        license_plate=license_plate,
+        started=datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
+        payment_status="pending",
+        username=current_user.username
+    )
+    
+    # Add session to database
+    if not access_sessions.add_session(session=session):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot start a session when another session for this license plate is already started."
         )
-        access_payments.add_payment(payment=payment)
-        self.send_json_response(201, "application/json", {"status": "Success", "payment": payment})
+    
+    return {"Server message": f"Session started for: {license_plate} under id: {session.id}"}
 
- 
-    @roles_required(['ADMIN'])
-    def _handle_debug_reset(self, session_user):
-        # ik hoop dat dit nooit gebruikt wordt
-        connection.cursor.execute("TRUNCATE TABLE users, parking_lots, reservations, payments, t_data, vehicles, sessions")
+@router.post("/parking-lots/{lid}/sessions/stop")
+async def stop_session(
+    lid: str,
+    session_data: SessionStopRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """Stop an active parking session."""
+    # Get parking lot
+    parking_lot = access_parkinglots.get_parking_lot(id=lid)
+    if not parking_lot:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Parking lot not found"
+        )
+    
+    # Validate license plate
+    license_plate = validate_license_plate(
+        session_data.license_plate,
+        session_data.licenseplate
+    )
+    
+    # Get active session
+    session = access_sessions.get_pending_session_bylicenseplate(licenseplate=license_plate)
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot stop a session when there is no active session for this license plate."
+        )
+    
+    # Update session
+    session.stopped = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+    access_sessions.update_session(session=session)
+    
+    return {"Server message": f"Session stopped for: {license_plate}"}
 
-        self.audit_logger.audit(session_user, action="debug_reset", target="all_data")
-        self.send_json_response(200, "application/json", {"Server message": "All data reset successfully"})
+# ============================================
+# Vehicle Routes
+# ============================================
+
+@router.post("/vehicles", status_code=status.HTTP_201_CREATED)
+async def create_vehicle(
+    vehicle_data: VehicleCreate,
+    current_user: User = Depends(get_current_user)
+):
+    """Register a new vehicle for the current user."""
+    # Check if vehicle already exists
+    if access_vehicles.get_vehicle_bylicenseplate(licenseplate=vehicle_data.licenseplate):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Vehicle with this license plate already exists"
+        )
+    
+    # Create vehicle
+    vehicle = Vehicle(
+        user=current_user,
+        license_plate=vehicle_data.licenseplate,
+        make=vehicle_data.make,
+        model=vehicle_data.model,
+        color=vehicle_data.color,
+        year=vehicle_data.year,
+        created_at=datetime.now().strftime("%Y-%m-%d")
+    )
+    
+    # Save vehicle
+    access_vehicles.add_vehicle(vehicle=vehicle)
+    
+    return {
+        "status": "Success",
+        "vehicle": {
+            "id": vehicle.id,
+            "license_plate": vehicle.license_plate,
+            "make": vehicle.make,
+            "model": vehicle.model,
+            "color": vehicle.color,
+            "year": vehicle.year
+        }
+    }
+
+# ============================================
+# Payment Routes
+# ============================================
+
+@router.post("/payments", status_code=status.HTTP_201_CREATED)
+async def create_payment(
+    payment_data: PaymentCreate,
+    current_user: User = Depends(get_current_user)
+):
+    """Create a new payment."""
+    # Create payment
+    payment = Payment(
+        transaction=payment_data.transaction,
+        amount=payment_data.amount,
+        initiator=current_user,
+        created_at=datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
+        completed=False,
+        t_data=payment_data.t_data,
+        hash=session_calculator.generate_transaction_validation_hash()
+    )
+    
+    # Save payment
+    access_payments.add_payment(payment=payment)
+    
+    return {
+        "status": "Success",
+        "payment": {
+            "transaction": payment.transaction,
+            "amount": payment.amount,
+            "initiator": payment.initiator.username,
+            "created_at": payment.created_at,
+            "completed": payment.completed
+        }
+    }
+
+@router.post("/payments/refund", status_code=status.HTTP_201_CREATED)
+async def refund_payment(
+    refund_data: RefundCreate,
+    current_user: User = Depends(require_roles(["ADMIN"]))
+):
+    """Create a refund payment (admin only)."""
+    # Generate transaction ID if not provided
+    transaction_id = refund_data.transaction or str(uuid.uuid4())
+    
+    # Create refund payment
+    refund = Payment(
+        transaction=transaction_id,
+        amount=-abs(refund_data.amount),  # Negative amount for refund
+        initiator=current_user,
+        created_at=datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
+        completed=False,
+        coupled_to=refund_data.coupled_to,
+        hash=session_calculator.generate_transaction_validation_hash()
+    )
+    
+    # Save refund
+    access_payments.add_payment(payment=refund)
+    
+    return {
+        "status": "Success",
+        "refund": {
+            "transaction": refund.transaction,
+            "amount": refund.amount,
+            "initiator": refund.initiator.username,
+            "coupled_to": refund.coupled_to,
+            "created_at": refund.created_at
+        }
+    }
+
+# ============================================
+# Admin Routes
+# ============================================
+
+@router.post("/debug/reset")
+async def debug_reset(
+    current_user: User = Depends(require_roles(["ADMIN"]))
+):
+    """
+    Reset all data (admin only).
+    WARNING: This will delete all data in the database!
+    """
+    # Truncate all tables
+    connection.cursor.execute(
+        "TRUNCATE TABLE users, parking_lots, reservations, payments, t_data, vehicles, sessions"
+    )
+    
+    return {"Server message": "All data reset successfully"}
