@@ -1,4 +1,4 @@
-name: Deploy to Production
+name: CD - Deploy (self-hosted)
 
 on:
   push:
@@ -7,56 +7,29 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-    env:
-      SERVER_IP: 145.24.223.87
-      SERVER_USER: ubuntu-1056396
-      TARGET_DIR: /home/ubuntu-1056396/mobypark
+    runs-on: self-hosted
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Set up SSH
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: Add known hosts (non-fatal) + check port 22
+      - name: Deploy locally
         run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-      
-          echo "Checking TCP 22 reachability..."
-          timeout 5 bash -c 'cat < /dev/null > /dev/tcp/'"$SERVER_IP"'/22' \
-            && echo "Port 22 reachable" \
-            || (echo "Port 22 NOT reachable from GitHub runner" && exit 1)
-          ssh-keyscan -T 5 -H "$SERVER_IP" >> ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
-          echo "known_hosts updated:"
-          tail -n 5 ~/.ssh/known_hosts
+          set -e
+          TARGET_DIR="/home/ubuntu-1056396/mobypark"
 
-      - name: Upload code (rsync)
-        run: |
-          rsync -az --delete -e "ssh -o StrictHostKeyChecking=yes" \
+          rsync -az --delete \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='__pycache__' \
-            ./ "$SERVER_USER@$SERVER_IP:$TARGET_DIR/"
+            ./ "$TARGET_DIR/"
 
-      - name: Run deploy script + restart service
-        run: |
-          ssh "$SERVER_USER@$SERVER_IP" "
-            set -e
-            cd $TARGET_DIR
+          cd "$TARGET_DIR"
 
-            if [ -f deploy.sh ]; then
-              chmod +x deploy.sh
-              ./deploy.sh
-            else
-              echo 'deploy.sh not found in repo root'
-              exit 1
-            fi
+          if [ -f deploy.sh ]; then
+            chmod +x deploy.sh
+            ./deploy.sh
+          fi
 
-            sudo systemctl restart mobypark
-            sudo systemctl status mobypark --no-pager -l | tail -n 30
-          "
+          sudo systemctl restart mobypark
+          sudo systemctl status mobypark --no-pager -l | tail -n 30
