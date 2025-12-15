@@ -18,6 +18,12 @@ jobs:
           cd /home/ubuntu-1056396/mobypark
           chmod +x deploy.sh
           ./deploy.sh
+      - name: Debug runner user
+        run: |
+          whoami
+          id
+          pwd
+          which systemctl
 
       - name: Restart service
         run: |
