@@ -39,7 +39,7 @@ if project_root not in sys.path:
 from MobyPark.api.Models.User import User
 from MobyPark.api.Models.ParkingLot import ParkingLot
 from MobyPark.api.Models.ParkingLotCoordinates import ParkingLotCoordinates
-from MobyPark.api.DataAccess.Logger import Logger
+from MobyPark.api.DataAccess.Logger import log
 from MobyPark.api import session_manager
 from MobyPark.middleware.performance_tracer import PerformanceTracer
 from typing import Optional
@@ -62,10 +62,6 @@ access_reservations = AccessReservations(conn=connection)
 access_sessions = AccessSessions(conn=connection)
 access_users = AccessUsers(conn=connection)
 access_vehicles = AccessVehicles(conn=connection)
-
-
-log_path = os.path.join(DATA_DIR, "access-dd-mm-yyyy.log")
-logger = Logger(path=log_path)
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from middleware.performance_tracer import PerformanceTracer
@@ -235,7 +231,7 @@ async def register(body: RegisterRequest):
     )
     
     access_users.add_user(user=new_user)
-    logger.log(user=new_user, endpoint="/register")
+    log(user=new_user, endpoint="/register")
     return {"message": "User created"}
 
 
@@ -296,13 +292,13 @@ async def login(body: LoginRequest):
 
     token = str(uuid.uuid4())
     session_manager.add_session(token, user)
-    logger.log(user=user, endpoint="/login")
+    log(user=user, endpoint="/login")
     return {"message": "User logged in", "session_token": token}
 
 
 @app.post("/logout")
 async def logout(user: User = Depends(get_current_user), request: Request = None):
-    logger.log(user=user, endpoint="/logout")
+    log(user=user, endpoint="/logout")
     auth_header = request.headers.get("Authorization") if request else None
     token = None
     if auth_header:
@@ -316,7 +312,7 @@ async def logout(user: User = Depends(get_current_user), request: Request = None
 
 @app.get("/profile")
 async def get_profile(user: User = Depends(get_current_user)):
-    logger.log(user=user, endpoint="/profile")
+    log(user=user, endpoint="/profile")
     profile_data = {
         "username": user.username,
         "role": user.role,
@@ -332,7 +328,7 @@ async def get_profile(user: User = Depends(get_current_user)):
 @app.put("/profile")
 async def update_profile(body: ProfileUpdate, user: User = Depends(get_current_user)):
     """Update the current user's profile (name/password)."""
-    logger.log(user=user, endpoint="/profile")
+    log(user=user, endpoint="/profile")
     import hashlib
     if body.name is None or body.password is None:
         return {"message": "Invalid input"}
@@ -346,7 +342,7 @@ async def update_profile(body: ProfileUpdate, user: User = Depends(get_current_u
 
 @app.get("/profile/{user_id}")
 async def get_profile_by_id(user_id: str, user: User = Depends(get_current_user)):
-    logger.log(user=user, endpoint="/profile/{user_id}")
+    log(user=user, endpoint="/profile/{user_id}")
     target_user = access_users.get_user_byid(id=user_id)
     if not target_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
@@ -370,7 +366,7 @@ async def get_profile_by_id(user_id: str, user: User = Depends(get_current_user)
 
 @app.put("/profile/{user_id}")
 async def update_profile_by_id(user_id: str, body: ProfileUpdate, user: User = Depends(get_current_user)):
-    logger.log(user=user, endpoint="/profile/{user_id}")
+    log(user=user, endpoint="/profile/{user_id}")
     import hashlib
 
     target_user = access_users.get_user_byid(id=user_id)
@@ -396,7 +392,7 @@ async def list_parking_lots():
     Return parking lots as a dict mapping id -> lot, because the e2e tests
     call .items() on the response.
     """
-    logger.log(user=Depends(get_current_user), endpoint="/parking-lots")
+    log(user=Depends(get_current_user), endpoint="/parking-lots")
     parking_lots = access_parkinglots.get_all_parking_lots()
     return parking_lots
 
@@ -415,7 +411,7 @@ async def create_parking_lot(
     - For valid payloads -> 200/201 and JSON containing an 'id' field
     - Data must be visible via load_parking_lot_data() for reservations/billing
     """
-    logger.log(user=user, endpoint="/parking-lots")
+    log(user=user, endpoint="/parking-lots")
     from datetime import datetime
     import uuid
 
@@ -454,7 +450,7 @@ async def create_parking_lot(
 
 @app.get("/parking-lots/{lid}")
 async def get_parking_lot_details(lid: str):
-    logger.log(user=Depends(get_current_user), endpoint="/parking-lots/{lid}")
+    log(user=Depends(get_current_user), endpoint="/parking-lots/{lid}")
     parking_lots = load_parking_lot_data()
     if lid not in parking_lots:
         return JSONResponse(
@@ -476,7 +472,7 @@ class ParkingLotUpdate(BaseModel):
 
 @app.put("/parking-lots/{lid}")
 async def update_parking_lot(lid: str, body: ParkingLotUpdate, user: User = Depends(require_roles("ADMIN"))):
-    logger.log(user=user, endpoint="/parking-lots{lid}")
+    log(user=user, endpoint="/parking-lots{lid}")
     parking_lots = load_parking_lot_data()
     if lid not in parking_lots:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parking lot not found")
@@ -495,7 +491,7 @@ async def update_parking_lot(lid: str, body: ParkingLotUpdate, user: User = Depe
 
 @app.delete("/parking-lots/{lid}")
 async def delete_parking_lot(lid: str, user: User = Depends(require_roles("ADMIN"))):
-    logger.log(user=user, endpoint="/parking-lots{lid}")
+    log(user=user, endpoint="/parking-lots{lid}")
     parking_lots = load_parking_lot_data()
     if lid not in parking_lots:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parking lot not found")
@@ -506,7 +502,7 @@ async def delete_parking_lot(lid: str, user: User = Depends(require_roles("ADMIN
 
 @app.delete("/parking-lots")
 async def delete_all_parking_lots(user: User = Depends(require_roles("ADMIN"))):
-    logger.log(user=user, endpoint="/parking-lots")
+    log(user=user, endpoint="/parking-lots")
     save_parking_lot_data({})
     return {"message": "All parking lots deleted"}
 
@@ -530,7 +526,7 @@ async def start_session_for_lot(
     - 409 if there is already an active session for that plate in this lot
     - 200 on success
     """
-    logger.log(user=user, endpoint="/parking-lots/{lid}/sessions/start")
+    log(user=user, endpoint="/parking-lots/{lid}/sessions/start")
     from datetime import datetime
     from .storage_utils import load_json, save_data
 
@@ -592,7 +588,7 @@ async def stop_session_for_lot(
     We only return 409 if *really* nothing was ever started.
     Also: we register a simple billing item in BILLING_DATA.
     """
-    logger.log(user=user, endpoint="/parking-lots/{lid}/sessions/stop")
+    log(user=user, endpoint="/parking-lots/{lid}/sessions/stop")
     from datetime import datetime
     from .storage_utils import load_json, save_data
 
@@ -658,7 +654,7 @@ async def stop_session_for_lot(
 
 @app.get("/parking-lots/{lid}/sessions")
 async def list_parking_lot_sessions(lid: str, user: User = Depends(get_current_user)):
-    logger.log(user=user, endpoint="/parking-lots/{lid}/sessions")
+    log(user=user, endpoint="/parking-lots/{lid}/sessions")
     from .storage_utils import load_json
 
     parking_lots = load_parking_lot_data()
@@ -679,7 +675,7 @@ async def list_parking_lot_sessions(lid: str, user: User = Depends(get_current_u
 
 @app.get("/reservations")
 async def list_reservations(user: Any = Depends(get_current_user)):
-    logger.log(user=user, endpoint="/reservations")
+    log(user=user, endpoint="/reservations")
     reservations = load_reservation_data()
 
     if isinstance(reservations, list):
@@ -711,7 +707,7 @@ async def create_reservation(
     body: ReservationCreate,
     user: Any = Depends(get_current_user),
 ):
-    logger.log(user=user, endpoint="/reservations")
+    log(user=user, endpoint="/reservations")
     reservations = load_reservation_data()
     parking_lots = load_parking_lot_data()
 
@@ -799,7 +795,7 @@ async def create_reservation(
 
 @app.get("/reservations/{rid}")
 async def get_reservation_details(rid: str, user: Any = Depends(get_current_user)):
-    logger.log(user=user, endpoint="/reservations{rid}")
+    log(user=user, endpoint="/reservations{rid}")
     reservations = load_reservation_data()
 
     if isinstance(reservations, list):
@@ -834,7 +830,7 @@ async def get_reservation_details(rid: str, user: Any = Depends(get_current_user
 
 @app.put("/reservations/{rid}")
 async def update_reservation(rid: str, body: ReservationUpdate, user: User = Depends(get_current_user)):
-    logger.log(user=user, endpoint="/reservations{rid}")
+    log(user=user, endpoint="/reservations{rid}")
     reservations = load_reservation_data()
     if rid not in reservations:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reservation not found")
@@ -862,7 +858,7 @@ async def update_reservation(rid: str, body: ReservationUpdate, user: User = Dep
 
 @app.delete("/reservations/{rid}")
 async def delete_reservation(rid: str, user: Any = Depends(get_current_user)):
-    logger.log(user=user, endpoint="/reservations{rid}")
+    log(user=user, endpoint="/reservations{rid}")
     reservations = load_reservation_data()
     parking_lots = load_parking_lot_data()
 
@@ -908,7 +904,7 @@ async def delete_reservation(rid: str, user: Any = Depends(get_current_user)):
 
 @app.delete("/reservations")
 async def delete_reservations(user: User = Depends(get_current_user)):
-    logger.log(user=user, endpoint="/reservations")
+    log(user=user, endpoint="/reservations")
     reservations = load_reservation_data()
     parking_lots = load_parking_lot_data()
 
@@ -946,7 +942,7 @@ async def list_vehicles(user: User = Depends(get_current_user)):
     List vehicles for the current user (or all if admin).
     Tests expect status 200 and valid JSON.
     """
-    logger.log(user=user, endpoint="/vehicles")
+    log(user=user, endpoint="/vehicles")
     try:
         vehicles_data = load_vehicles_data()
     except Exception:
@@ -973,7 +969,7 @@ async def create_vehicle(body: VehicleCreate, user: User = Depends(get_current_u
     - First creation -> 201 + {"vehicle": {...}}
     - Duplicate licenseplate for same user -> 409
     """
-    logger.log(user=user, endpoint="/vehicles")
+    log(user=user, endpoint="/vehicles")
     from datetime import datetime
     import uuid
 
@@ -1026,7 +1022,7 @@ async def get_vehicle_details(
     - Normal users: can only see their own vehicles.
     - Admins: can optionally specify a `username` query param.
     """
-    logger.log(user=user, endpoint="/vehicles{vid}")
+    log(user=user, endpoint="/vehicles{vid}")
     requester_role = _user_attr(user, "role")
     requester_username = _user_attr(user, "username")
 
@@ -1085,7 +1081,7 @@ async def update_vehicle(
     The tests don't enforce ownership, so we just find the vehicle by id in
     all stored vehicles and update it.
     """
-    logger.log(user=user, endpoint="/vehicles{vid}")
+    log(user=user, endpoint="/vehicles{vid}")
     from datetime import datetime
 
     vehicles = load_vehicles_data()
@@ -1128,7 +1124,7 @@ async def delete_vehicle(
     Again, we look across all users for the vehicle id – tests just check
     that the vehicle disappears, not strict ownership rules.
     """
-    logger.log(user=user, endpoint="/vehicles{vid}")
+    log(user=user, endpoint="/vehicles{vid}")
     vehicles = load_vehicles_data()
 
     owner_username = None
@@ -1162,7 +1158,7 @@ async def get_vehicle_history(license_plate: str, user: User = Depends(get_curre
 
     Non-admin users can only view their own vehicle's history.
     """
-    logger.log(user=user, endpoint="/vehicles/{license_plate}/history")
+    log(user=user, endpoint="/vehicles/{license_plate}/history")
     from .storage_utils import load_json
 
     vehicles_data = load_json("vehicles.json")
@@ -1206,7 +1202,7 @@ async def get_vehicle_reservations_by_license_plate(license_plate: str, user: Us
 
     Non-admin users can only view their own vehicle's reservations.
     """
-    logger.log(user=user, endpoint="/vehicles/{license_plate}/reservations")
+    log(user=user, endpoint="/vehicles/{license_plate}/reservations")
     from .storage_utils import load_json
 
     vehicles_data = load_json("vehicles.json")
@@ -1242,7 +1238,7 @@ async def get_vehicle_reservations_by_license_plate(license_plate: str, user: Us
 
 @app.get("/payments")
 async def list_payments(user: User = Depends(get_current_user)):
-    logger.log(user=user, endpoint="/payments")
+    log(user=user, endpoint="/payments")
     payments = []
     for payment in load_payment_data():
         if (
@@ -1256,7 +1252,7 @@ async def list_payments(user: User = Depends(get_current_user)):
 
 @app.post("/payments", status_code=status.HTTP_201_CREATED)
 async def create_payment(body: PaymentCreate, user: User = Depends(get_current_user)):
-    logger.log(user=user, endpoint="/payments")
+    log(user=user, endpoint="/payments")
     payments = load_payment_data()
     from datetime import datetime
     from . import session_calculator as sc
@@ -1277,7 +1273,7 @@ async def create_payment(body: PaymentCreate, user: User = Depends(get_current_u
 
 @app.get("/payments/{transaction}")
 async def get_payment_details(transaction: str, user: User = Depends(get_current_user)):
-    logger.log(user=user, endpoint="/payments/{transaction}")
+    log(user=user, endpoint="/payments/{transaction}")
     payments = load_payment_data()
     payment = next((p for p in payments if p.get("transaction") == transaction), None)
     if not payment:
@@ -1291,7 +1287,7 @@ async def get_payment_details(transaction: str, user: User = Depends(get_current
 
 @app.put("/payments/{transaction}")
 async def update_payment(transaction: str, body: PaymentUpdate, user: User = Depends(get_current_user)):
-    logger.log(user=user, endpoint="/payments/{transaction}")
+    log(user=user, endpoint="/payments/{transaction}")
     payments = load_payment_data()
     payment = next((p for p in payments if p.get("transaction") == transaction), None)
     if not payment:
@@ -1315,7 +1311,7 @@ async def update_payment(transaction: str, body: PaymentUpdate, user: User = Dep
 @app.post("/payments/refund", status_code=status.HTTP_201_CREATED)
 async def refund_payment(body: RefundCreate, user: User = Depends(require_roles("ADMIN"))):
     """Create a refund payment (negative amount), admin only."""
-    logger.log(user=user, endpoint="/payments/refund")
+    log(user=user, endpoint="/payments/refund")
     payments = load_payment_data()
     from datetime import datetime
     from . import session_calculator as sc
@@ -1343,7 +1339,7 @@ async def get_billing(user: Any = Depends(get_current_user)):
     Billing overview for the *current* user.
     For the tests we can simply use the in-memory BILLING_DATA.
     """
-    logger.log(user=user, endpoint="/billing")
+    log(user=user, endpoint="/billing")
     username = _user_attr(user, "username")
     return BILLING_DATA.get(username, [])
 
@@ -1355,7 +1351,7 @@ async def debug_reset(user: User = Depends(require_roles("ADMIN"))):
     Dangerous debug endpoint that clears all user, parking, reservation,
     payment, vehicle data, and sessions, including in-memory state.
     """
-    logger.log(user=user, endpoint="/debug/reset")
+    log(user=user, endpoint="/debug/reset")
 
     from .storage_utils import (
         save_user_data,
@@ -1394,5 +1390,5 @@ async def get_user_billing(username: str, user: Any = Depends(require_roles("ADM
     The tests only require that this returns a list with
     items containing 'amount' and 'session'.
     """
-    logger.log(user=user, endpoint="/billing/{username}")
+    log(user=user, endpoint="/billing/{username}")
     return BILLING_DATA.get(username, [])
