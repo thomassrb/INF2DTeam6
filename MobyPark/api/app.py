@@ -402,11 +402,11 @@ async def list_parking_lots():
 
 
 
-@app.post("/parking-lots", status_code=status.HTTP_201_CREATED)
+@app.post("/parking-lots", status_code=status.HTTP_201_CREATED, response_model=dict)
 async def create_parking_lot(
-    body: ParkingLot,
+    body: ParkingLotCreate,
     user: User = Depends(require_roles("ADMIN")),
-):
+) -> dict:
     """
     Create a parking lot.
 
