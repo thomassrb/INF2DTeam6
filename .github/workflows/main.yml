@@ -29,5 +29,5 @@ jobs:
         run: |
           sudo -n /usr/bin/systemctl daemon-reload
           sudo -n /usr/bin/systemctl restart mobypark
-          sudo -n /usr/bin/systemctl status mobypark --no-pager
+          sudo -n /usr/bin/systemctl status mobypark 
 
