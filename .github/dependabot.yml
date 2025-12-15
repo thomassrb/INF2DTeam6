@@ -1,5 +1,3 @@
-
-# 000 ? 
 version: 2
 updates:
   - package-ecosystem: "pip"
