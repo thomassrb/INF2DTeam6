@@ -1,4 +1,4 @@
-name: CD - Deploy (self-hosted)
+name: CD – Deploy MobyPark
 
 on:
   push:
@@ -13,29 +13,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy locally
+      - name: Run deploy script
         run: |
-            set -e
-            TARGET_DIR="/home/ubuntu-1056396/mobypark"
-        
-            # Stop service zodat files niet "locked" zijn
-            sudo systemctl stop mobypark || true
-        
-            rsync -az \
-              --exclude='.git' \
-              --exclude='.github' \
-              --exclude='__pycache__' \
-              --exclude='venv/' \
-              --exclude='.venv/' \
-              --exclude='tests/e2e_backup/' \
-              ./ "$TARGET_DIR/"
-        
-            cd "$TARGET_DIR"
-        
-            if [ -f deploy.sh ]; then
-              chmod +x deploy.sh
-              ./deploy.sh
-            fi
-        
-            sudo systemctl start mobypark
-            sudo systemctl status mobypark --no-pager -l | tail -n 30
+          cd /home/ubuntu-1056396/mobypark
+          chmod +x deploy.sh
+          ./deploy.sh
+
+      - name: Restart service
+        run: |
+          sudo systemctl restart mobypark
+          sudo systemctl status mobypark --no-pager
