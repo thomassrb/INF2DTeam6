@@ -12,37 +12,64 @@ class AccessParkingLots:
 
     def get_all_parking_lots(self):
         query = """
-        SELECT p.*, c.*
+        SELECT p.*, c.lat, c.lng
         FROM parking_lots p
-        JOIN parking_lots_coordinates c ON c.id = p.id;
+        LEFT JOIN parking_lots_coordinates c ON c.id = p.id;
         """
         self.cursor.execute(query)
         parking_lots = self.cursor.fetchall()
-
-        return parking_lots
+        
+        # Convert SQLite Row objects to dictionaries
+        result = []
+        for row in parking_lots:
+            row_dict = dict(row)
+            # Ensure all required fields are present with appropriate defaults
+            result.append({
+                "id": str(row_dict["id"]),
+                "name": row_dict.get("name", ""),
+                "location": row_dict.get("location", ""),
+                "address": row_dict.get("address", ""),
+                "capacity": row_dict.get("capacity", 0),
+                "reserved": row_dict.get("reserved", 0),
+                "tariff": float(row_dict.get("tariff", 0.0)),
+                "daytariff": float(row_dict.get("daytariff", 0.0)),
+                "coordinates": [float(row_dict.get("lat", 0.0)), float(row_dict.get("lng", 0.0))],
+                "created_at": row_dict.get("created_at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            })
+        
+        return result
     
     
-    def get_parking_lot(self, id):
-        query = """
-        SELECT * FROM parking_lots
-        WHERE id = ?;
-        """
-        coordinates_query = """
-        SELECT * FROM parking_lots_coordinates
-        WHERE id = ?;
-        """
-        self.cursor.execute(query, [id])
-        parking_lot = self.cursor.fetchone()
-        self.cursor.execute(coordinates_query, [id])
-        coordinates = self.cursor.fetchone()
-
-        if parking_lot is None or coordinates is None:
+    def get_parking_lot(self, id: str):
+        try:
+            query = """
+            SELECT p.*, c.lat, c.lng
+            FROM parking_lots p
+            LEFT JOIN parking_lots_coordinates c ON c.id = p.id
+            WHERE p.id = ?;
+            """
+            self.cursor.execute(query, [id])
+            result = self.cursor.fetchone()
+            
+            if not result:
+                return None
+                
+            row_dict = dict(result)
+            return {
+                "id": str(row_dict["id"]),
+                "name": row_dict.get("name", ""),
+                "location": row_dict.get("location", ""),
+                "address": row_dict.get("address", ""),
+                "capacity": row_dict.get("capacity", 0),
+                "reserved": row_dict.get("reserved", 0),
+                "tariff": float(row_dict.get("tariff", 0.0)),
+                "daytariff": float(row_dict.get("daytariff", 0.0)),
+                "coordinates": [float(row_dict.get("lat", 0.0)), float(row_dict.get("lng", 0.0))],
+                "created_at": row_dict.get("created_at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            }
+        except Exception as e:
+            print(f"Error getting parking lot {id}: {str(e)}")
             return None
-        else:
-            parking_lot = dict(parking_lot)
-            parking_lot["created_at"] = datetime.strptime(parking_lot["created_at"], "%Y-%m-%d %H:%M:%S")
-            parking_lot["coordinates"] = ParkingLotCoordinates(**coordinates)
-            return ParkingLot(**parking_lot)
 
 
     def delete_parking_lot(self, parkinglot: ParkingLot):

@@ -7,6 +7,9 @@ class DBConnection:
         self.connection.row_factory = sqlite3.Row
         self.cursor = self.connection.cursor()
         
+        self.cursor.execute("PRAGMA foreign_keys = ON")
+        self.connection.commit()
+        
         self.create_database_and_tables()
 
 

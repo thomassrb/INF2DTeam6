@@ -401,6 +401,19 @@ async def list_parking_lots():
     return parking_lots
 
 
+@app.get("/parking-lots/{lot_id}")
+async def get_parking_lot(lot_id: str):
+    """Get a specific parking lot by ID."""
+    logger.log(user=Depends(get_current_user), endpoint=f"/parking-lots/{lot_id}")
+    parking_lot = access_parkinglots.get_parking_lot(lot_id)
+    if not parking_lot:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Parking lot not found"
+        )
+    return parking_lot
+
+
 
 @app.post("/parking-lots", status_code=status.HTTP_201_CREATED, response_model=dict)
 async def create_parking_lot(
