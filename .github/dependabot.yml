@@ -14,26 +14,5 @@ updates:
     open-pull-requests-limit: 10
     rebase-strategy: "auto"
     ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-patch", "version-update:semver-minor"]
-        paths:
-          - "test-requirements.txt"
-
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    labels:
-      - "dependencies"
-      - "python"
-      - "tests"
-    versioning-strategy: "increase-if-necessary"
-    commit-message:
-      prefix: "test"
-      include: "scope"
-    open-pull-requests-limit: 10
-    rebase-strategy: "auto"
-    allow:
-      - dependency-type: "direct"
-        dependency-name: "*"
-        sourcefile: "test-requirements.txt"
+      - dependency-name: "*test*"
+        versions: ["> 0"]
