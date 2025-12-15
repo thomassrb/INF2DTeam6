@@ -12,18 +12,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Run deploy script
-        run: |
-          cd /home/ubuntu-1056396/mobypark
-          chmod +x deploy.sh
-          ./deploy.sh
       - name: Debug runner user
         run: |
           whoami
           id
           pwd
           which systemctl
+      - name: Run deploy script
+        run: |
+          cd /home/ubuntu-1056396/mobypark
+          chmod +x deploy.sh
+          ./deploy.sh
+      
 
       - name: Restart service
         run: |
