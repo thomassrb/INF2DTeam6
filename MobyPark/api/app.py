@@ -39,8 +39,8 @@ if project_root not in sys.path:
 from MobyPark.api.Models.User import User
 from MobyPark.api.Models.ParkingLot import ParkingLot
 from MobyPark.api.Models.ParkingLotCoordinates import ParkingLotCoordinates
-from MobyPark.api.DataAccess.Logger import log
 from MobyPark.api import session_manager
+from MobyPark.api.DataAccess.Logger import Logger
 from MobyPark.middleware.performance_tracer import PerformanceTracer
 from typing import Optional
 import os
@@ -53,6 +53,11 @@ DATA_DIR = (
     or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "MobyPark-api-data", "pdata")
 )
 os.makedirs(DATA_DIR, exist_ok=True)
+
+LOG_DIR = os.path.join(DATA_DIR, 'logs')
+os.makedirs(LOG_DIR, exist_ok=True)
+log_file = os.path.join(LOG_DIR, 'mobypark.log')
+logger = Logger(log_file)
 
 db_path = os.path.join(DATA_DIR, "MobyParkData.db")
 connection = DBConnection(database_path=db_path)
@@ -69,6 +74,16 @@ from middleware.performance_tracer import PerformanceTracer
 app = FastAPI(title="MobyPark API", version="1.0.0")
 
 app.add_middleware(PerformanceTracer)
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    response = await call_next(request)
+    try:
+        user = request.state.user if hasattr(request.state, 'user') else None
+        logger.log(user or 'anonymous', request.url.path, getattr(user, 'role', 'ANONYMOUS'))
+    except Exception as e:
+        logger.error(f"Error in request logging: {str(e)}")
+    return response
 
 app.add_middleware(
     CORSMiddleware,
