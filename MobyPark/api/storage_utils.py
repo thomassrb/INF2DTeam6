@@ -17,12 +17,11 @@ json_file_lock = threading.Lock()
 
 def load_json(filename):
     full_path = os.path.join(DATA_DIR, filename)
-    print(f"DEBUG: load_json trying to open: {full_path}")
     with json_file_lock:
         try:
             with open(full_path, 'r', encoding='utf-8') as file:
                 data = json.load(file)
-                print(f"DEBUG: Successfully loaded JSON from {filename}. Data type: {type(data)}")
+                print(f"DEBUG: Successfully loaded JSON from {filename}.")
                 return data
         except FileNotFoundError:
             print(f"DEBUG: FileNotFoundError for {filename}. Returning empty dictionary.")

@@ -235,18 +235,27 @@ class DataValidator:
 class AuditLogger:
     def audit(self, session_user, action, *, target=None, extra=None, status="SUCCESS"):
         try:
+            from MobyPark.api import crypto_utils
             script_dir = os.path.dirname(os.path.abspath(__file__))
             data_dir = os.path.join(script_dir, '..', '..', 'data')
             os.makedirs(data_dir, exist_ok=True)
             log_path = os.path.join(data_dir, 'audit.log')
+            # sanitize PII in 'extra' and 'target' before persisting to audit log
+            def _sanitize(v):
+                if isinstance(v, str):
+                    return crypto_utils.mask_value(v, keep=1)
+                if isinstance(v, dict):
+                    return {k: _sanitize(vv) if k in ("license_plate", "licenseplate", "email", "phone", "name") else vv for k, vv in v.items()}
+                return v
+
             entry = {
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "user": session_user.get("username") if session_user else None,
                 "role": session_user.get("role") if session_user else None,
                 "action": action,
-                "target": target,
+                "target": _sanitize(target),
                 "status": status,
-                "extra": extra,
+                "extra": _sanitize(extra),
             }
             with open(log_path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps(entry, ensure_ascii=False) + "\n")
