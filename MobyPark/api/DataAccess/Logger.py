@@ -4,49 +4,63 @@ import os
 import logging
 import json
 from datetime import datetime
+from typing import Union, Dict, Any
 
-def setup_logger():
-    log_dir = os.path.join(os.path.dirname(__file__), "..", "..", "..", "logs")
-    os.makedirs(log_dir, exist_ok=True)
-
-    logger = logging.getLogger("json_logger")
-    logger.setLevel(logging.INFO)
-
-    if logger.handlers:
-        return logger
-
-    handler = TimedRotatingFileHandler(
-    os.path.join(log_dir, "access.log"),
-    when="midnight",
-    utc=True
-    )
-    handler.namer = lambda name: name.replace("access.log.", "access-") + ".log"
-
-    handler.setFormatter(JsonFormatter())
-    logger.addHandler(handler)
-
-    return logger
-
-
-def log(user: User, endpoint: str):
-    logger = setup_logger()
-
-    logger.info(
-        "access",
-        extra={
-            "endpoint": endpoint,
-            "user": user.username,
-            "role": user.role,
-            "timestamp": datetime.utcnow().isoformat()
-        }
-    )
 
 class JsonFormatter(logging.Formatter):
     def format(self, record):
+        message = record.getMessage()
         log_entry = {
-            "endpoint": record.endpoint,
-            "user": record.user,
-            "role": record.role,
-            "timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+            'timestamp': datetime.utcnow().isoformat(),
+            'level': record.levelname,
+            'message': message,
+            'endpoint': getattr(record, 'endpoint', ''),
+            'user': getattr(record, 'user', ''),
+            'role': getattr(record, 'role', ''),
         }
         return json.dumps(log_entry)
+
+
+class Logger:
+    def __init__(self, path: str):
+        self.path = path
+        self.logger = logging.getLogger("mobypark")
+        self.logger.setLevel(logging.INFO)
+
+        # Prevent duplicate handlers on reload
+        if self.logger.handlers:
+            self.logger.handlers = []
+
+        # File logging
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        file_handler = TimedRotatingFileHandler(
+            path,
+            when="midnight",
+            utc=True,
+            encoding="utf-8"
+        )
+        file_handler.setFormatter(JsonFormatter())
+        self.logger.addHandler(file_handler)
+
+        # Console logging
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(
+            logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        )
+        self.logger.addHandler(console_handler)
+
+    def log(self, user: Union[str, object], endpoint: str, role: str = "USER"):
+        username = user.username if hasattr(user, 'username') else str(user)
+        user_role = user.role if hasattr(user, 'role') else role
+
+        self.logger.info(
+            "API Request",
+            extra={
+                'endpoint': endpoint,
+                'user': username,
+                'role': user_role,
+            }
+        )
+
+    def error(self, message: str):
+        self.logger.error(message)

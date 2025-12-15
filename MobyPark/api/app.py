@@ -389,12 +389,40 @@ async def update_profile_by_id(user_id: str, body: ProfileUpdate, user: User = D
 @app.get("/parking-lots")
 async def list_parking_lots():
     """
-    Return parking lots as a dict mapping id -> lot, because the e2e tests
-    call .items() on the response.
+    Return a list of all parking lots.
     """
-    log(user=Depends(get_current_user), endpoint="/parking-lots")
-    parking_lots = access_parkinglots.get_all_parking_lots()
-    return parking_lots
+    try:
+        logger.log(user=Depends(get_current_user), endpoint="/parking-lots")
+        parking_lots = access_parkinglots.get_all_parking_lots()
+        return parking_lots
+    except Exception as e:
+        logger.error(f"Error in list_parking_lots: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error": f"Failed to retrieve parking lots: {str(e)}"}
+        )
+
+
+@app.get("/parking-lots/{lot_id}")
+async def get_parking_lot(lot_id: str):
+    """Get a specific parking lot by ID."""
+    try:
+        logger.log(user=Depends(get_current_user), endpoint=f"/parking-lots/{lot_id}")
+        parking_lot = access_parkinglots.get_parking_lot(lot_id)
+        if not parking_lot:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"error": "Parking lot not found"}
+            )
+        return parking_lot
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in get_parking_lot: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error": f"Failed to retrieve parking lot: {str(e)}"}
+        )
 
 
 
