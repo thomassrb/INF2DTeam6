@@ -1,15 +1,15 @@
-
 import os
 import sys
 import pathlib
 
-project_root = str(pathlib.Path(__file__).resolve().parent.parent.parent.parent)
+# project root path
+project_root = str(pathlib.Path(__file__).resolve().parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from MobyPark.api.authentication import login_required, roles_required
-from MobyPark.api.app import access_vehicles, access_parkinglots, access_payments, access_reservations, access_sessions, access_users, connection
-from MobyPark.api.Models.User import User
+from ..authentication import login_required, roles_required
+from ..app import access_vehicles, access_parkinglots, access_payments, access_reservations, access_sessions, access_users, connection
+from ..Models.User import User
 
 
 class delete_routes:
