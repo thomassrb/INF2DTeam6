@@ -11,7 +11,7 @@ echo "Target: $TARGET_DIR"
 
 mkdir -p "$TARGET_DIR"
 
-Copy code, but keep venv/logs on the server
+# Copy code, but keep venv/logs on the server
 rsync -a --delete \
   --exclude '.git' \
   --exclude 'venv' \
