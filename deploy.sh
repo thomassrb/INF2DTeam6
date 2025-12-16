@@ -17,6 +17,7 @@ rsync -a --delete \
   --exclude 'venv' \
   --exclude 'pycache' \
   --exclude 'logs' \
+  --exclude 'start_app.sh' \
   "$SRC_DIR"/ "$TARGET_DIR"/
 
 echo "Deployment completed successfully!"
