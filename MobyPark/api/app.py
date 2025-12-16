@@ -5,7 +5,7 @@ import os
 import pathlib
 import sys
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 # 3rd part
 from fastapi import Depends, FastAPI, HTTPException, Request, responses, status
@@ -22,9 +22,11 @@ from .DataAccess.AccessReservations import AccessReservations
 from .DataAccess.AccessSessions import AccessSessions
 from .DataAccess.AccessUsers import AccessUsers
 from .DataAccess.AccessVehicles import AccessVehicles
+from .DataAccess.AccessFreeParking import AccessFreeParking
 from .Models.ParkingLot import ParkingLot
 from .Models.ParkingLotCoordinates import ParkingLotCoordinates
 from .Models.User import User
+from .Models.FreeParking import FreeParking
 from .storage_utils import (
     load_json, save_user_data, load_parking_lot_data, load_reservation_data,
     save_parking_lot_data, save_reservation_data, load_vehicles_data,
@@ -56,13 +58,30 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 db_path = os.path.join(DATA_DIR, "MobyParkData.db")
 connection = DBConnection(database_path=db_path)
-access_parkinglots = AccessParkingLots(conn=connection)
-access_payments = AccessPayments(conn=connection)
-access_reservations = AccessReservations(conn=connection)
-access_sessions = AccessSessions(conn=connection)
+
+# Create free_parking_plates table if it doesn't exist
+with connection.connection as conn:
+    cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS free_parking_plates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        license_plate TEXT NOT NULL UNIQUE,
+        added_by INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (added_by) REFERENCES users(id)
+    )
+    """)
+    
+    cursor.execute("INSERT OR IGNORE INTO discounts (discount) VALUES (100)")
+    conn.commit()
+
 access_users = AccessUsers(conn=connection)
 access_vehicles = AccessVehicles(conn=connection)
-
+access_parkinglots = AccessParkingLots(conn=connection)
+access_reservations = AccessReservations(conn=connection)
+access_sessions = AccessSessions(conn=connection)
+access_payments = AccessPayments(conn=connection)
+access_free_parking = AccessFreeParking(connection=connection)
 
 log_path = os.path.join(DATA_DIR, "access-dd-mm-yyyy.log")
 logger = Logger(path=log_path)
@@ -167,6 +186,15 @@ class RefundCreate(BaseModel):
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
     password: Optional[str] = None
+
+class FreeParkingRequest(BaseModel):
+    license_plate: str
+
+class FreeParkingResponse(BaseModel):
+    id: int
+    license_plate: str
+    added_by: int
+    created_at: Optional[str] = None
 
 
 
@@ -1424,3 +1452,69 @@ async def get_user_billing(username: str, user: Any = Depends(require_roles("ADM
     """
     logger.log(user=user, endpoint="/billing/{username}")
     return BILLING_DATA.get(username, [])
+
+@app.post("/discount-codes/free-parking", response_model=FreeParkingResponse, status_code=201)
+async def add_free_parking_plate(
+    request: FreeParkingRequest,
+    user: User = Depends(require_roles("ADMIN"))
+):
+    try:
+        free_parking = access_free_parking.add_free_parking_plate(
+            license_plate=request.license_plate,
+            added_by=user.id
+        )
+        
+        return {
+            "id": free_parking.id,
+            "license_plate": free_parking.license_plate,
+            "added_by": free_parking.added_by,
+            "created_at": free_parking.created_at.isoformat() if free_parking.created_at else None
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.log(f"Error adding free parking plate: {str(e)}")
+        
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/discount-codes/free-parking", response_model=List[FreeParkingResponse])
+async def list_free_parking_plates(
+    user: User = Depends(require_roles("ADMIN"))
+):
+    try:
+        plates = access_free_parking.get_all_free_parking_plates()
+        return [
+            {
+                "id": plate.id,
+                "license_plate": plate.license_plate,
+                "added_by": plate.added_by,
+                "created_at": plate.created_at.isoformat() if plate.created_at else None
+            }
+            for plate in plates
+        ]
+    except Exception as e:
+        logger.log(f"Error listing free parking plates: {str(e)}", level="error")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.delete("/discount-codes/free-parking/{license_plate}", status_code=200)
+async def remove_free_parking_plate(
+    license_plate: str,
+    user: User = Depends(require_roles("ADMIN"))
+):
+    try:
+        success = access_free_parking.remove_free_parking_plate(license_plate)
+        if not success:
+            raise HTTPException(
+                status_code=404,
+                detail=f"License plate {license_plate} not found in free parking whitelist"
+            )
+            
+        return {
+            "status": "success",
+            "message": f"License plate {license_plate} removed from free parking whitelist"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.log(f"Error removing free parking plate: {str(e)}", level="error")
+        raise HTTPException(status_code=500, detail="Internal server error")
