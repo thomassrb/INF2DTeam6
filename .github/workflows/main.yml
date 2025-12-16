@@ -14,26 +14,20 @@ jobs:
       - run: echo "Deploying because CI passed"
       
       - name: Checkout code
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-
+        uses: actions/checkout@v4
 
       - name: Debug runner user
         run: |
           whoami
           id
           which systemctl
-
       - name: Run deploy script
         run: |
           cd /home/ubuntu-1056396/mobypark
           chmod +x deploy.sh
           ./deploy.sh
-
       - name: Restart mobypark service
         run: |
           sudo -n /usr/bin/systemctl daemon-reload
           sudo -n /usr/bin/systemctl restart mobypark
           sudo -n /usr/bin/systemctl status mobypark 
-
