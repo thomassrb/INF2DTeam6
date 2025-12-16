@@ -2,7 +2,7 @@ name: Deploy
 
 on:
   workflow_run:
-    workflows: ["Python Tests"]
+    workflows: ["Python Tests"]   # must match Workflow A's `name:`
     types:
       - completed
 
@@ -15,6 +15,13 @@ jobs:
       
       - name: Checkout code
         uses: actions/checkout@v4
+      - name: Debug which deploy.sh runs
+        run: |
+            pwd
+            ls -la
+            ls -la deploy.sh
+            head -n 60 deploy.sh
+
 
       - name: Debug runner user
         run: |
@@ -31,5 +38,3 @@ jobs:
           sudo -n /usr/bin/systemctl daemon-reload
           sudo -n /usr/bin/systemctl restart mobypark
           sudo -n /usr/bin/systemctl status mobypark 
-
-# aa
