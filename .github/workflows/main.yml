@@ -23,9 +23,9 @@ jobs:
           which systemctl
       - name: Run deploy script
         run: |
-          cd /home/ubuntu-1056396/mobypark
-          chmod +x deploy.sh
-          ./deploy.sh
+            chmod +x deploy.sh
+            ./deploy.sh
+            
       - name: Restart mobypark service
         run: |
           sudo -n /usr/bin/systemctl daemon-reload
