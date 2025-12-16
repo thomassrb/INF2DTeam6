@@ -14,7 +14,10 @@ jobs:
       - run: echo "Deploying because CI passed"
       
       - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
 
       - name: Debug runner user
         run: |
