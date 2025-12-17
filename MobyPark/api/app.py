@@ -1573,44 +1573,55 @@ async def get_discount_code(
     code_id: int,
     user: User = Depends(require_roles("ADMIN"))
 ):
-
+    """
+    Get a discount code by its ID
+    """
     try:
         code = access_discount_codes.get_discount_code_by_id(code_id)
         if not code:
             raise HTTPException(status_code=404, detail="Discount code not found")
-        return code.to_dict()
+            
+        if hasattr(code, 'to_dict'):
+            return code.to_dict()
+        return code
+        
     except Exception as e:
-        logger.log(f"Error getting discount code: {str(e)}", level="error")
+        logger.error(f"Error getting discount code: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to retrieve discount code")
 
 @app.put("/discount-codes/{code_id}", response_model=DiscountCodeResponse)
 async def update_discount_code(
     code_id: int,
-    code_data: DiscountCodeCreate,
+    code_data: dict,
     user: User = Depends(require_roles("ADMIN"))
 ):
-
     try:
         existing_code = access_discount_codes.get_discount_code_by_id(code_id)
         if not existing_code:
             raise HTTPException(status_code=404, detail="Discount code not found")
         
-        existing_code.code = code_data.code
-        existing_code.discount_percentage = code_data.discount_percentage
-        existing_code.max_uses = code_data.max_uses
-        existing_code.valid_from = code_data.valid_from
-        existing_code.valid_until = code_data.valid_until
-        
-        success = access_discount_codes.update_discount_code(existing_code)
-        if not success:
-            raise Exception("Failed to update discount code")
+        if hasattr(existing_code, 'to_dict'):
+            existing_code = existing_code.to_dict()
             
-        return existing_code.to_dict()
+        for key, value in code_data.items():
+            if key in existing_code and value is not None:
+                existing_code[key] = value
+        
+        success = access_discount_codes.update_discount_code(
+            code_id=code_id,
+            **{k: v for k, v in existing_code.items() if k != 'id'}
+        )
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to update discount code")
+            
+        updated_code = access_discount_codes.get_discount_code_by_id(code_id)
+        return updated_code if not hasattr(updated_code, 'to_dict') else updated_code.to_dict()
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.log(f"Error updating discount code: {str(e)}", level="error")
+        logger.error(f"Error updating discount code: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to update discount code")
 
 @app.delete("/discount-codes/{code_id}", status_code=200)
@@ -1618,7 +1629,6 @@ async def delete_discount_code(
     code_id: int,
     user: User = Depends(require_roles("ADMIN"))
 ):
-
     try:
         success = access_discount_codes.delete_discount_code(code_id)
         if not success:
@@ -1631,6 +1641,36 @@ async def delete_discount_code(
     except Exception as e:
         logger.log(f"Error deleting discount code: {str(e)}", level="error")
         raise HTTPException(status_code=500, detail="Failed to delete discount code")
+
+@app.put("/discount-codes/{code_id}/deactivate", response_model=DiscountCodeResponse)
+async def deactivate_discount_code(
+    code_id: int,
+    user: User = Depends(require_roles("ADMIN"))
+):
+    """
+    Deactivate a discount code
+    """
+    try:
+        code = access_discount_codes.get_discount_code_by_id(code_id)
+        if not code:
+            raise HTTPException(status_code=404, detail="Discount code not found")
+            
+        success = access_discount_codes.update_discount_code(
+            code_id=code_id,
+            is_active=False
+        )
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to deactivate discount code")
+            
+        updated_code = access_discount_codes.get_discount_code_by_id(code_id)
+        return updated_code
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.log(f"Error deactivating discount code: {str(e)}", level="error")
+        raise HTTPException(status_code=500, detail="Failed to deactivate discount code")
 
 
 @app.post("/payments/apply-discount", response_model=ApplyDiscountResponse)
