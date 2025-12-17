@@ -23,10 +23,18 @@ from .DataAccess.AccessSessions import AccessSessions
 from .DataAccess.AccessUsers import AccessUsers
 from .DataAccess.AccessVehicles import AccessVehicles
 from .DataAccess.AccessFreeParking import AccessFreeParking
+from .DataAccess.AccessDiscountCodes import AccessDiscountCodes
 from .Models.ParkingLot import ParkingLot
 from .Models.ParkingLotCoordinates import ParkingLotCoordinates
 from .Models.User import User
 from .Models.FreeParking import FreeParking
+from .Models.DiscountCode import (
+    DiscountCode, 
+    DiscountCodeCreate, 
+    DiscountCodeResponse,
+    ApplyDiscountRequest,
+    ApplyDiscountResponse
+)
 from .storage_utils import (
     load_json, save_user_data, load_parking_lot_data, load_reservation_data,
     save_parking_lot_data, save_reservation_data, load_vehicles_data,
@@ -82,6 +90,7 @@ access_reservations = AccessReservations(conn=connection)
 access_sessions = AccessSessions(conn=connection)
 access_payments = AccessPayments(conn=connection)
 access_free_parking = AccessFreeParking(connection=connection)
+access_discount_codes = AccessDiscountCodes(connection=connection)
 
 log_path = os.path.join(DATA_DIR, "access-dd-mm-yyyy.log")
 logger = Logger(path=log_path)
@@ -1518,3 +1527,211 @@ async def remove_free_parking_plate(
     except Exception as e:
         logger.log(f"Error removing free parking plate: {str(e)}", level="error")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/discount-codes", response_model=DiscountCodeResponse, status_code=201)
+async def create_discount_code(
+    code_data: DiscountCodeCreate,
+    user: User = Depends(require_roles("ADMIN"))
+):
+
+    try:
+        discount_code = DiscountCode(
+            id=0,
+            code=code_data.code,
+            discount_percentage=code_data.discount_percentage,
+            max_uses=code_data.max_uses,
+            valid_from=code_data.valid_from,
+            valid_until=code_data.valid_until,
+            created_by=user.id,
+            is_active=True
+        )
+        
+        created_code = access_discount_codes.add_discount_code(discount_code)
+        return created_code.to_dict()
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.log(f"Error creating discount code: {str(e)}", "error")
+        raise HTTPException(status_code=500, detail="Failed to create discount code")
+
+@app.get("/discount-codes", response_model=List[DiscountCodeResponse])
+async def list_discount_codes(
+    user: User = Depends(require_roles("ADMIN"))
+):
+
+    try:
+        codes = access_discount_codes.get_all_discount_codes()
+        return [code.to_dict() for code in codes]
+    except Exception as e:
+        logger.log(f"Error listing discount codes: {str(e)}", level="error")
+        raise HTTPException(status_code=500, detail="Failed to retrieve discount codes")
+
+@app.get("/discount-codes/{code_id}", response_model=DiscountCodeResponse)
+async def get_discount_code(
+    code_id: int,
+    user: User = Depends(require_roles("ADMIN"))
+):
+
+    try:
+        code = access_discount_codes.get_discount_code_by_id(code_id)
+        if not code:
+            raise HTTPException(status_code=404, detail="Discount code not found")
+        return code.to_dict()
+    except Exception as e:
+        logger.log(f"Error getting discount code: {str(e)}", level="error")
+        raise HTTPException(status_code=500, detail="Failed to retrieve discount code")
+
+@app.put("/discount-codes/{code_id}", response_model=DiscountCodeResponse)
+async def update_discount_code(
+    code_id: int,
+    code_data: DiscountCodeCreate,
+    user: User = Depends(require_roles("ADMIN"))
+):
+
+    try:
+        existing_code = access_discount_codes.get_discount_code_by_id(code_id)
+        if not existing_code:
+            raise HTTPException(status_code=404, detail="Discount code not found")
+        
+        existing_code.code = code_data.code
+        existing_code.discount_percentage = code_data.discount_percentage
+        existing_code.max_uses = code_data.max_uses
+        existing_code.valid_from = code_data.valid_from
+        existing_code.valid_until = code_data.valid_until
+        
+        success = access_discount_codes.update_discount_code(existing_code)
+        if not success:
+            raise Exception("Failed to update discount code")
+            
+        return existing_code.to_dict()
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.log(f"Error updating discount code: {str(e)}", level="error")
+        raise HTTPException(status_code=500, detail="Failed to update discount code")
+
+@app.delete("/discount-codes/{code_id}", status_code=200)
+async def delete_discount_code(
+    code_id: int,
+    user: User = Depends(require_roles("ADMIN"))
+):
+
+    try:
+        success = access_discount_codes.delete_discount_code(code_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Discount code not found")
+            
+        return {"status": "success", "message": "Discount code deleted"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.log(f"Error deleting discount code: {str(e)}", level="error")
+        raise HTTPException(status_code=500, detail="Failed to delete discount code")
+
+
+@app.post("/payments/apply-discount", response_model=ApplyDiscountResponse)
+async def apply_discount_code(
+    request: ApplyDiscountRequest,
+    user: User = Depends(get_current_user)
+):
+
+    if not request.code:
+        return ApplyDiscountResponse(
+            success=False,
+            discount_amount=0,
+            final_amount=request.amount,
+            message="No discount code provided"
+        )
+    
+    try:
+        if request.code.upper() == "GRATIS":
+            vehicles = access_vehicles.get_vehicles_by_user_id(user.id)
+            for vehicle in vehicles:
+                if access_free_parking.is_plate_free_parking(vehicle.licenseplate):
+                    return ApplyDiscountResponse(
+                        success=True,
+                        discount_amount=request.amount,
+                        final_amount=0,
+                        message="100% discount applied (GRATIS)"
+                    )
+            
+            return ApplyDiscountResponse(
+                success=False,
+                discount_amount=0,
+                final_amount=request.amount,
+                message="GRATIS code is only available for vehicles with free parking privileges"
+            )
+        
+        final_amount, message = access_discount_codes.apply_discount_code(
+            request.code, 
+            user.id, 
+            request.amount
+        )
+        
+        discount_amount = request.amount - final_amount
+        
+        return ApplyDiscountResponse(
+            success=True,
+            discount_amount=discount_amount,
+            final_amount=final_amount,
+            message=message or f"Discount applied"
+        )
+        
+    except ValueError as e:
+        return ApplyDiscountResponse(
+            success=False,
+            discount_amount=0,
+            final_amount=request.amount,
+            message=str(e)
+        )
+    except Exception as e:
+        logger.log(f"Error applying discount code: {str(e)}", level="error")
+        return ApplyDiscountResponse(
+            success=False,
+            discount_amount=0,
+            final_amount=request.amount,
+            message="Failed to apply discount code"
+        )
+
+@app.post("/discount-codes/apply", response_model=ApplyDiscountResponse)
+@app.post("/payments/apply-discount", response_model=ApplyDiscountResponse)
+async def apply_discount(
+    request: ApplyDiscountRequest,
+    current_user: User = Depends(require_roles("USER", "ADMIN"))
+):
+    try:
+        final_amount, message = access_discount_codes.apply_discount_code(
+            code=request.code.upper(),
+            user_id=current_user.id,
+            amount=request.amount
+        )
+        
+        discount_amount = request.amount - final_amount
+        
+        if "error" in message.lower() or "invalid" in message.lower():
+            return ApplyDiscountResponse(
+                success=False,
+                discount_amount=0,
+                final_amount=request.amount,
+                message=message
+            )
+            
+        return ApplyDiscountResponse(
+            success=True,
+            discount_amount=round(discount_amount, 2),
+            final_amount=round(final_amount, 2),
+            message=message
+        )
+        
+    except Exception as e:
+        print(f"Error applying discount: {str(e)}")
+        return ApplyDiscountResponse(
+            success=False,
+            discount_amount=0,
+            final_amount=request.amount,
+            message="An error occurred while applying the discount"
+        )
