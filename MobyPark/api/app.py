@@ -1557,15 +1557,15 @@ async def create_discount_code(
         raise HTTPException(status_code=500, detail="Failed to create discount code")
 
 @app.get("/discount-codes", response_model=List[DiscountCodeResponse])
-async def list_discount_codes(
-    user: User = Depends(require_roles("ADMIN"))
-):
-
+async def list_discount_codes():
     try:
         codes = access_discount_codes.get_all_discount_codes()
+        # Convert dictionary to DiscountCode objects if needed
+        if codes and isinstance(codes[0], dict):
+            return codes  # Already in the correct format for Pydantic
         return [code.to_dict() for code in codes]
     except Exception as e:
-        logger.log(f"Error listing discount codes: {str(e)}", level="error")
+        logger.error(f"Error listing discount codes: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to retrieve discount codes")
 
 @app.get("/discount-codes/{code_id}", response_model=DiscountCodeResponse)

@@ -7,25 +7,32 @@ logger = logging.getLogger(__name__)
 
 class AccessDiscountCodes:
     def __init__(self, connection):
-
-    if hasattr(connection, 'connection') and hasattr(connection, 'cursor'):
-        self.connection = connection.connection
-        self.cursor = connection.cursor()
-        self._owns_cursor = True
-    elif isinstance(connection, sqlite3.Connection):
-        self.connection = connection
-        self.cursor = connection.cursor()
-        self._owns_cursor = True
-    elif isinstance(connection, sqlite3.Cursor):
-        self.cursor = connection
-        self.connection = connection.connection
-        self._owns_cursor = False
-    else:
-        raise ValueError(
-            "connection must be a sqlite3.Connection, sqlite3.Cursor, or DBConnection"
-        )
+        """Initialize with either a database connection, cursor, or DBConnection.
         
-    self._create_tables()
+        Args:
+            connection: Can be one of:
+                      - sqlite3.Connection: A database connection
+                      - sqlite3.Cursor: A database cursor
+                      - DBConnection: A custom DBConnection object
+        """
+        if hasattr(connection, 'connection') and hasattr(connection, 'cursor'):
+            self.connection = connection.connection
+            self.cursor = connection.cursor
+            self._owns_cursor = True
+        elif isinstance(connection, sqlite3.Connection):
+            self.connection = connection
+            self.cursor = connection.cursor()
+            self._owns_cursor = True
+        elif isinstance(connection, sqlite3.Cursor):
+            self.cursor = connection
+            self.connection = connection.connection
+            self._owns_cursor = False
+        else:
+            raise ValueError(
+                "connection must be a sqlite3.Connection, sqlite3.Cursor, or DBConnection"
+            )
+            
+        self._create_tables()
 
     def _create_tables(self):
         """Create necessary tables if they don't exist"""
