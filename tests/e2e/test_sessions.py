@@ -14,13 +14,14 @@ def create_parking_lot(admin_token: str, name: str = "E2E Lot") -> str:
         "address": "Wijnhaven 100",
         "coordinates": [52.0, 4.0],
     }
-    r = requests.post(f"{BASE}/parking-lots", json=payload, headers={"Authorization": f"Bearer {admin_token}"}, timeout=5)
+    r = requests.post(
+        f"{BASE}/parking-lots", 
+        json=payload, 
+        headers={"Authorization": f"Bearer {admin_token}"}, 
+        timeout=5
+    )
     assert r.status_code in (200, 201), r.text
-    lots = requests.get(f"{BASE}/parking-lots", timeout=5).json()
-
-    lot_id = next((lid for lid, lot in lots.items() if lot.get("name") == name), None)
-    assert lot_id, "Failed to resolve created parking lot id"
-    return lot_id
+    return r.json()["id"]
 
 
 def test_session_start_stop_flow(server_process, admin_token, user_token):

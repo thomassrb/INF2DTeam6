@@ -1,37 +1,54 @@
-from typing import Optional, Dict, Any
-import os
-import sys
-import pathlib
-from .storage_utils import load_json, save_user_data
+# Standaard imports
 import hashlib
-from MobyPark.api import authentication
+import glob as _glob
+import os
+import pathlib
+import sys
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+# 3rd part
+from fastapi import Depends, FastAPI, HTTPException, Request, responses, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, PlainTextResponse
+from pydantic import BaseModel
+
+# Locale imports
+from . import authentication, session_manager
+from .DBConnection import DBConnection
+from .DataAccess.AccessParkingLots import AccessParkingLots
+from .DataAccess.AccessPayments import AccessPayments
+from .DataAccess.AccessReservations import AccessReservations
+from .DataAccess.AccessSessions import AccessSessions
+from .DataAccess.AccessUsers import AccessUsers
+from .DataAccess.AccessVehicles import AccessVehicles
+from .DataAccess.AccessFreeParking import AccessFreeParking
+from .Models.ParkingLot import ParkingLot
+from .Models.ParkingLotCoordinates import ParkingLotCoordinates
+from .Models.User import User
+from .Models.FreeParking import FreeParking
+from .storage_utils import (
+    load_json, save_user_data, load_parking_lot_data, load_reservation_data,
+    save_parking_lot_data, save_reservation_data, load_vehicles_data,
+    save_vehicles_data, load_user_data, load_payment_data, save_payment_data
+)
+
+# project root path
 project_root = str(pathlib.Path(__file__).resolve().parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-from typing import Any
-from fastapi import FastAPI, Depends, HTTPException, Request, status, responses
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse, JSONResponse
-from pydantic import BaseModel
-from fastapi.responses import JSONResponse
-from MobyPark.api.DBConnection import DBConnection
-from MobyPark.api.DataAccess.AccessParkingLots import AccessParkingLots
-from MobyPark.api.DataAccess.AccessPayments import AccessPayments
-from MobyPark.api.DataAccess.AccessReservations import AccessReservations
-from MobyPark.api.DataAccess.AccessSessions import AccessSessions
-from MobyPark.api.DataAccess.AccessUsers import AccessUsers
-from MobyPark.api.DataAccess.AccessVehicles import AccessVehicles
-from MobyPark.api.storage_utils import load_parking_lot_data,load_reservation_data,save_parking_lot_data,save_reservation_data,load_vehicles_data,save_vehicles_data,load_user_data,save_user_data,load_payment_data,save_payment_data
 
 from MobyPark.api.Models.User import User
 from MobyPark.api.Models.ParkingLot import ParkingLot
 from MobyPark.api.Models.ParkingLotCoordinates import ParkingLotCoordinates
+from MobyPark.api.DataAccess.Logger import Logger
 from MobyPark.api import session_manager
+from MobyPark.middleware.performance_tracer import PerformanceTracer
 from typing import Optional
 import os
+
 get_current_user = authentication.get_current_user 
 require_roles = authentication.require_roles
-# Gebruik dezelfde data directory als de rest van het project
 DATA_DIR = (
     os.environ.get("MOBYPARK_DB_DIR")
     or os.environ.get("MOBYPARK_DATA_DIR")
@@ -41,14 +58,40 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 db_path = os.path.join(DATA_DIR, "MobyParkData.db")
 connection = DBConnection(database_path=db_path)
-access_parkinglots = AccessParkingLots(conn=connection)
-access_payments = AccessPayments(conn=connection)
-access_reservations = AccessReservations(conn=connection)
-access_sessions = AccessSessions(conn=connection)
+
+# Create free_parking_plates table if it doesn't exist
+with connection.connection as conn:
+    cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS free_parking_plates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        license_plate TEXT NOT NULL UNIQUE,
+        added_by INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (added_by) REFERENCES users(id)
+    )
+    """)
+    
+    cursor.execute("INSERT OR IGNORE INTO discounts (discount) VALUES (100)")
+    conn.commit()
+
 access_users = AccessUsers(conn=connection)
 access_vehicles = AccessVehicles(conn=connection)
+access_parkinglots = AccessParkingLots(conn=connection)
+access_reservations = AccessReservations(conn=connection)
+access_sessions = AccessSessions(conn=connection)
+access_payments = AccessPayments(conn=connection)
+access_free_parking = AccessFreeParking(connection=connection)
+
+log_path = os.path.join(DATA_DIR, "access-dd-mm-yyyy.log")
+logger = Logger(path=log_path)
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from middleware.performance_tracer import PerformanceTracer
 
 app = FastAPI(title="MobyPark API", version="1.0.0")
+
+app.add_middleware(PerformanceTracer)
 
 app.add_middleware(
     CORSMiddleware,
@@ -58,10 +101,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 from fastapi.responses import JSONResponse
 from typing import Any
 
-# Simple in-memory index so we can reliably detect active sessions per lot+license plate
 ACTIVE_SESSION_KEYS: set[str] = set()
 
 BILLING_DATA: dict[str, list[dict]] = {}
@@ -144,6 +187,15 @@ class ProfileUpdate(BaseModel):
     name: Optional[str] = None
     password: Optional[str] = None
 
+class FreeParkingRequest(BaseModel):
+    license_plate: str
+
+class FreeParkingResponse(BaseModel):
+    id: int
+    license_plate: str
+    added_by: int
+    created_at: Optional[str] = None
+
 
 
 def get_current_user(request: Request) -> User:
@@ -211,6 +263,7 @@ async def register(body: RegisterRequest):
     )
     
     access_users.add_user(user=new_user)
+    logger.log(user=new_user, endpoint="/register")
     return {"message": "User created"}
 
 
@@ -271,11 +324,13 @@ async def login(body: LoginRequest):
 
     token = str(uuid.uuid4())
     session_manager.add_session(token, user)
+    logger.log(user=user, endpoint="/login")
     return {"message": "User logged in", "session_token": token}
 
 
 @app.post("/logout")
 async def logout(user: User = Depends(get_current_user), request: Request = None):
+    logger.log(user=user, endpoint="/logout")
     auth_header = request.headers.get("Authorization") if request else None
     token = None
     if auth_header:
@@ -289,6 +344,7 @@ async def logout(user: User = Depends(get_current_user), request: Request = None
 
 @app.get("/profile")
 async def get_profile(user: User = Depends(get_current_user)):
+    logger.log(user=user, endpoint="/profile")
     profile_data = {
         "username": user.username,
         "role": user.role,
@@ -304,6 +360,7 @@ async def get_profile(user: User = Depends(get_current_user)):
 @app.put("/profile")
 async def update_profile(body: ProfileUpdate, user: User = Depends(get_current_user)):
     """Update the current user's profile (name/password)."""
+    logger.log(user=user, endpoint="/profile")
     import hashlib
     if body.name is None or body.password is None:
         return {"message": "Invalid input"}
@@ -317,6 +374,7 @@ async def update_profile(body: ProfileUpdate, user: User = Depends(get_current_u
 
 @app.get("/profile/{user_id}")
 async def get_profile_by_id(user_id: str, user: User = Depends(get_current_user)):
+    logger.log(user=user, endpoint="/profile/{user_id}")
     target_user = access_users.get_user_byid(id=user_id)
     if not target_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
@@ -340,43 +398,71 @@ async def get_profile_by_id(user_id: str, user: User = Depends(get_current_user)
 
 @app.put("/profile/{user_id}")
 async def update_profile_by_id(user_id: str, body: ProfileUpdate, user: User = Depends(get_current_user)):
-    from .storage_utils import load_json, save_user_data
+    logger.log(user=user, endpoint="/profile/{user_id}")
     import hashlib
 
-    users = load_json("users.json")
-    target_user = next((u for u in users if u.get("id") == user_id), None)
+    target_user = access_users.get_user_byid(id=user_id)
     if not target_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    is_admin = user.get("role") == "ADMIN"
-    if not is_admin and user.get("id") != user_id:
+    is_admin = user.role == "ADMIN"
+    if not is_admin and user.id != user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied. You can only view your own profile.")
 
     if body.name is not None:
-        target_user["name"] = body.name
+        target_user.name = body.name
     if body.password is not None:
-        target_user["password"] = hashlib.sha256(body.password.encode("utf-8")).hexdigest()
+        target_user.password = hashlib.sha256(body.password.encode("utf-8")).hexdigest()
 
-    save_user_data(users)
+    access_users.update_user(user=target_user)
     return {"message": "User updated successfully"}
 
 
 @app.get("/parking-lots")
 async def list_parking_lots():
     """
-    Return parking lots as a dict mapping id -> lot, because the e2e tests
-    call .items() on the response.
+    Return a list of all parking lots.
     """
-    parking_lots = load_parking_lot_data()
-    return parking_lots
+    try:
+        logger.log(user=Depends(get_current_user), endpoint="/parking-lots")
+        parking_lots = access_parkinglots.get_all_parking_lots()
+        return parking_lots
+    except Exception as e:
+        logger.error(f"Error in list_parking_lots: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error": f"Failed to retrieve parking lots: {str(e)}"}
+        )
+
+
+@app.get("/parking-lots/{lot_id}")
+async def get_parking_lot(lot_id: str):
+    """Get a specific parking lot by ID."""
+    try:
+        logger.log(user=Depends(get_current_user), endpoint=f"/parking-lots/{lot_id}")
+        parking_lot = access_parkinglots.get_parking_lot(lot_id)
+        if not parking_lot:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"error": "Parking lot not found"}
+            )
+        return parking_lot
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in get_parking_lot: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"error": f"Failed to retrieve parking lot: {str(e)}"}
+        )
 
 
 
-@app.post("/parking-lots", status_code=status.HTTP_201_CREATED)
+@app.post("/parking-lots", status_code=status.HTTP_201_CREATED, response_model=dict)
 async def create_parking_lot(
     body: ParkingLotCreate,
     user: User = Depends(require_roles("ADMIN")),
-):
+) -> dict:
     """
     Create a parking lot.
 
@@ -385,6 +471,7 @@ async def create_parking_lot(
     - For valid payloads -> 200/201 and JSON containing an 'id' field
     - Data must be visible via load_parking_lot_data() for reservations/billing
     """
+    logger.log(user=user, endpoint="/parking-lots")
     from datetime import datetime
     import uuid
 
@@ -398,7 +485,6 @@ async def create_parking_lot(
             },
         )
 
-    # Use the JSON-based storage that the rest of the code (reservations/billing) already uses
     parking_lots = load_parking_lot_data()
 
     # Maak een nieuw uniek ID
@@ -419,12 +505,12 @@ async def create_parking_lot(
 
     save_parking_lot_data(parking_lots)
 
-    # Tests use response.json()["id"], so return the full lot dict
     return parking_lots[lot_id]
 
 
 @app.get("/parking-lots/{lid}")
 async def get_parking_lot_details(lid: str):
+    logger.log(user=Depends(get_current_user), endpoint="/parking-lots/{lid}")
     parking_lots = load_parking_lot_data()
     if lid not in parking_lots:
         return JSONResponse(
@@ -446,6 +532,7 @@ class ParkingLotUpdate(BaseModel):
 
 @app.put("/parking-lots/{lid}")
 async def update_parking_lot(lid: str, body: ParkingLotUpdate, user: User = Depends(require_roles("ADMIN"))):
+    logger.log(user=user, endpoint="/parking-lots{lid}")
     parking_lots = load_parking_lot_data()
     if lid not in parking_lots:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parking lot not found")
@@ -464,6 +551,7 @@ async def update_parking_lot(lid: str, body: ParkingLotUpdate, user: User = Depe
 
 @app.delete("/parking-lots/{lid}")
 async def delete_parking_lot(lid: str, user: User = Depends(require_roles("ADMIN"))):
+    logger.log(user=user, endpoint="/parking-lots{lid}")
     parking_lots = load_parking_lot_data()
     if lid not in parking_lots:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parking lot not found")
@@ -474,6 +562,7 @@ async def delete_parking_lot(lid: str, user: User = Depends(require_roles("ADMIN
 
 @app.delete("/parking-lots")
 async def delete_all_parking_lots(user: User = Depends(require_roles("ADMIN"))):
+    logger.log(user=user, endpoint="/parking-lots")
     save_parking_lot_data({})
     return {"message": "All parking lots deleted"}
 
@@ -497,12 +586,12 @@ async def start_session_for_lot(
     - 409 if there is already an active session for that plate in this lot
     - 200 on success
     """
+    logger.log(user=user, endpoint="/parking-lots/{lid}/sessions/start")
     from datetime import datetime
     from .storage_utils import load_json, save_data
 
     lp = (body.license_plate or body.licenseplate or "").strip()
     if not lp:
-        # Alt-flow test expects 400 when license plate missing
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Missing or invalid field: license_plate",
@@ -511,14 +600,12 @@ async def start_session_for_lot(
     username = _user_attr(user, "username")
     key = f"{lid}:{lp}"
 
-    # If there is already an active session for this lot+plate => 409 (this is test_session_start_stop_flow)
     if key in ACTIVE_SESSION_KEYS:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot start a session when another session for this license plate is already started.",
         )
 
-    # Try to load existing sessions from disk, but never crash if something is off
     try:
         sessions = load_json(f"pdata/p{lid}-sessions.json")
         if not isinstance(sessions, dict):
@@ -561,6 +648,7 @@ async def stop_session_for_lot(
     We only return 409 if *really* nothing was ever started.
     Also: we register a simple billing item in BILLING_DATA.
     """
+    logger.log(user=user, endpoint="/parking-lots/{lid}/sessions/stop")
     from datetime import datetime
     from .storage_utils import load_json, save_data
 
@@ -574,7 +662,6 @@ async def stop_session_for_lot(
     key = f"{lid}:{lp}"
     username = _user_attr(user, "username")
 
-    # Try to load sessions; if it fails, we still try to behave gracefully
     try:
         sessions = load_json(f"pdata/p{lid}-sessions.json")
         if not isinstance(sessions, dict):
@@ -584,7 +671,6 @@ async def stop_session_for_lot(
     except Exception:
         sessions = {}
 
-    # Find active session in file (best effort)
     active_sid = None
     for sid, sess in sessions.items():
         if (sess.get("licenseplate") == lp or sess.get("license_plate") == lp) and not sess.get("stopped"):
@@ -603,21 +689,17 @@ async def stop_session_for_lot(
                 "started": sess.get("started"),
                 "stopped": sess.get("stopped"),
             },
-            "amount": 0.0,  # tests only check presence, not value
+            "amount": 0.0,
         }
         BILLING_DATA.setdefault(username, []).append(billing_item)
         return {"message": f"Session stopped for: {lp}", "session_id": active_sid}
 
-    # No active session in file.
-    # If we never saw a start for this key => 409 (true "no session" situation)
     if key not in ACTIVE_SESSION_KEYS:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot stop a session when there is no session for this license plate.",
         )
 
-    # We *have* seen a start in-memory but the file does not reflect it (edge cases).
-    # For the billing happy-path test, we treat this as success and still add a billing item.
     ACTIVE_SESSION_KEYS.discard(key)
     billing_item = {
         "session": {
@@ -632,6 +714,7 @@ async def stop_session_for_lot(
 
 @app.get("/parking-lots/{lid}/sessions")
 async def list_parking_lot_sessions(lid: str, user: User = Depends(get_current_user)):
+    logger.log(user=user, endpoint="/parking-lots/{lid}/sessions")
     from .storage_utils import load_json
 
     parking_lots = load_parking_lot_data()
@@ -652,9 +735,9 @@ async def list_parking_lot_sessions(lid: str, user: User = Depends(get_current_u
 
 @app.get("/reservations")
 async def list_reservations(user: Any = Depends(get_current_user)):
+    logger.log(user=user, endpoint="/reservations")
     reservations = load_reservation_data()
 
-    # Normalise to dict: {id: reservation_dict}
     if isinstance(reservations, list):
         tmp = {}
         for res in reservations:
@@ -670,10 +753,8 @@ async def list_reservations(user: Any = Depends(get_current_user)):
     username = _user_attr(user, "username")
 
     if role == "ADMIN":
-        # Tests expect something JSON-serialisable; dict is fine
         return reservations
 
-    # Normal user: only own reservations
     user_reservations = {
         rid: res for rid, res in reservations.items()
         if isinstance(res, dict) and res.get("user") == username
@@ -686,15 +767,13 @@ async def create_reservation(
     body: ReservationCreate,
     user: Any = Depends(get_current_user),
 ):
+    logger.log(user=user, endpoint="/reservations")
     reservations = load_reservation_data()
     parking_lots = load_parking_lot_data()
 
-    # Sometimes parking_lots may be a list (from DB) – convert to dict that
-    # matches what the tests expect: {id: lot_dict}
     if isinstance(parking_lots, list):
         parking_lots = {pl.get("id"): pl for pl in parking_lots if isinstance(pl, dict)}
 
-    # Alt-flow: parking lot does not exist → 404
     if body.parkinglot not in parking_lots:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -706,19 +785,16 @@ async def create_reservation(
 
     data: Dict[str, Any] = body.dict()
 
-    # Normalise start/end fields (tests use start_time / end_time)
     if not data.get("start") and data.get("start_time"):
         data["start"] = data["start_time"]
     if not data.get("end") and data.get("end_time"):
         data["end"] = data["end_time"]
 
-    # Helper for user data (dict or User model)
     def _u(attr: str) -> Optional[str]:
         if isinstance(user, dict):
             return user.get(attr)
         return getattr(user, attr, None)
 
-    # Ownership rules
     if _u("role") != "ADMIN":
         if not data.get("user"):
             data["user"] = _u("username")
@@ -731,16 +807,13 @@ async def create_reservation(
         if not data.get("user"):
             data["user"] = None
 
-    # Normalise license plate key
     if "license_plate" not in data and data.get("licenseplate"):
         data["license_plate"] = data["licenseplate"]
 
-    # Create reservation id and persist
     rid = str(len(reservations) + 1)
     data["id"] = rid
     reservations[rid] = data
 
-    # Increase reserved count on lot, but be robust
     lot = parking_lots.get(data["parkinglot"])
     if isinstance(lot, dict):
         lot["reserved"] = lot.get("reserved", 0) + 1
@@ -782,9 +855,9 @@ async def create_reservation(
 
 @app.get("/reservations/{rid}")
 async def get_reservation_details(rid: str, user: Any = Depends(get_current_user)):
+    logger.log(user=user, endpoint="/reservations{rid}")
     reservations = load_reservation_data()
 
-    # Normalise to dict: {id: reservation_dict}
     if isinstance(reservations, list):
         tmp = {}
         for res in reservations:
@@ -817,6 +890,7 @@ async def get_reservation_details(rid: str, user: Any = Depends(get_current_user
 
 @app.put("/reservations/{rid}")
 async def update_reservation(rid: str, body: ReservationUpdate, user: User = Depends(get_current_user)):
+    logger.log(user=user, endpoint="/reservations{rid}")
     reservations = load_reservation_data()
     if rid not in reservations:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reservation not found")
@@ -844,10 +918,10 @@ async def update_reservation(rid: str, body: ReservationUpdate, user: User = Dep
 
 @app.delete("/reservations/{rid}")
 async def delete_reservation(rid: str, user: Any = Depends(get_current_user)):
+    logger.log(user=user, endpoint="/reservations{rid}")
     reservations = load_reservation_data()
     parking_lots = load_parking_lot_data()
 
-    # Normalise reservations into a dict: {id: reservation_dict}
     if isinstance(reservations, list):
         tmp: dict[str, dict] = {}
         for res in reservations:
@@ -870,7 +944,6 @@ async def delete_reservation(rid: str, user: Any = Depends(get_current_user)):
     role = _user_attr(user, "role")
     username = _user_attr(user, "username")
 
-    # Only owner or admin may delete
     if role != "ADMIN" and res.get("user") != username:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -878,11 +951,9 @@ async def delete_reservation(rid: str, user: Any = Depends(get_current_user)):
         )
 
     pid = res.get("parkinglot")
-    # Be tolerant: only decrement if it makes sense, never 400 here
     if pid and pid in parking_lots and parking_lots[pid].get("reserved", 0) > 0:
         parking_lots[pid]["reserved"] -= 1
 
-    # Remove reservation and persist
     del reservations[rid]
     save_reservation_data(reservations)
     save_parking_lot_data(parking_lots)
@@ -893,6 +964,7 @@ async def delete_reservation(rid: str, user: Any = Depends(get_current_user)):
 
 @app.delete("/reservations")
 async def delete_reservations(user: User = Depends(get_current_user)):
+    logger.log(user=user, endpoint="/reservations")
     reservations = load_reservation_data()
     parking_lots = load_parking_lot_data()
 
@@ -930,10 +1002,10 @@ async def list_vehicles(user: User = Depends(get_current_user)):
     List vehicles for the current user (or all if admin).
     Tests expect status 200 and valid JSON.
     """
+    logger.log(user=user, endpoint="/vehicles")
     try:
         vehicles_data = load_vehicles_data()
     except Exception:
-        # If file is missing/corrupt, behave as "no vehicles" instead of 500
         vehicles_data = {}
 
     username = user.get("username") if isinstance(user, dict) else getattr(user, "username", None)
@@ -945,7 +1017,6 @@ async def list_vehicles(user: User = Depends(get_current_user)):
             all_vehicles.extend(user_v_list)
         return all_vehicles
 
-    # Normal user: only their own vehicles
     return vehicles_data.get(username, [])
 
 
@@ -958,19 +1029,18 @@ async def create_vehicle(body: VehicleCreate, user: User = Depends(get_current_u
     - First creation -> 201 + {"vehicle": {...}}
     - Duplicate licenseplate for same user -> 409
     """
+    logger.log(user=user, endpoint="/vehicles")
     from datetime import datetime
     import uuid
 
     vehicles = load_vehicles_data()
 
-    # user from session_manager is stored as a dict
     username = user.get("username") if isinstance(user, dict) else getattr(user, "username", None)
     if not username:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user in session")
 
     user_vehicles = vehicles.get(username, [])
 
-    # Duplicate protection: same user + same licenseplate
     for v in user_vehicles:
         lp = v.get("license_plate") or v.get("licenseplate")
         if lp == body.licenseplate:
@@ -992,7 +1062,6 @@ async def create_vehicle(body: VehicleCreate, user: User = Depends(get_current_u
     vehicles[username] = user_vehicles
     save_vehicles_data(vehicles)
 
-    # Shape expected by tests: response.json()["vehicle"]["id"]
     return {"vehicle": vehicle}
 
 
@@ -1013,6 +1082,7 @@ async def get_vehicle_details(
     - Normal users: can only see their own vehicles.
     - Admins: can optionally specify a `username` query param.
     """
+    logger.log(user=user, endpoint="/vehicles{vid}")
     requester_role = _user_attr(user, "role")
     requester_username = _user_attr(user, "username")
 
@@ -1021,7 +1091,6 @@ async def get_vehicle_details(
     found_vehicle = None
     owner_username = None
 
-    # vehicles_data may be dict(username -> list[vehicle]) or a plain list
     if isinstance(vehicles_data, dict):
         for uname, vlist in vehicles_data.items():
             if not isinstance(vlist, list):
@@ -1041,7 +1110,6 @@ async def get_vehicle_details(
                 continue
             if v.get("id") == vid:
                 found_vehicle = v
-                # no clear owner; assume current user
                 owner_username = requester_username
                 break
 
@@ -1051,7 +1119,6 @@ async def get_vehicle_details(
             detail="Vehicle not found",
         )
 
-    # Permission check
     if requester_role != "ADMIN":
         if owner_username and owner_username != requester_username:
             raise HTTPException(
@@ -1074,6 +1141,7 @@ async def update_vehicle(
     The tests don't enforce ownership, so we just find the vehicle by id in
     all stored vehicles and update it.
     """
+    logger.log(user=user, endpoint="/vehicles{vid}")
     from datetime import datetime
 
     vehicles = load_vehicles_data()
@@ -1081,7 +1149,6 @@ async def update_vehicle(
     owner_username = None
     idx = None
 
-    # Find vehicle in any user's list
     for uname, vlist in vehicles.items():
         if not isinstance(vlist, list):
             continue
@@ -1117,6 +1184,7 @@ async def delete_vehicle(
     Again, we look across all users for the vehicle id – tests just check
     that the vehicle disappears, not strict ownership rules.
     """
+    logger.log(user=user, endpoint="/vehicles{vid}")
     vehicles = load_vehicles_data()
 
     owner_username = None
@@ -1137,7 +1205,6 @@ async def delete_vehicle(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vehicle not found")
 
     del vehicles[owner_username][idx]
-    # Clean up empty lists just in case
     if not vehicles[owner_username]:
         vehicles[owner_username] = []
 
@@ -1151,6 +1218,7 @@ async def get_vehicle_history(license_plate: str, user: User = Depends(get_curre
 
     Non-admin users can only view their own vehicle's history.
     """
+    logger.log(user=user, endpoint="/vehicles/{license_plate}/history")
     from .storage_utils import load_json
 
     vehicles_data = load_json("vehicles.json")
@@ -1194,6 +1262,7 @@ async def get_vehicle_reservations_by_license_plate(license_plate: str, user: Us
 
     Non-admin users can only view their own vehicle's reservations.
     """
+    logger.log(user=user, endpoint="/vehicles/{license_plate}/reservations")
     from .storage_utils import load_json
 
     vehicles_data = load_json("vehicles.json")
@@ -1229,6 +1298,7 @@ async def get_vehicle_reservations_by_license_plate(license_plate: str, user: Us
 
 @app.get("/payments")
 async def list_payments(user: User = Depends(get_current_user)):
+    logger.log(user=user, endpoint="/payments")
     payments = []
     for payment in load_payment_data():
         if (
@@ -1242,6 +1312,7 @@ async def list_payments(user: User = Depends(get_current_user)):
 
 @app.post("/payments", status_code=status.HTTP_201_CREATED)
 async def create_payment(body: PaymentCreate, user: User = Depends(get_current_user)):
+    logger.log(user=user, endpoint="/payments")
     payments = load_payment_data()
     from datetime import datetime
     from . import session_calculator as sc
@@ -1262,6 +1333,7 @@ async def create_payment(body: PaymentCreate, user: User = Depends(get_current_u
 
 @app.get("/payments/{transaction}")
 async def get_payment_details(transaction: str, user: User = Depends(get_current_user)):
+    logger.log(user=user, endpoint="/payments/{transaction}")
     payments = load_payment_data()
     payment = next((p for p in payments if p.get("transaction") == transaction), None)
     if not payment:
@@ -1275,6 +1347,7 @@ async def get_payment_details(transaction: str, user: User = Depends(get_current
 
 @app.put("/payments/{transaction}")
 async def update_payment(transaction: str, body: PaymentUpdate, user: User = Depends(get_current_user)):
+    logger.log(user=user, endpoint="/payments/{transaction}")
     payments = load_payment_data()
     payment = next((p for p in payments if p.get("transaction") == transaction), None)
     if not payment:
@@ -1298,6 +1371,7 @@ async def update_payment(transaction: str, body: PaymentUpdate, user: User = Dep
 @app.post("/payments/refund", status_code=status.HTTP_201_CREATED)
 async def refund_payment(body: RefundCreate, user: User = Depends(require_roles("ADMIN"))):
     """Create a refund payment (negative amount), admin only."""
+    logger.log(user=user, endpoint="/payments/refund")
     payments = load_payment_data()
     from datetime import datetime
     from . import session_calculator as sc
@@ -1325,6 +1399,7 @@ async def get_billing(user: Any = Depends(get_current_user)):
     Billing overview for the *current* user.
     For the tests we can simply use the in-memory BILLING_DATA.
     """
+    logger.log(user=user, endpoint="/billing")
     username = _user_attr(user, "username")
     return BILLING_DATA.get(username, [])
 
@@ -1332,8 +1407,19 @@ async def get_billing(user: Any = Depends(get_current_user)):
 
 @app.post("/debug/reset")
 async def debug_reset(user: User = Depends(require_roles("ADMIN"))):
-    """Dangerous debug endpoint that clears all user, parking, reservation, payment, vehicle data, and sessions."""
-    from .storage_utils import save_user_data, save_parking_lot_data, save_reservation_data, save_payment_data, save_vehicles_data
+    """
+    Dangerous debug endpoint that clears all user, parking, reservation,
+    payment, vehicle data, and sessions, including in-memory state.
+    """
+    logger.log(user=user, endpoint="/debug/reset")
+
+    from .storage_utils import (
+        save_user_data,
+        save_parking_lot_data,
+        save_reservation_data,
+        save_payment_data,
+        save_vehicles_data,
+    )
     from . import session_manager as sm
 
     save_user_data([])
@@ -1342,7 +1428,20 @@ async def debug_reset(user: User = Depends(require_roles("ADMIN"))):
     save_payment_data([])
     save_vehicles_data({})
 
-    return {"Server message": "All data reset successfully"}
+    global BILLING_DATA, ACTIVE_SESSION_KEYS
+    BILLING_DATA.clear()
+    ACTIVE_SESSION_KEYS.clear()
+
+    try:
+        for session_file in _glob.glob("pdata/p*-sessions.json"):
+            try:
+                os.remove(session_file)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    return {"status": "success", "message": "All data and sessions have been reset"}
 
 @app.get("/billing/{username}")
 async def get_user_billing(username: str, user: Any = Depends(require_roles("ADMIN"))):
@@ -1351,4 +1450,71 @@ async def get_user_billing(username: str, user: Any = Depends(require_roles("ADM
     The tests only require that this returns a list with
     items containing 'amount' and 'session'.
     """
+    logger.log(user=user, endpoint="/billing/{username}")
     return BILLING_DATA.get(username, [])
+
+@app.post("/discount-codes/free-parking", response_model=FreeParkingResponse, status_code=201)
+async def add_free_parking_plate(
+    request: FreeParkingRequest,
+    user: User = Depends(require_roles("ADMIN"))
+):
+    try:
+        free_parking = access_free_parking.add_free_parking_plate(
+            license_plate=request.license_plate,
+            added_by=user.id
+        )
+        
+        return {
+            "id": free_parking.id,
+            "license_plate": free_parking.license_plate,
+            "added_by": free_parking.added_by,
+            "created_at": free_parking.created_at.isoformat() if free_parking.created_at else None
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.log(f"Error adding free parking plate: {str(e)}")
+        
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/discount-codes/free-parking", response_model=List[FreeParkingResponse])
+async def list_free_parking_plates(
+    user: User = Depends(require_roles("ADMIN"))
+):
+    try:
+        plates = access_free_parking.get_all_free_parking_plates()
+        return [
+            {
+                "id": plate.id,
+                "license_plate": plate.license_plate,
+                "added_by": plate.added_by,
+                "created_at": plate.created_at.isoformat() if plate.created_at else None
+            }
+            for plate in plates
+        ]
+    except Exception as e:
+        logger.log(f"Error listing free parking plates: {str(e)}", level="error")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.delete("/discount-codes/free-parking/{license_plate}", status_code=200)
+async def remove_free_parking_plate(
+    license_plate: str,
+    user: User = Depends(require_roles("ADMIN"))
+):
+    try:
+        success = access_free_parking.remove_free_parking_plate(license_plate)
+        if not success:
+            raise HTTPException(
+                status_code=404,
+                detail=f"License plate {license_plate} not found in free parking whitelist"
+            )
+            
+        return {
+            "status": "success",
+            "message": f"License plate {license_plate} removed from free parking whitelist"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.log(f"Error removing free parking plate: {str(e)}", level="error")
+        raise HTTPException(status_code=500, detail="Internal server error")

@@ -9,8 +9,14 @@ from MobyPark.api.Models.User import User
 from MobyPark.api.Models.ParkingLot import ParkingLot
 
 
-def calculate_price(parkinglot, session: User):
-    # Deze functie berekent de prijs op basis van je start en end tijd.
+def calculate_price(parkinglot, session: User, license_plate: str = None):
+    # Check if the license plate is in the free parking whitelist
+    if license_plate:
+        from MobyPark.api.app import access_free_parking
+        if access_free_parking.is_plate_free_parking(license_plate):
+            return 0.0, 0, 0  # 100% discount for whitelisted plates
+    
+    # Calculate price based on start and end time
     start_time = session.started
     end_time = session.stopped
 

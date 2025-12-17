@@ -21,10 +21,7 @@ def create_parking_lot(admin_token: str, name: str) -> str:
         timeout=5,
     )
     assert r.status_code in (200, 201), r.text
-    lots = requests.get(f"{BASE}/parking-lots", timeout=5).json()
-    lot_id = next((lid for lid, lot in lots.items() if lot.get("name") == name), None)
-    assert lot_id, "Failed to resolve created parking lot id"
-    return lot_id
+    return r.json()["id"]
 
 
 def test_billing_for_user_after_session(server_process, admin_token, user_token):

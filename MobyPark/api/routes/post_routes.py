@@ -5,19 +5,18 @@ import bcrypt
 import os
 from datetime import datetime
 
-from MobyPark.api import session_manager
-from MobyPark.api.storage_utils import (
+from .. import session_manager
+from ..storage_utils import (
     load_json,
     load_payment_data,
     load_reservation_data,
-    save_reservation_data,
-    load_parking_lot_data,
+    load_user_data,
     save_parking_lot_data,
     save_user_data,
 )
-from MobyPark.api.authentication import login_required, roles_required
-from MobyPark.api import session_calculator as sc
-from MobyPark.api.app import (
+from ..authentication import login_required, roles_required
+from .. import session_calculator as sc
+from ..app import (
     access_vehicles,
     access_parkinglots,
     access_payments,
@@ -26,9 +25,9 @@ from MobyPark.api.app import (
     access_users,
     connection,
 )
-from MobyPark.api.Models.User import User
-from MobyPark.api.Models.ParkingLot import ParkingLot
-from MobyPark.api.Models.Reservation import Reservation
+from ..Models.User import User
+from ..Models.ParkingLot import ParkingLot
+from ..Models.Reservation import Reservation
 
 
 class post_routes:

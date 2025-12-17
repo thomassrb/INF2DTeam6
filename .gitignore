@@ -1,5 +1,6 @@
 # Data
 MobyPark/api/data/
+MobyPark-api-data/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -218,3 +219,9 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 MobyPark-api-data/pdata/MobyParkData.db
+MobyPark-api-data/pdata/MobyParkData.db
+MobyPark-api-data/pdata/MobyParkData.db
+MobyPark-api-data/pdata/MobyParkData.db
+test_data/MobyParkData.db
+MobyPark-api-data/pdata/MobyParkData.db
+/MobyPark-api-data

@@ -11,38 +11,81 @@ class AccessParkingLots:
 
 
     def get_all_parking_lots(self):
-        query = """
-        SELECT p.*, c.*
-        FROM parking_lots p
-        JOIN parking_lots_coordinates c ON c.id = p.id;
-        """
-        self.cursor.execute(query)
-        parking_lots = self.cursor.fetchall()
-
-        return parking_lots
+        try:
+            query = """
+            SELECT p.*, c.lat, c.lng
+            FROM parking_lots p
+            LEFT JOIN parking_lots_coordinates c ON c.id = p.id;
+            """
+            self.cursor.execute(query)
+            parking_lots = self.cursor.fetchall()
+            
+            if not parking_lots:
+                return []
+                
+            result = []
+            for row in parking_lots:
+                row_dict = dict(row)
+                result.append({
+                    "id": str(row_dict["id"]),
+                    "name": row_dict.get("name", ""),
+                    "location": row_dict.get("location", ""),
+                    "address": row_dict.get("address", ""),
+                    "capacity": int(row_dict.get("capacity", 0)),
+                    "reserved": int(row_dict.get("reserved", 0)),
+                    "tariff": float(row_dict.get("tariff", 0.0)),
+                    "daytariff": float(row_dict.get("daytariff", 0.0)),
+                    "coordinates": [
+                        float(row_dict.get("lat", 0.0)), 
+                        float(row_dict.get("lng", 0.0))
+                    ],
+                    "created_at": row_dict.get("created_at") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                })
+                
+            return result
+            
+        except Exception as e:
+            print(f"Error in get_all_parking_lots: {str(e)}")
+            raise
     
     
-    def get_parking_lot(self, id):
-        query = """
-        SELECT * FROM parking_lots
-        WHERE id = ?;
-        """
-        coordinates_query = """
-        SELECT * FROM parking_lots_coordinates
-        WHERE id = ?;
-        """
-        self.cursor.execute(query, [id])
-        parking_lot = self.cursor.fetchone()
-        self.cursor.execute(coordinates_query, [id])
-        coordinates = self.cursor.fetchone()
-
-        if parking_lot is None or coordinates is None:
-            return None
-        else:
-            parking_lot = dict(parking_lot)
-            parking_lot["created_at"] = datetime.strptime(parking_lot["created_at"], "%Y-%m-%d %H:%M:%S")
-            parking_lot["coordinates"] = ParkingLotCoordinates(**coordinates)
-            return ParkingLot(**parking_lot)
+    def get_parking_lot(self, lot_id: str):
+        try:
+            if not lot_id:
+                return None
+                
+            query = """
+            SELECT p.*, c.lat, c.lng
+            FROM parking_lots p
+            LEFT JOIN parking_lots_coordinates c ON c.id = p.id
+            WHERE p.id = ?;
+            """
+            self.cursor.execute(query, [str(lot_id)])
+            result = self.cursor.fetchone()
+            
+            if not result:
+                return None
+                
+            row_dict = dict(result)
+            return {
+                "id": str(row_dict["id"]),
+                "name": row_dict.get("name", ""),
+                "location": row_dict.get("location", ""),
+                "address": row_dict.get("address", ""),
+                "capacity": int(row_dict.get("capacity", 0)),
+                "reserved": int(row_dict.get("reserved", 0)),
+                "tariff": float(row_dict.get("tariff", 0.0)),
+                "daytariff": float(row_dict.get("daytariff", 0.0)),
+                "coordinates": [
+                    float(row_dict.get("lat", 0.0)), 
+                    float(row_dict.get("lng", 0.0))
+                ],
+                "created_at": row_dict.get("created_at") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            
+        except Exception as e:
+            print(f"Error in get_parking_lot for id {lot_id}: {str(e)}")
+            raise
 
 
     def delete_parking_lot(self, parkinglot: ParkingLot):
