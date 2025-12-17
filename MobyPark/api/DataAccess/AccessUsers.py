@@ -2,6 +2,7 @@ import sqlite3
 from MobyPark.api.DBConnection import DBConnection
 from MobyPark.api.Models.User import User
 from datetime import datetime
+from MobyPark.api import crypto_utils
 
 class AccessUsers:
 
@@ -21,15 +22,22 @@ class AccessUsers:
             return None
         else:
             result = dict(result)
-            created_at = result["created_at"]
-            try:
-                result["created_at"] = datetime.strptime(created_at, "%Y-%m-%d %H:%M:%S")
-            except ValueError:
-                try:
-                    result["created_at"] = datetime.strptime(created_at, "%Y-%m-%d")
-                except ValueError:
-                    result["created_at"] = datetime.now()
-            return User(**result)
+
+        # PII decrypt
+        try:
+            result["name"] = crypto_utils.decrypt_str(result.get("name"))
+        except Exception:
+            pass
+        try:
+            result["email"] = crypto_utils.decrypt_str(result.get("email"))
+        except Exception:
+            pass
+        try:
+            result["phone"] = crypto_utils.decrypt_str(result.get("phone"))
+        except Exception:
+            pass
+        result["created_at"] = datetime.strptime(result["created_at"], "%Y-%m-%d")
+        return User(**result)
         
 
     def get_user_byid(self, id):
@@ -43,7 +51,21 @@ class AccessUsers:
             return None
         else:
             result = dict(result)
-            result["created_at"] = datetime.strptime(result["created_at"], "%Y-%m-%d %H:%M:%S")
+
+            # PII decrypt
+            try:
+                result["name"] = crypto_utils.decrypt_str(result.get("name"))
+            except Exception:
+                pass
+            try:
+                result["email"] = crypto_utils.decrypt_str(result.get("email"))
+            except Exception:
+                pass
+            try:
+                result["phone"] = crypto_utils.decrypt_str(result.get("phone"))
+            except Exception:
+                pass
+            result["created_at"] = datetime.strptime(result["created_at"], "%Y-%m-%d")
             return User(**result)
         
 
@@ -65,8 +87,22 @@ class AccessUsers:
             (:username, :name, :email, :password, :created_at, :phone, :birth_year, :role, :active)
         RETURNING id;
         """ 
+        # payload voorbereiden met encrypted PII
+        payload = dict(user.__dict__)
         try:
-            self.cursor.execute(query, user.__dict__)
+            payload["name"] = crypto_utils.encrypt_str(payload.get("name"))
+        except Exception:
+            pass
+        try:
+            payload["email"] = crypto_utils.encrypt_str(payload.get("email"))
+        except Exception:
+            pass
+        try:
+            payload["phone"] = crypto_utils.encrypt_str(payload.get("phone"))
+        except Exception:
+            pass
+        try:
+            self.cursor.execute(query, payload)
             user.id = self.cursor.fetchone()[0]
             self.conn.commit()
         except sqlite3.IntegrityError as e:
@@ -96,8 +132,21 @@ class AccessUsers:
             active = :active
         WHERE id = :id;
         """
+        payload = dict(user.__dict__)
         try:
-            self.cursor.execute(query, user.__dict__)
+            payload["name"] = crypto_utils.encrypt_str(payload.get("name"))
+        except Exception:
+            pass
+        try:
+            payload["email"] = crypto_utils.encrypt_str(payload.get("email"))
+        except Exception:
+            pass
+        try:
+            payload["phone"] = crypto_utils.encrypt_str(payload.get("phone"))
+        except Exception:
+            pass
+        try:
+            self.cursor.execute(query, payload)
             self.conn.commit()
         except sqlite3.IntegrityError as e:
             print(e)

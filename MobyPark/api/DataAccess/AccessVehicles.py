@@ -4,6 +4,7 @@ from datetime import datetime
 from MobyPark.api.DataAccess.AccessUsers import AccessUsers
 from MobyPark.api.Models.Vehicle import Vehicle
 from MobyPark.api.Models.User import User
+from MobyPark.api import crypto_utils
 
 class AccessVehicles:
 
@@ -25,6 +26,12 @@ class AccessVehicles:
         else:
             vehicle_dict = dict(vehicle)
             vehicle_dict["created_at"] = datetime.strptime(vehicle_dict["created_at"], "%Y-%m-%d %H:%M:%S")
+
+            # decrypt licenseplate
+            try:
+                vehicle_dict["licenseplate"] = crypto_utils.decrypt_str(vehicle_dict.get("licenseplate"))
+            except Exception:
+                pass
             vehicle_dict["user"] = self.accessusers.get_user_byid(id=vehicle_dict["user_id"])
             del vehicle_dict["user_id"]
             return Vehicle(**vehicle_dict)
@@ -63,6 +70,11 @@ class AccessVehicles:
         vehicle_dict = vehicle.__dict__
         vehicle_dict["user_id"] = vehicle.user.id
 
+        # encrypt licenseplate
+        try:
+            vehicle_dict["licenseplate"] = crypto_utils.encrypt_str(vehicle_dict.get("licenseplate"))
+        except Exception:
+            pass
         try:
             self.cursor.execute(query, vehicle_dict)
             vehicle.id = self.cursor.fetchone()[0]
@@ -82,8 +94,13 @@ class AccessVehicles:
             created_at = :created_at
         WHERE id = :id
         """
+        payload = dict(vehicle.__dict__)
         try:
-            self.cursor.execute(query, vehicle.__dict__)
+            payload["licenseplate"] = crypto_utils.encrypt_str(payload.get("licenseplate"))
+        except Exception:
+            pass
+        try:
+            self.cursor.execute(query, payload)
             self.conn.commit()
         except sqlite3.IntegrityError as e:
             print(e)

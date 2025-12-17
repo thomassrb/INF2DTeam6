@@ -216,4 +216,3 @@ class get_routes:
                 "balance": amount - payed
             })
         self.send_json_response(200, "application/json", data)
-    
