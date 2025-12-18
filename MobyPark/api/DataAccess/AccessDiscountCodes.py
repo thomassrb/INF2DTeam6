@@ -8,39 +8,45 @@ from ..Models.DiscountCode import DiscountCode, LocationRule, TimeRule
 logger = logging.getLogger(__name__)
 
 class AccessDiscountCodes:
-    def __init__(self, db_path: str = "database.db", connection = None):
-    """
-    Initialize the AccessDiscountCodes instance.
-    
-    Args:
-        db_path: Path to the SQLite database file
-        connection: Either a sqlite3.Connection or a cursor with a connection
-    """
+    def __init__(self, db_path: str = "database.db", connection=None):
+        """
+        Initialize the AccessDiscountCodes instance.
+        
+        Args:
+            db_path: Path to the SQLite database file
+            connection: Either a sqlite3.Connection or a cursor with a connection
+        """
     self.connection = None
     self.cursor = None
     self._owns_connection = False
     
-    if connection:
-        if hasattr(connection, 'execute'):
-            self.connection = connection.connection
-            self.cursor = connection
-        elif hasattr(connection, 'cursor'):
-            self.connection = connection
-            self.cursor = connection.cursor()
+    try:
+        if connection:
+            # If a connection or cursor is provided, use it
+            if hasattr(connection, 'execute'):
+                # It's a cursor
+                self.cursor = connection
+                self.connection = connection.connection
+            elif hasattr(connection, 'cursor'):
+                # It's a connection
+                self.connection = connection
+                self.cursor = connection.cursor()
+            else:
+                raise ValueError("connection must be a sqlite3.Connection or a cursor")
         else:
-            raise ValueError("connection must be a sqlite3.Connection or a cursor")
-    else:
-        try:
             self.connection = sqlite3.connect(db_path)
             self.cursor = self.connection.cursor()
             self._owns_connection = True
-        except Exception as e:
-            logger.error(f"Failed to connect to database: {e}")
-            raise
-    
-    if self.connection:
+            
+        # Configure the connection
         self.connection.row_factory = sqlite3.Row
         self._create_tables()
+            
+    except Exception as e:
+        if self._owns_connection and self.connection:
+            self.connection.close()
+        logger.error(f"Failed to initialize database connection: {e}")
+        raise
 
     def _create_tables(self):
         """Create necessary tables if they don't exist"""
