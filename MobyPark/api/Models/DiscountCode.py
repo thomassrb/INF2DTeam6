@@ -1,6 +1,8 @@
 from datetime import datetime
 from typing import Optional, Dict, Any
 from pydantic import BaseModel
+import random
+import string
 
 
 class DiscountCode:
@@ -70,6 +72,26 @@ class DiscountCodeResponse(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+def generate_discount_code(length: int = 6) -> str:
+    """
+    Generate a random alphanumeric discount code.
+    
+    Args:
+        length: Length of the code to generate (default: 6)
+        
+    Returns:
+        str: A random alphanumeric code in uppercase
+    """
+    # Define character set (alphanumeric, excluding ambiguous characters)
+    chars = string.ascii_uppercase + string.digits
+    # Remove ambiguous characters: 0, O, 1, I, L
+    for c in ['0', 'O', '1', 'I', 'L']:
+        chars = chars.replace(c, '')
+    
+    # Generate random code
+    return ''.join(random.choice(chars) for _ in range(length))
 
 
 class DiscountCodeCreate(BaseModel):

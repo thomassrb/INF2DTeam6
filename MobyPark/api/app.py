@@ -33,7 +33,8 @@ from .Models.DiscountCode import (
     DiscountCodeCreate, 
     DiscountCodeResponse,
     ApplyDiscountRequest,
-    ApplyDiscountResponse
+    ApplyDiscountResponse,
+    generate_discount_code
 )
 from .storage_utils import (
     load_json, save_user_data, load_parking_lot_data, load_reservation_data,
@@ -1534,26 +1535,32 @@ async def create_discount_code(
     code_data: DiscountCodeCreate,
     user: User = Depends(require_roles("ADMIN"))
 ):
-
+    """Create a new discount code with optional location and time rules"""
     try:
-        discount_code = DiscountCode(
-            id=0,
-            code=code_data.code,
-            discount_percentage=code_data.discount_percentage,
-            max_uses=code_data.max_uses,
-            valid_from=code_data.valid_from,
-            valid_until=code_data.valid_until,
-            created_by=user.id,
-            is_active=True
-        )
+        code = code_data.code if code_data.code else generate_discount_code()
         
-        created_code = access_discount_codes.add_discount_code(discount_code)
-        return created_code.to_dict()
+        discount_data = {
+            'code': code,
+            'discount_percentage': code_data.discount_percentage,
+            'max_uses': code_data.max_uses,
+            'valid_from': code_data.valid_from.isoformat() if code_data.valid_from else None,
+            'valid_until': code_data.valid_until.isoformat() if code_data.valid_until else None,
+            'created_by': user.id,
+            'is_active': True,
+            'location_rules': code_data.location_rules,
+            'time_rules': code_data.time_rules
+        }
+        
+        created_code = access_discount_codes.create_discount_code(discount_data)
+        
+        if hasattr(created_code, 'to_dict'):
+            return created_code.to_dict()
+        return created_code
         
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.log(f"Error creating discount code: {str(e)}", "error")
+        logger.log(f"Error creating discount code: {str(e)}", level="error")
         raise HTTPException(status_code=500, detail="Failed to create discount code")
 
 @app.get("/discount-codes", response_model=List[DiscountCodeResponse])
@@ -1595,28 +1602,36 @@ async def update_discount_code(
     code_data: dict,
     user: User = Depends(require_roles("ADMIN"))
 ):
+    """Update a discount code"""
     try:
+        # Get existing code
         existing_code = access_discount_codes.get_discount_code_by_id(code_id)
         if not existing_code:
             raise HTTPException(status_code=404, detail="Discount code not found")
         
+        # Convert to dict if needed
         if hasattr(existing_code, 'to_dict'):
             existing_code = existing_code.to_dict()
-            
-        for key, value in code_data.items():
-            if key in existing_code and value is not None:
-                existing_code[key] = value
         
-        success = access_discount_codes.update_discount_code(
-            code_id=code_id,
-            **{k: v for k, v in existing_code.items() if k != 'id'}
-        )
+        # Prepare updates
+        updates = {}
+        for field in ['code', 'discount_percentage', 'max_uses', 'valid_from', 
+                     'valid_until', 'is_active', 'location_rules', 'time_rules']:
+            if field in code_data and code_data[field] is not None:
+                updates[field] = code_data[field]
         
-        if not success:
+        if not updates:
+            return existing_code
+        
+        # Update the code
+        updated_code = access_discount_codes.update_discount_code(code_id, **updates)
+        if not updated_code:
             raise HTTPException(status_code=500, detail="Failed to update discount code")
             
-        updated_code = access_discount_codes.get_discount_code_by_id(code_id)
-        return updated_code if not hasattr(updated_code, 'to_dict') else updated_code.to_dict()
+        # Return the updated code
+        if hasattr(updated_code, 'to_dict'):
+            return updated_code.to_dict()
+        return updated_code
         
     except HTTPException:
         raise
@@ -1642,36 +1657,42 @@ async def delete_discount_code(
         logger.log(f"Error deleting discount code: {str(e)}", level="error")
         raise HTTPException(status_code=500, detail="Failed to delete discount code")
 
-@app.put("/discount-codes/{code_id}/deactivate", response_model=DiscountCodeResponse)
-async def deactivate_discount_code(
+@app.put("/discount-codes/{code_id}", response_model=DiscountCodeResponse)
+async def update_discount_code(
     code_id: int,
+    code_data: dict,
     user: User = Depends(require_roles("ADMIN"))
 ):
-    """
-    Deactivate a discount code
-    """
+    """Update a discount code"""
     try:
-        code = access_discount_codes.get_discount_code_by_id(code_id)
-        if not code:
+        existing_code = access_discount_codes.get_discount_code_by_id(code_id)
+        if not existing_code:
             raise HTTPException(status_code=404, detail="Discount code not found")
-            
-        success = access_discount_codes.update_discount_code(
-            code_id=code_id,
-            is_active=False
-        )
         
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to deactivate discount code")
+        if hasattr(existing_code, 'to_dict'):
+            existing_code = existing_code.to_dict()
+        
+        updates = {}
+        for field in ['code', 'discount_percentage', 'max_uses', 'valid_from', 'valid_until', 'is_active', 'location_rules', 'time_rules']:
+            if field in code_data and code_data[field] is not None:
+                updates[field] = code_data[field]
+        
+        if not updates:
+            return existing_code
+        
+        updated_code = access_discount_codes.update_discount_code(code_id, **updates)
+        if not updated_code:
+            raise HTTPException(status_code=500, detail="Failed to update discount code")
             
-        updated_code = access_discount_codes.get_discount_code_by_id(code_id)
+        if hasattr(updated_code, 'to_dict'):
+            return updated_code.to_dict()
         return updated_code
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.log(f"Error deactivating discount code: {str(e)}", level="error")
-        raise HTTPException(status_code=500, detail="Failed to deactivate discount code")
-
+        logger.error(f"Error updating discount code: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update discount code")
 
 @app.post("/payments/apply-discount", response_model=ApplyDiscountResponse)
 async def apply_discount_code(
@@ -1739,39 +1760,66 @@ async def apply_discount_code(
 
 @app.post("/discount-codes/apply", response_model=ApplyDiscountResponse)
 @app.post("/payments/apply-discount", response_model=ApplyDiscountResponse)
-async def apply_discount(
+async def apply_discount_code(
     request: ApplyDiscountRequest,
-    current_user: User = Depends(require_roles("USER", "ADMIN"))
+    user: User = Depends(get_current_user)
 ):
+    """Apply a discount code to an amount"""
     try:
+        if not request.code:
+            return ApplyDiscountResponse(
+                success=False,
+                discount_amount=0,
+                final_amount=request.amount,
+                message="No discount code provided"
+            )
+
+        if request.code.upper() == "GRATIS":
+            vehicles = access_vehicles.get_vehicles_by_user_id(user.id)
+            for vehicle in vehicles:
+                if access_free_parking.is_plate_free_parking(vehicle.licenseplate):
+                    return ApplyDiscountResponse(
+                        success=True,
+                        discount_amount=request.amount,
+                        final_amount=0,
+                        message="100% discount applied (GRATIS)"
+                    )
+            return ApplyDiscountResponse(
+                success=False,
+                discount_amount=0,
+                final_amount=request.amount,
+                message="GRATIS code is only available for vehicles with free parking privileges"
+            )
+        
         final_amount, message = access_discount_codes.apply_discount_code(
             code=request.code.upper(),
-            user_id=current_user.id,
+            user_id=user.id,
             amount=request.amount
         )
         
         discount_amount = request.amount - final_amount
         
-        if "error" in message.lower() or "invalid" in message.lower():
-            return ApplyDiscountResponse(
-                success=False,
-                discount_amount=0,
-                final_amount=request.amount,
-                message=message
-            )
-            
+        success = "applied" in message.lower() or "discount" in message.lower()
+        
         return ApplyDiscountResponse(
-            success=True,
+            success=success,
             discount_amount=round(discount_amount, 2),
             final_amount=round(final_amount, 2),
             message=message
         )
         
-    except Exception as e:
-        print(f"Error applying discount: {str(e)}")
+    except ValueError as e:
         return ApplyDiscountResponse(
             success=False,
             discount_amount=0,
             final_amount=request.amount,
-            message="An error occurred while applying the discount"
+            message=str(e)
+        )
+    except Exception as e:
+        logger.log(f"Error applying discount code: {str(e)}", level="error")
+        return ApplyDiscountResponse(
+            success=False,
+            discount_amount=0,
+            final_amount=request.amount,
+            message="Failed to apply discount code"
         )
