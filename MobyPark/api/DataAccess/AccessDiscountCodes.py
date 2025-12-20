@@ -2,19 +2,14 @@ from datetime import datetime
 from typing import List, Optional, Tuple, Dict, Any
 import logging
 import sqlite3
+import json
+from MobyPark.api.Models.DiscountCode import generate_discount_code
 
 logger = logging.getLogger(__name__)
 
 class AccessDiscountCodes:
     def __init__(self, connection):
-        """Initialize with either a database connection, cursor, or DBConnection.
-        
-        Args:
-            connection: Can be one of:
-                      - sqlite3.Connection: A database connection
-                      - sqlite3.Cursor: A database cursor
-                      - DBConnection: A custom DBConnection object
-        """
+        """Initialize with either a database connection, cursor, or DBConnection."""
         if hasattr(connection, 'connection') and hasattr(connection, 'cursor'):
             self.connection = connection.connection
             self.cursor = connection.cursor
@@ -33,6 +28,25 @@ class AccessDiscountCodes:
             )
             
         self._create_tables()
+        self._update_schema()
+
+    def _update_schema(self):
+        """Update the database schema if needed"""
+        try:
+            self.cursor.execute("PRAGMA table_info(discount_codes)")
+            columns = [col[1] for col in self.cursor.fetchall()]
+            
+            if 'location_rules' not in columns:
+                self.cursor.execute("ALTER TABLE discount_codes ADD COLUMN location_rules TEXT")
+                
+            if 'time_rules' not in columns:
+                self.cursor.execute("ALTER TABLE discount_codes ADD COLUMN time_rules TEXT")
+                
+            self.connection.commit()
+        except Exception as e:
+            self.connection.rollback()
+            logger.error(f"Error updating schema: {str(e)}", exc_info=True)
+            raise
 
     def _create_tables(self):
         """Create necessary tables if they don't exist"""
@@ -48,6 +62,8 @@ class AccessDiscountCodes:
             created_by INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             is_active BOOLEAN DEFAULT 1,
+            location_rules TEXT,
+            time_rules TEXT,
             FOREIGN KEY (created_by) REFERENCES users(id)
         )
         """)
@@ -71,82 +87,21 @@ class AccessDiscountCodes:
         if hasattr(self, '_owns_cursor') and self._owns_cursor and self.cursor:
             self.cursor.close()
 
-    def apply_discount_code(self, code: str, user_id: int, amount: float) -> Tuple[float, str]:
-        """
-        Apply a discount code to an amount
-        
-        Args:
-            code: The discount code to apply
-            user_id: ID of the user applying the code
-            amount: Original amount before discount
-            
-        Returns:
-            Tuple of (final_amount, message)
-        """
-        try:
-            # Get the discount code details
-            self.cursor.execute(
-                """
-                SELECT * FROM discount_codes 
-                WHERE code = ? AND is_active = 1 
-                AND (valid_until IS NULL OR valid_until >= ?)
-                AND (max_uses IS NULL OR uses < max_uses)
-                """,
-                (code.upper(), datetime.now().isoformat())
-            )
-            discount = self._row_to_dict(self.cursor.fetchone())
-            
-            if not discount:
-                return amount, "Invalid or expired discount code"
-                
-            # Check if code has reached max uses
-            if discount['max_uses'] is not None and discount['uses'] >= discount['max_uses']:
-                return amount, "This discount code has reached its maximum usage limit"
-                
-            # Calculate discount
-            discount_amount = (amount * discount['discount_percentage']) / 100
-            final_amount = max(0, amount - discount_amount)
-            
-            # Record the usage
-            self.cursor.execute(
-                """
-                UPDATE discount_codes 
-                SET uses = uses + 1 
-                WHERE id = ?
-                """,
-                (discount['id'],)
-            )
-            
-            # Record the usage in discount_code_usage table
-            self.cursor.execute(
-                """
-                INSERT INTO discount_code_usage 
-                (code_id, user_id, amount_before_discount, discount_amount)
-                VALUES (?, ?, ?, ?)
-                """,
-                (discount['id'], user_id, amount, discount_amount)
-            )
-            
-            # If we've reached max uses, deactivate the code
-            if discount['max_uses'] is not None and (discount['uses'] + 1) >= discount['max_uses']:
-                self.cursor.execute(
-                    "UPDATE discount_codes SET is_active = 0 WHERE id = ?",
-                    (discount['id'],)
-                )
-            
-            self.connection.commit()
-            return final_amount, f"{discount['discount_percentage']}% discount applied"
-            
-        except Exception as e:
-            self.connection.rollback()
-            logger.error(f"Error applying discount code: {str(e)}", exc_info=True)
-            return amount, f"Error applying discount code: {str(e)}"
-
     def _row_to_dict(self, row) -> Optional[Dict[str, Any]]:
         """Convert a database row to a dictionary"""
         if not row:
             return None
-        return {key: row[key] for key in row.keys()}
+            
+        result = {key: row[key] for key in row.keys()}
+        
+        for field in ['location_rules', 'time_rules']:
+            if field in result and result[field] is not None:
+                try:
+                    result[field] = json.loads(result[field])
+                except (json.JSONDecodeError, TypeError):
+                    result[field] = None
+                    
+        return result
 
     def get_discount_code_by_id(self, code_id: int) -> Optional[Dict[str, Any]]:
         """Get a discount code by its ID"""
@@ -158,26 +113,54 @@ class AccessDiscountCodes:
         self.cursor.execute("SELECT * FROM discount_codes WHERE code = ?", (code.upper(),))
         return self._row_to_dict(self.cursor.fetchone())
 
-    def create_discount_code(self, code: str, discount_percentage: int, max_uses: Optional[int] = None,
-                           valid_from: Optional[datetime] = None, valid_until: Optional[datetime] = None,
-                           created_by: Optional[int] = None) -> Dict[str, Any]:
+    def create_discount_code(self, code_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new discount code"""
         try:
+            if 'code' not in code_data or not code_data['code']:
+                code = generate_discount_code()
+            else:
+                code = code_data['code']
+
+            location_rules = None
+            if 'location_rules' in code_data and code_data['location_rules'] is not None:
+                location_rules = code_data['location_rules']
+                if hasattr(location_rules, 'dict'):
+                    location_rules = location_rules.dict()
+                
+            time_rules = None
+            if 'time_rules' in code_data and code_data['time_rules'] is not None:
+                time_rules = code_data['time_rules']
+                if hasattr(time_rules, 'dict'):
+                    time_rules = time_rules.dict()
+
             self.cursor.execute(
                 """
                 INSERT INTO discount_codes 
-                (code, discount_percentage, max_uses, valid_from, valid_until, created_by, is_active)
-                VALUES (?, ?, ?, ?, ?, ?, 1)
+                (code, discount_percentage, max_uses, valid_from, valid_until, 
+                 created_by, is_active, location_rules, time_rules)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 RETURNING *
                 """,
-                (code.upper(), discount_percentage, max_uses, 
-                 valid_from.isoformat() if valid_from else None,
-                 valid_until.isoformat() if valid_until else None, 
-                 created_by)
+                (
+                    code.upper(),
+                    code_data['discount_percentage'],
+                    code_data.get('max_uses'),
+                    code_data.get('valid_from'),
+                    code_data.get('valid_until'),
+                    code_data.get('created_by'),
+                    int(code_data.get('is_active', True)),
+                    json.dumps(location_rules) if location_rules is not None else None,
+                    json.dumps(time_rules) if time_rules is not None else None
+                )
             )
             result = self._row_to_dict(self.cursor.fetchone())
             self.connection.commit()
             return result
+        except sqlite3.IntegrityError as e:
+            self.connection.rollback()
+            if "UNIQUE constraint failed" in str(e):
+                raise ValueError("A discount code with this code already exists")
+            raise
         except Exception as e:
             self.connection.rollback()
             logger.error(f"Error creating discount code: {str(e)}", exc_info=True)
@@ -192,7 +175,12 @@ class AccessDiscountCodes:
         """Update a discount code"""
         if not updates:
             return None
-            
+
+        if 'location_rules' in updates:
+            updates['location_rules'] = json.dumps(updates['location_rules']) if updates['location_rules'] else None
+        if 'time_rules' in updates:
+            updates['time_rules'] = json.dumps(updates['time_rules']) if updates['time_rules'] else None
+
         set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
         values = list(updates.values())
         values.append(code_id)
@@ -219,4 +207,75 @@ class AccessDiscountCodes:
         except Exception as e:
             self.connection.rollback()
             logger.error(f"Error deleting discount code: {str(e)}", exc_info=True)
-            return False
+            raise ValueError(f"Failed to delete discount code: {str(e)}")
+
+    def apply_discount_code(self, code: str, user_id: int, amount: float) -> Tuple[float, str]:
+        """
+        Apply a discount code to an amount
+        
+        Args:
+            code: The discount code to apply
+            user_id: ID of the user applying the code
+            amount: Original amount before discount
+            
+        Returns:
+            Tuple of (final_amount, message)
+        """
+        try:
+            self.cursor.execute(
+                """
+                SELECT * FROM discount_codes 
+                WHERE code = ? AND is_active = 1 
+                AND (valid_until IS NULL OR valid_until >= ?)
+                AND (max_uses IS NULL OR uses < max_uses)
+                """,
+                (code.upper(), datetime.now().isoformat())
+            )
+            discount = self._row_to_dict(self.cursor.fetchone())
+            
+            if not discount:
+                return amount, "Invalid or expired discount code"
+                
+            if discount['max_uses'] is not None and discount['uses'] >= discount['max_uses']:
+                return amount, "This discount code has reached its maximum usage limit"
+                
+            if discount.get('location_rules'):
+                pass
+                
+            if discount.get('time_rules'):
+                pass
+                
+            discount_amount = (amount * discount['discount_percentage']) / 100
+            final_amount = max(0, amount - discount_amount)
+            
+            self.cursor.execute(
+                """
+                UPDATE discount_codes 
+                SET uses = uses + 1 
+                WHERE id = ?
+                """,
+                (discount['id'],)
+            )
+            
+            self.cursor.execute(
+                """
+                INSERT INTO discount_code_usage 
+                (code_id, user_id, amount_before_discount, discount_amount)
+                VALUES (?, ?, ?, ?)
+                """,
+                (discount['id'], user_id, amount, discount_amount)
+            )
+            
+            if discount['max_uses'] is not None and (discount['uses'] + 1) >= discount['max_uses']:
+                self.cursor.execute(
+                    "UPDATE discount_codes SET is_active = 0 WHERE id = ?",
+                    (discount['id'],)
+                )
+            
+            self.connection.commit()
+            return final_amount, f"{discount['discount_percentage']}% discount applied"
+            
+        except Exception as e:
+            self.connection.rollback()
+            logger.error(f"Error applying discount code: {str(e)}", exc_info=True)
+            return amount, f"Error applying discount code: {str(e)}"
