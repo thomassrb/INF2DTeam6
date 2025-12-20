@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pydantic import BaseModel
 import random
 import string
@@ -84,15 +84,32 @@ def generate_discount_code(length: int = 6) -> str:
     Returns:
         str: A random alphanumeric code in uppercase
     """
-    # Define character set (alphanumeric, excluding ambiguous characters)
     chars = string.ascii_uppercase + string.digits
-    # Remove ambiguous characters: 0, O, 1, I, L
     for c in ['0', 'O', '1', 'I', 'L']:
         chars = chars.replace(c, '')
     
-    # Generate random code
     return ''.join(random.choice(chars) for _ in range(length))
 
+
+class LocationRules(BaseModel):
+    allowed_locations: List[str] = []
+    excluded_locations: List[str] = []
+
+    def dict(self, **kwargs):
+        return {
+            "allowed_locations": self.allowed_locations,
+            "excluded_locations": self.excluded_locations
+        }
+
+class TimeRules(BaseModel):
+    valid_days: List[int] = []
+    valid_hours: Optional[Dict[str, str]] = None
+
+    def dict(self, **kwargs):
+        return {
+            "valid_days": self.valid_days,
+            "valid_hours": self.valid_hours
+        }
 
 class DiscountCodeCreate(BaseModel):
     code: str
@@ -100,6 +117,16 @@ class DiscountCodeCreate(BaseModel):
     max_uses: Optional[int] = None
     valid_from: Optional[datetime] = None
     valid_until: Optional[datetime] = None
+    location_rules: Optional[LocationRules] = None
+    time_rules: Optional[TimeRules] = None
+
+    def dict(self, **kwargs):
+        data = super().dict(**kwargs)
+        if self.location_rules is not None:
+            data["location_rules"] = self.location_rules.dict()
+        if self.time_rules is not None:
+            data["time_rules"] = self.time_rules.dict()
+        return data
 
 
 class ApplyDiscountRequest(BaseModel):

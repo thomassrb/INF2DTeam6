@@ -3,7 +3,7 @@ from typing import List, Optional, Tuple, Dict, Any
 import logging
 import sqlite3
 import json
-from ..Models.DiscountCode import DiscountCode
+from MobyPark.api.Models.DiscountCode import generate_discount_code
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,25 @@ class AccessDiscountCodes:
             )
             
         self._create_tables()
+        self._update_schema()
+
+    def _update_schema(self):
+        """Update the database schema if needed"""
+        try:
+            self.cursor.execute("PRAGMA table_info(discount_codes)")
+            columns = [col[1] for col in self.cursor.fetchall()]
+            
+            if 'location_rules' not in columns:
+                self.cursor.execute("ALTER TABLE discount_codes ADD COLUMN location_rules TEXT")
+                
+            if 'time_rules' not in columns:
+                self.cursor.execute("ALTER TABLE discount_codes ADD COLUMN time_rules TEXT")
+                
+            self.connection.commit()
+        except Exception as e:
+            self.connection.rollback()
+            logger.error(f"Error updating schema: {str(e)}", exc_info=True)
+            raise
 
     def _create_tables(self):
         """Create necessary tables if they don't exist"""
@@ -98,9 +117,21 @@ class AccessDiscountCodes:
         """Create a new discount code"""
         try:
             if 'code' not in code_data or not code_data['code']:
-                code = DiscountCode.generate_code()
+                code = generate_discount_code()
             else:
                 code = code_data['code']
+
+            location_rules = None
+            if 'location_rules' in code_data and code_data['location_rules'] is not None:
+                location_rules = code_data['location_rules']
+                if hasattr(location_rules, 'dict'):
+                    location_rules = location_rules.dict()
+                
+            time_rules = None
+            if 'time_rules' in code_data and code_data['time_rules'] is not None:
+                time_rules = code_data['time_rules']
+                if hasattr(time_rules, 'dict'):
+                    time_rules = time_rules.dict()
 
             self.cursor.execute(
                 """
@@ -118,8 +149,8 @@ class AccessDiscountCodes:
                     code_data.get('valid_until'),
                     code_data.get('created_by'),
                     int(code_data.get('is_active', True)),
-                    json.dumps(code_data.get('location_rules')) if code_data.get('location_rules') else None,
-                    json.dumps(code_data.get('time_rules')) if code_data.get('time_rules') else None
+                    json.dumps(location_rules) if location_rules is not None else None,
+                    json.dumps(time_rules) if time_rules is not None else None
                 )
             )
             result = self._row_to_dict(self.cursor.fetchone())
