@@ -7,10 +7,9 @@ from MobyPark.api.Models.User import User
 router = APIRouter()
 
 @router.delete("/parkinglots/{lid}", status_code=status.HTTP_200_OK)
-@require_roles(["ADMIN"])
 async def delete_parking_lot(
     lid: str,
-    user: User = Depends(get_current_user)
+    user: User = Depends(require_roles("ADMIN"))
 ) -> Dict[str, str]:
     """
     Delete a specific parking lot by ID.
@@ -29,9 +28,8 @@ async def delete_parking_lot(
     return {"message": f"Parking lot {lid} deleted"}
 
 @router.delete("/parkinglots/", status_code=status.HTTP_200_OK)
-@require_roles(["ADMIN"])
 async def delete_all_parking_lots(
-    user: User = Depends(get_current_user)
+    user: User = Depends(require_roles("ADMIN"))
 ) -> Dict[str, str]:
     """
     Delete all parking lots.
