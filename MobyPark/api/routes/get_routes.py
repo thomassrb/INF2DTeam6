@@ -5,15 +5,7 @@ from pydantic import BaseModel
 from datetime import datetime
 
 from MobyPark.api.authentication import get_current_user, require_roles
-from MobyPark.api.app import (
-    access_vehicles,
-    access_parkinglots,
-    access_payments,
-    access_reservations,
-    access_sessions,
-    access_users,
-    connection,
-)
+
 from MobyPark.api import session_calculator as sc
 from MobyPark.api.Models.User import User
 from MobyPark.api.Models.ParkingLot import ParkingLot
@@ -63,6 +55,7 @@ async def get_profile_by_id(
     current_user: User = Depends(get_current_user)
 ) -> ProfileResponse:
     """Get profile by user ID (admin only or own profile)."""
+    from MobyPark.api.app import access_users
     target_user = access_users.get_user_byid(id=user_id)
     
     if not target_user:
@@ -90,6 +83,7 @@ async def get_profile_by_id(
 @router.get("/parkinglots", response_model=List[Dict[str, Any]])
 async def get_parking_lots():
     """Get all parking lots."""
+    from MobyPark.api.app import access_parkinglots
     return access_parkinglots.get_all_parking_lots()
 
 @router.get("/parkinglots/{lid}", response_model=Dict[str, Any])
@@ -97,6 +91,7 @@ async def get_parking_lot_details(
     lid: str
 ) -> Dict[str, Any]:
     """Get details of a specific parking lot."""
+    from MobyPark.api.app import access_parkinglots
     parking_lot = access_parkinglots.get_parking_lot(id=lid)
     if not parking_lot:
         raise HTTPException(
@@ -110,6 +105,7 @@ async def get_reservations(
     user: User = Depends(get_current_user)
 ) -> List[Dict[str, Any]]:
     """Get all reservations (admin) or user's reservations."""
+    from MobyPark.api.app import access_reservations
     if user.role == "ADMIN":
         return access_reservations.get_all_reservations()
     return access_reservations.get_reservations_by_user(user=user)
@@ -120,6 +116,7 @@ async def get_reservation_details(
     user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """Get details of a specific reservation."""
+    from MobyPark.api.app import access_reservations
     reservation = access_reservations.get_reservation(id=rid)
     if not reservation:
         raise HTTPException(
@@ -140,6 +137,7 @@ async def get_vehicles(
     user: User = Depends(get_current_user)
 ) -> List[Dict[str, Any]]:
     """Get all vehicles (admin) or user's vehicles."""
+    from MobyPark.api.app import access_vehicles
     if user.role == "ADMIN":
         return access_vehicles.get_all_vehicles()
     return access_vehicles.get_vehicles_byuser(user=user)
@@ -149,6 +147,7 @@ async def get_payments(
     user: User = Depends(get_current_user)
 ) -> List[Dict[str, Any]]:
     """Get all payments (admin) or user's payments."""
+    from MobyPark.api.app import access_payments
     if user.role == "ADMIN":
         return access_payments.get_all_payments()
     return access_payments.get_payments_by_user(user_id=user)
@@ -159,6 +158,7 @@ async def get_payment_details(
     user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """Get details of a specific payment."""
+    from MobyPark.api.app import access_payments
     payment = access_payments.get_payment(id=pid)
     if not payment:
         raise HTTPException(
@@ -179,6 +179,7 @@ async def get_billing(
     user: User = Depends(get_current_user)
 ) -> List[Dict[str, Any]]:
     """Get billing information for the current user."""
+    from MobyPark.api.app import access_sessions
     sessions = access_sessions.get_sessions_byuser(user=user)
     return _process_billing_sessions(sessions)
 
@@ -189,6 +190,8 @@ async def get_user_billing(
     current_user: User = Depends(get_current_user)
 ) -> List[Dict[str, Any]]:
     """Get billing information for a specific user (admin only)."""
+    from MobyPark.api.app import access_users
+    from MobyPark.api.app import access_sessions
     target_user = access_users.get_user_by_username(username=username)
     if not target_user:
         raise HTTPException(

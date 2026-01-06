@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from typing import Dict, Any, Optional
 from MobyPark.api.authentication import get_current_user, require_roles
-from MobyPark.api.app import access_vehicles, access_parkinglots, access_payments, access_reservations, access_sessions, access_users, connection
 from MobyPark.api.Models.User import User
 
 router = APIRouter()
@@ -17,6 +16,7 @@ async def delete_parking_lot(
     Delete a specific parking lot by ID.
     Admin only.
     """
+    from MobyPark.api.app import access_parkinglots
     parking_lot = access_parkinglots.get_parking_lot(id=lid)
     if not parking_lot:
         raise HTTPException(
@@ -37,6 +37,7 @@ async def delete_all_parking_lots(
     Delete all parking lots.
     Admin only.
     """
+    from MobyPark.api.app import connection
     connection.cursor.execute("TRUNCATE TABLE parking_lots, parking_lots_coordinates")
     # Audit log would be handled by middleware or logging system
     return {"message": "All parking lots deleted"}
@@ -51,6 +52,8 @@ async def delete_reservation(
     Delete a specific reservation.
     Users can only delete their own reservations unless they are admins.
     """
+    from MobyPark.api.app import access_reservations
+    from MobyPark.api.app import access_parkinglots
     reservation = access_reservations.get_reservation(id=rid)
     if not reservation:
         raise HTTPException(
@@ -86,6 +89,9 @@ async def delete_all_reservations(
     Delete all reservations.
     Admins can delete all reservations, users can only delete their own.
     """
+    from MobyPark.api.app import access_reservations
+    from MobyPark.api.app import access_parkinglots
+    from MobyPark.api.app import connection
     parking_lots = access_parkinglots.get_all_parking_lots()
     
     if user.role == "ADMIN":
@@ -120,6 +126,7 @@ async def delete_vehicle(
     Delete a specific vehicle.
     Users can only delete their own vehicles unless they are admins.
     """
+    from MobyPark.api.app import access_vehicles
     vehicle = access_vehicles.get_vehicle(id=vid)
     if not vehicle:
         raise HTTPException(
@@ -146,6 +153,7 @@ async def delete_session(
     Delete a specific session.
     Admin only.
     """
+    from MobyPark.api.app import access_sessions
     if not sid.isnumeric():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

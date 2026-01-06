@@ -5,22 +5,11 @@ from pydantic import BaseModel
 
 from MobyPark.api.authentication import get_current_user, require_roles
 from MobyPark.api.Models.User import User
-from MobyPark.api.DataAccess.AccessParkingLots import AccessParkingLots
-from MobyPark.api.DataAccess.AccessUsers import AccessUsers
-from MobyPark.api.DataAccess.AccessReservations import AccessReservations
-from MobyPark.api.DataAccess.AccessVehicles import AccessVehicles
-from MobyPark.api.DataAccess.AccessPayments import AccessPayments
-from MobyPark.api.password_utils import PasswordManager
+from MobyPark.api.authentication import PasswordManager
 
 # Initialize router
 router = APIRouter(prefix="/api", tags=["put_routes"])
 
-# Initialize data access objects
-access_parkinglots = AccessParkingLots()
-access_users = AccessUsers()
-access_reservations = AccessReservations()
-access_vehicles = AccessVehicles()
-access_payments = AccessPayments()
 password_manager = PasswordManager()
 
 # Request models
@@ -65,6 +54,7 @@ async def update_parking_lot(
     """
     Update a parking lot's information. Admin only.
     """
+    from MobyPark.api.app import access_parkinglots
     parking_lot = access_parkinglots.get_parking_lot(id=lid)
     
     if not parking_lot:
@@ -94,6 +84,7 @@ async def update_profile_by_id(
     """
     Update a user's profile. Users can update their own profile, admins can update any profile.
     """
+    from MobyPark.api.app import access_users
     target_user = access_users.get_user_byid(id=user_id)
     
     if not target_user:
@@ -135,6 +126,7 @@ async def update_reservation(
     """
     Update a reservation. Users can update their own reservations, admins can update any reservation.
     """
+    from MobyPark.api.app import access_reservations
     reservation = access_reservations.get_reservation(id=reservation_id)
     
     if not reservation:
@@ -179,6 +171,7 @@ async def update_vehicle(
     """
     Update a vehicle. Users can update their own vehicles.
     """
+    from MobyPark.api.app import access_vehicles
     vehicle = access_vehicles.get_vehicle(id=vehicle_id)
     
     if not vehicle:
@@ -215,6 +208,7 @@ async def update_payment(
     """
     Update a payment. This is typically used to mark a payment as completed.
     """
+    from MobyPark.api.app import access_payments
     payment = access_payments.get_payment(id=payment_id)
     
     if not payment:

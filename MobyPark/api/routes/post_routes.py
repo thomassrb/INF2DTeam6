@@ -18,17 +18,6 @@ from ..Models.Payment import Payment
 from ..Models.Session import Session
 from ..Models.Vehicle import Vehicle
 
-# Import data access objects
-from ..app import (
-    access_vehicles,
-    access_parkinglots,
-    access_payments,
-    access_reservations,
-    access_sessions,
-    access_users,
-    connection
-)
-
 # Create router
 router = APIRouter()
 
@@ -119,6 +108,7 @@ async def register(
     current_user: User = Depends(require_roles(["ADMIN"]))
 ):
     """Register a new user (admin only)."""
+    from MobyPark.api.app import access_users
     # Check if username already exists
     if access_users.get_user_byusername(username=register_data.username):
         raise HTTPException(
@@ -156,6 +146,7 @@ async def register(
 @router.post("/login", response_model=LoginResponse)
 async def login(login_data: LoginRequest):
     """Authenticate user and return session token."""
+    from MobyPark.api.app import access_users
     user = access_users.get_user_byusername(username=login_data.username)
     
     if not user:
@@ -213,6 +204,7 @@ async def create_parking_lot(
     current_user: User = Depends(require_roles(["ADMIN"]))
 ):
     """Create a new parking lot (admin only)."""
+    from MobyPark.api.app import access_parkinglots
     # Validate coordinates
     if len(parking_data.coordinates) != 2 or \
        not all(isinstance(coord, (int, float)) for coord in parking_data.coordinates):
@@ -248,6 +240,8 @@ async def start_session(
     current_user: User = Depends(get_current_user)
 ):
     """Start a new parking session."""
+    from MobyPark.api.app import access_sessions
+    from MobyPark.api.app import access_parkinglots
     # Get parking lot
     parking_lot = access_parkinglots.get_parking_lot(id=lid)
     if not parking_lot:
@@ -288,6 +282,8 @@ async def stop_session(
     current_user: User = Depends(get_current_user)
 ):
     """Stop an active parking session."""
+    from MobyPark.api.app import access_sessions
+    from MobyPark.api.app import access_parkinglots
     # Get parking lot
     parking_lot = access_parkinglots.get_parking_lot(id=lid)
     if not parking_lot:
@@ -326,6 +322,7 @@ async def create_vehicle(
     current_user: User = Depends(get_current_user)
 ):
     """Register a new vehicle for the current user."""
+    from MobyPark.api.app import access_vehicles
     # Check if vehicle already exists
     if access_vehicles.get_vehicle_bylicenseplate(licenseplate=vehicle_data.licenseplate):
         raise HTTPException(
@@ -369,6 +366,7 @@ async def create_payment(
     current_user: User = Depends(get_current_user)
 ):
     """Create a new payment."""
+    from MobyPark.api.app import access_payments
     # Create payment
     payment = Payment(
         transaction=payment_data.transaction,
@@ -400,6 +398,7 @@ async def refund_payment(
     current_user: User = Depends(require_roles(["ADMIN"]))
 ):
     """Create a refund payment (admin only)."""
+    from MobyPark.api.app import access_payments
     # Generate transaction ID if not provided
     transaction_id = refund_data.transaction or str(uuid.uuid4())
     
@@ -440,6 +439,7 @@ async def debug_reset(
     Reset all data (admin only).
     WARNING: This will delete all data in the database!
     """
+    from MobyPark.api.app import connection
     # Truncate all tables
     connection.cursor.execute(
         "TRUNCATE TABLE users, parking_lots, reservations, payments, t_data, vehicles, sessions"

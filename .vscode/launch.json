@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Uvicorn (module, reload)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "MobyPark.api.app:app",
+        "--reload"
+      ],
+      "jinja": true,
+      "console": "integratedTerminal",
+      "justMyCode": false
+    }
+  ]
+}
