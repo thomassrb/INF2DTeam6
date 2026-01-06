@@ -8,10 +8,27 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 # 3rd part
-from fastapi import Depends, FastAPI, HTTPException, Request, responses, status
+from fastapi import Depends, FastAPI, HTTPException, Request, responses, status, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
+from typing import List, Optional, Dict, Any, Union
+import logging
+import sys
+import os
+import json
+import uuid
+import datetime
+import time
+import random
+import string
+import hmac
+import base64
+import jwt
+import secrets
+import re
+import pytz
+from datetime import datetime, timedelta
 
 # Locale imports
 from . import authentication, session_manager
@@ -429,14 +446,30 @@ async def update_profile_by_id(user_id: str, body: ProfileUpdate, user: User = D
 
 
 @app.get("/parking-lots")
-async def list_parking_lots():
+async def list_parking_lots(
+    lat: float = Query(None, description="Latitude for distance calculation"),
+    lng: float = Query(None, description="Longitude for distance calculation"),
+    radius: float = Query(500, description="Maximum distance in meters (default: 500m)")
+):
     """
-    Return a list of all parking lots.
+    Return a list of parking lots, optionally filtered by distance from a location.
+    
+    If latitude and longitude are provided, results will be sorted by distance
+    and limited to the 5 closest parking lots within the specified radius.
     """
     try:
         logger.log(user=Depends(get_current_user), endpoint="/parking-lots")
-        parking_lots = access_parkinglots.get_all_parking_lots()
+        
+        if (lat is not None) != (lng is not None):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": "Both lat and lng parameters must be provided together"}
+            )
+            
+        parking_lots = access_parkinglots.get_all_parking_lots(lat=lat, lng=lng, radius=radius)
         return parking_lots
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error in list_parking_lots: {str(e)}")
         raise HTTPException(
