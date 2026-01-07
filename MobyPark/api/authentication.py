@@ -7,7 +7,7 @@ import os
 import re
 from datetime import datetime
 
-from .storage_utils import load_json, save_user_data
+from .storage_utils import load_json, save_json as save_user_data
 from . import session_manager
 # MobyPark/api/authentication.py
 

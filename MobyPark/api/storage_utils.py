@@ -1,147 +1,96 @@
+# storage_utils.py
+import os
 import json
 import csv
-import os
 import threading
+from typing import Dict, List, Any, Optional
 
+# File operations lock
+json_file_lock = threading.Lock()
+csv_file_lock = threading.Lock()
+text_file_lock = threading.Lock()
+
+# Get the data directory
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
-# Dit zorgt ervoor dat testes data files mogen overriden
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 DATA_DIR = os.environ.get('MOBYPARK_DATA_DIR') or os.path.join(PROJECT_ROOT, 'MobyPark-api-data', 'pdata')
-
-# Zeker weten dat de data directory uberhaupt bestaat
 os.makedirs(DATA_DIR, exist_ok=True)
 
-# Een beveiliging die ervoor zorgt dat meerdere threads niet tegelijk hetzelfde JSON-bestand kunnen aanpassen
-# dit vermijdt de mogelijkheid op data verlies in de jsons
-json_file_lock = threading.Lock()
-
-def load_json(filename):
+def load_json(filename: str) -> dict:
+    """Load data from a JSON file."""
     full_path = os.path.join(DATA_DIR, filename)
     with json_file_lock:
         try:
             with open(full_path, 'r', encoding='utf-8') as file:
                 data = json.load(file)
-                print(f"DEBUG: Successfully loaded JSON from {filename}.")
                 return data
         except FileNotFoundError:
-            print(f"DEBUG: FileNotFoundError for {filename}. Returning empty dictionary.")
             return {}
         except json.JSONDecodeError:
-            print(f"DEBUG: Error decoding JSON from {filename}. Returning empty dictionary.")
             return {}
 
-def write_json(filename, data):
+def save_json(filename: str, data: Any) -> None:
+    """Save data to a JSON file."""
     full_path = os.path.join(DATA_DIR, filename)
     with json_file_lock:
-        try:
-            with open(full_path, 'w', encoding='utf-8') as file:
-                json.dump(data, file, indent=4)
-        except IOError as e:
-            print(f"Error writing JSON to {filename}: {e}")
-
-def load_csv(filename):
-    full_path = os.path.join(DATA_DIR, filename)
-    try:
-        with open(full_path, 'r', encoding='utf-8') as file:
-            reader = csv.reader(file)
-            return [row for row in reader]
-    except FileNotFoundError:
-        return []
-    except csv.Error as e:
-        print(f"Error loading CSV from {filename}: {e}")
-        return []
-
-def write_csv(filename, data):
-    full_path = os.path.join(DATA_DIR, filename)
-    try:
-        with open(full_path, 'w', newline='', encoding='utf-8') as file:
-            writer = csv.writer(file)
-            for row in data:
-                writer.writerow(row)
-    except IOError as e:
-        print(f"Error writing CSV to {filename}: {e}")
-
-def load_text(filename):
-    full_path = os.path.join(DATA_DIR, filename)
-    try:
-        with open(full_path, 'r', encoding='utf-8') as file:
-            return file.readlines()
-    except FileNotFoundError:
-        return []
-    except IOError as e:
-        print(f"Error loading text from {filename}: {e}")
-        return []
-
-def write_text(filename, data):
-    full_path = os.path.join(DATA_DIR, filename)
-    try:
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
         with open(full_path, 'w', encoding='utf-8') as file:
-            for line in data:
-                file.write(line + '\n')
-    except IOError as e:
-        print(f"Error writing text to {filename}: {e}")
+            json.dump(data, file, indent=2)
 
-def save_data(filename, data):
-    if filename.endswith('.json'):
-        write_json(filename, data)
-    elif filename.endswith('.csv'):
-        write_csv(filename, data)
-    elif filename.endswith('.txt'):
-        write_text(filename, data)
-    else:
-        raise ValueError("Unsupported file format")
+def load_csv(filename: str) -> List[Dict[str, str]]:
+    """Load data from a CSV file."""
+    full_path = os.path.join(DATA_DIR, filename)
+    with csv_file_lock:
+        try:
+            with open(full_path, 'r', encoding='utf-8') as file:
+                reader = csv.DictReader(file)
+                return list(reader)
+        except FileNotFoundError:
+            return []
 
-def load_data(filename):
+def save_csv(filename: str, data: List[Dict[str, str]]) -> None:
+    """Save data to a CSV file."""
+    full_path = os.path.join(DATA_DIR, filename)
+    with csv_file_lock:
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        with open(full_path, 'w', encoding='utf-8', newline='') as file:
+            if data:
+                writer = csv.DictWriter(file, fieldnames=data[0].keys())
+                writer.writeheader()
+                writer.writerows(data)
+
+def load_text(filename: str) -> str:
+    """Load text from a file."""
+    full_path = os.path.join(DATA_DIR, filename)
+    with text_file_lock:
+        try:
+            with open(full_path, 'r', encoding='utf-8') as file:
+                return file.read()
+        except FileNotFoundError:
+            return ''
+
+def save_text(filename: str, text: str) -> None:
+    """Save text to a file."""
+    full_path = os.path.join(DATA_DIR, filename)
+    with text_file_lock:
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        with open(full_path, 'w', encoding='utf-8') as file:
+            file.write(text)
+
+# Legacy functions for backward compatibility
+def load_data(filename: str) -> Any:
+    """Legacy function to load data from a file."""
     if filename.endswith('.json'):
         return load_json(filename)
     elif filename.endswith('.csv'):
         return load_csv(filename)
-    elif filename.endswith('.txt'):
-        return load_text(filename)
+    return load_text(filename)
+
+def save_data(filename: str, data: Any) -> None:
+    """Legacy function to save data to a file."""
+    if filename.endswith('.json'):
+        save_json(filename, data)
+    elif filename.endswith('.csv'):
+        save_csv(filename, data)
     else:
-        return None
-
-def load_user_data():
-    return load_data('users.json')
-
-def save_user_data(data):
-    save_data('users.json', data)
-
-def load_parking_lot_data():
-    return load_data('parking-lots.json')
-
-def save_parking_lot_data(data):
-    save_data('parking-lots.json', data)
-
-def load_reservation_data():
-    return load_data('reservations.json')
-
-def save_reservation_data(data):
-    save_data('reservations.json', data)
-
-def load_payment_data():
-    return load_data('payments.json')
-
-def save_payment_data(data):
-    save_data('payments.json', data)
-
-def load_discounts_data():
-    return load_data('discounts.csv')
-
-def save_discounts_data(data):
-    save_data('discounts.csv', data)
-
-def load_vehicles_data():
-    data = load_data('vehicles.json')
-    # Ensure we always work with a dict keyed by username -> list[vehicle]
-    if isinstance(data, dict):
-        return data
-    # Handle legacy flat-list formats defensively
-    if isinstance(data, list):
-        return {"__legacy__": data}
-    # Fallback to empty mapping
-    return {}
-
-
-def save_vehicles_data(data):
-    save_data('vehicles.json', data)
+        save_text(filename, str(data))

@@ -8,30 +8,22 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 # 3rd part
-from fastapi import Depends, FastAPI, HTTPException, Request, responses, status, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse
+from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.responses import PlainTextResponse
+from fastapi import Query
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Union
-import logging
-import sys
 import os
-import json
 import uuid
-import datetime
-import time
-import random
-import string
-import hmac
-import base64
-import jwt
-import secrets
-import re
 import pytz
 from datetime import datetime, timedelta
+import bcrypt
 
 # Locale imports
-from . import authentication, session_manager
+from . import authentication
 from .DBConnection import DBConnection
 from .DataAccess.AccessParkingLots import AccessParkingLots
 from .DataAccess.AccessPayments import AccessPayments
@@ -42,23 +34,13 @@ from .DataAccess.AccessVehicles import AccessVehicles
 from .DataAccess.AccessFreeParking import AccessFreeParking
 from .DataAccess.AccessDiscountCodes import AccessDiscountCodes
 from .DataAccess.AccessAnalytics import AccessAnalytics
+from .Models.User import User
 from .Models.ParkingLot import ParkingLot
 from .Models.ParkingLotCoordinates import ParkingLotCoordinates
-from .Models.User import User
 from .Models.FreeParking import FreeParking
-from .Models.DiscountCode import (
-    DiscountCode, 
-    DiscountCodeCreate, 
-    DiscountCodeResponse,
-    ApplyDiscountRequest,
-    ApplyDiscountResponse,
-    generate_discount_code
-)
-from .storage_utils import (
-    load_json, save_user_data, load_parking_lot_data, load_reservation_data,
-    save_parking_lot_data, save_reservation_data, load_vehicles_data,
-    save_vehicles_data, load_user_data, load_payment_data, save_payment_data
-)
+from .Models.DiscountCode import DiscountCode, DiscountCodeCreate, ApplyDiscountRequest
+
+from .storage_utils import load_json, save_json
 
 # project root path
 project_root = str(pathlib.Path(__file__).resolve().parent.parent.parent)
@@ -225,6 +207,26 @@ class FreeParkingResponse(BaseModel):
     added_by: int
     created_at: Optional[str] = None
 
+class DiscountCodeResponse(BaseModel):
+    id: int
+    code: str
+    discount: float
+    valid_from: Optional[datetime] = None
+    valid_until: Optional[datetime] = None
+    max_uses: Optional[int] = None
+    uses: int = 0
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class ApplyDiscountResponse(BaseModel):
+    success: bool
+    message: str
+    original_amount: float
+    discount_amount: float
+    final_amount: float
+    discount_code: Optional[str] = None
+    discount_percentage: Optional[float] = None
 
 
 def get_current_user(request: Request) -> User:
