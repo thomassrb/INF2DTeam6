@@ -184,10 +184,9 @@ async def get_billing(
     return _process_billing_sessions(sessions)
 
 @router.get("/billing/{username}", response_model=List[BillingItem])
-@require_roles(["ADMIN"])
 async def get_user_billing(
     username: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_roles("ADMIN"))
 ) -> List[Dict[str, Any]]:
     """Get billing information for a specific user (admin only)."""
     from MobyPark.api.app import access_users
