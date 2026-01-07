@@ -38,7 +38,7 @@ require_roles = authentication.require_roles
 DATA_DIR = (
     os.environ.get("MOBYPARK_DB_DIR")
     or os.environ.get("MOBYPARK_DATA_DIR")
-    or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "MobyPark-api-data")
+    or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "MobyPark-api-data", "pdata")
 )
 os.makedirs(DATA_DIR, exist_ok=True)
 
