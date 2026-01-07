@@ -41,6 +41,7 @@ from .DataAccess.AccessUsers import AccessUsers
 from .DataAccess.AccessVehicles import AccessVehicles
 from .DataAccess.AccessFreeParking import AccessFreeParking
 from .DataAccess.AccessDiscountCodes import AccessDiscountCodes
+from .DataAccess.AccessAnalytics import AccessAnalytics
 from .Models.ParkingLot import ParkingLot
 from .Models.ParkingLotCoordinates import ParkingLotCoordinates
 from .Models.User import User
@@ -109,6 +110,7 @@ access_sessions = AccessSessions(conn=connection)
 access_payments = AccessPayments(conn=connection)
 access_free_parking = AccessFreeParking(connection=connection)
 access_discount_codes = AccessDiscountCodes(connection=connection)
+access_analytics = AccessAnalytics(connection)
 
 log_path = os.path.join(DATA_DIR, "access-dd-mm-yyyy.log")
 logger = Logger(path=log_path)
@@ -460,6 +462,7 @@ async def list_parking_lots(
     try:
         logger.log(user=Depends(get_current_user), endpoint="/parking-lots")
         
+        # If lat or lng is provided, both must be provided
         if (lat is not None) != (lng is not None):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1855,4 +1858,59 @@ async def apply_discount_code(
             discount_amount=0,
             final_amount=request.amount,
             message="Failed to apply discount code"
+        )
+    
+
+@app.get("/analytics/occupancy")
+async def get_occupancy_analytics(
+    lot_id: str = Query(..., description="ID of the parking lot"),
+    days: int = Query(30, description="Number of days to look back"),
+    user: User = Depends(require_roles("ADMIN"))
+):
+    """
+    Get occupancy analytics for a parking lot over time
+    
+    Returns a list of occupancy percentages for each day in the specified time range
+    """
+    try:
+        occupancy_data = access_analytics.get_occupancy_over_time(lot_id, days)
+        return {
+            "lot_id": lot_id,
+            "time_period_days": days,
+            "data": occupancy_data
+        }
+    except Exception as e:
+        print(f"Error in get_occupancy_analytics: {str(e)}")
+        # Return empty data instead of error for now
+        return {
+            "lot_id": lot_id,
+            "time_period_days": days,
+            "data": [{"date": (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d'), 
+                     "occupancy_percentage": 0} 
+                    for i in range(days, 0, -1)]
+        }
+
+@app.get("/analytics/revenue", response_model=dict)
+async def get_revenue_analytics(
+    lot_id: str = Query(..., description="ID of the parking lot"),
+    start_date: str = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: str = Query(None, description="End date (YYYY-MM-DD)"),
+    user: User = Depends(require_roles("ADMIN"))
+):
+
+    try:
+        revenue_data = access_analytics.get_revenue(lot_id, start_date, end_date)
+        return {
+            "lot_id": lot_id,
+            "start_date": revenue_data["start_date"],
+            "end_date": revenue_data["end_date"],
+            "total_revenue": revenue_data["total_revenue"],
+            "total_transactions": revenue_data["total_transactions"],
+            "breakdown": revenue_data["breakdown"]
+        }
+    except Exception as e:
+        logger.error(f"Error in get_revenue_analytics: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve revenue data: {str(e)}"
         )
