@@ -41,7 +41,6 @@ async def delete_all_parking_lots(
     return {"message": "All parking lots deleted"}
 
 @router.delete("/reservations/{rid}", status_code=status.HTTP_200_OK)
-@require_roles(["USER", "ADMIN"])
 async def delete_reservation(
     rid: str,
     user: User = Depends(get_current_user)
@@ -79,7 +78,6 @@ async def delete_reservation(
     return {"status": "Deleted"}
 
 @router.delete("/reservations/", status_code=status.HTTP_200_OK)
-@require_roles(["USER", "ADMIN"])
 async def delete_all_reservations(
     user: User = Depends(get_current_user)
 ) -> Dict[str, str]:
@@ -114,8 +112,8 @@ async def delete_all_reservations(
         
         return {"status": "All user reservations deleted"}
 
+
 @router.delete("/vehicles/{vid}", status_code=status.HTTP_200_OK)
-@require_roles(["USER", "ADMIN"])
 async def delete_vehicle(
     vid: str,
     user: User = Depends(get_current_user)
@@ -141,11 +139,11 @@ async def delete_vehicle(
     access_vehicles.delete_vehicle(vehicle=vehicle)
     return {"status": "Deleted"}
 
+
 @router.delete("/sessions/{sid}", status_code=status.HTTP_200_OK)
-@require_roles(["ADMIN"])
 async def delete_session(
     sid: str,
-    user: User = Depends(get_current_user)
+    user: User = Depends(require_roles("ADMIN"))
 ) -> Dict[str, str]:
     """
     Delete a specific session.
