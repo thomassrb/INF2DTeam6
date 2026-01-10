@@ -23,7 +23,7 @@ class ProfileResponse(BaseModel):
     name: str
     email: str
     phone: str
-    birth_year: str
+    birth_year: int  # Changed from str to int to match User model
     created_at: str
 
 class BillingItem(BaseModel):

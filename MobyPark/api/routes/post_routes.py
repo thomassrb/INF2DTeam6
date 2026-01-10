@@ -201,33 +201,76 @@ async def logout(
 @router.post("/parking-lots", status_code=status.HTTP_201_CREATED)
 async def create_parking_lot(
     parking_data: ParkingLotCreate,
-    current_user: User = Depends(require_roles(["ADMIN"]))
+    current_user: User = Depends(require_roles("ADMIN"))  # Fixed: pass role as string, not list
 ):
-    """Create a new parking lot (admin only)."""
-    from MobyPark.api.app import access_parkinglots
-    # Validate coordinates
-    if len(parking_data.coordinates) != 2 or \
-       not all(isinstance(coord, (int, float)) for coord in parking_data.coordinates):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Coordinates must be a list of two numbers"
+    """
+    Create a new parking lot (admin only).
+    
+    Required fields:
+    - name: str
+    - location: str
+    - capacity: int
+    - tariff: float (hourly rate)
+    - daytariff: float (daily rate)
+    - address: str
+    - coordinates: List[float, float] (latitude, longitude)
+    """
+    print(f"DEBUG: Creating parking lot with data: {parking_data}")
+    
+    try:
+        # Validate coordinates
+        if len(parking_data.coordinates) != 2 or \
+           not all(isinstance(coord, (int, float)) for coord in parking_data.coordinates):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Coordinates must be a list of exactly two numbers [longitude, latitude]"
+            )
+        
+        # Get the access_parkinglots instance
+        from MobyPark.api.app import access_parkinglots
+        
+        # Create parking lot
+        parking_lot = ParkingLot(
+            name=parking_data.name,
+            location=parking_data.location,
+            capacity=parking_data.capacity,
+            hourly_rate=parking_data.tariff,
+            day_rate=parking_data.daytariff,
+            address=parking_data.address,
+            coordinates=parking_data.coordinates,
+            reserved=0
         )
-    
-    # Create parking lot
-    parking_lot = ParkingLot(
-        name=parking_data.name,
-        location=parking_data.location,
-        capacity=parking_data.capacity,
-        hourly_rate=parking_data.tariff,
-        day_rate=parking_data.daytariff,
-        address=parking_data.address,
-        coordinates=parking_data.coordinates,
-        reserved=0
-    )
-    
-    access_parkinglots.add_parking_lot(parkinglot=parking_lot)
-    
-    return {"Server message": f"Parking lot saved under ID: {parking_lot.id}"}
+        
+        # Add the parking lot to the database
+        access_parkinglots.add_parking_lot(parkinglot=parking_lot)
+        
+        print(f"DEBUG: Successfully created parking lot: {parking_lot.name} (ID: {parking_lot.id})")
+        
+        return {
+            "status": "success",
+            "message": "Parking lot created successfully",
+            "data": {
+                "id": parking_lot.id,
+                "name": parking_lot.name,
+                "location": parking_lot.location,
+                "address": parking_lot.address,
+                "capacity": parking_lot.capacity,
+                "hourly_rate": parking_lot.hourly_rate,
+                "daily_rate": parking_lot.day_rate,
+                "coordinates": parking_lot.coordinates
+            }
+        }
+        
+    except HTTPException as he:
+        # Re-raise HTTP exceptions with their original status code
+        print(f"ERROR in create_parking_lot: {str(he.detail)}")
+        raise
+    except Exception as e:
+        print(f"ERROR in create_parking_lot: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while creating the parking lot: {str(e)}"
+        )
 
 # ============================================
 # Session Routes

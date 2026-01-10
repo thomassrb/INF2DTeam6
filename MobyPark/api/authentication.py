@@ -22,18 +22,33 @@ def extract_bearer_token(auth_header: Optional[str]) -> Optional[str]:
     Extract 'token' from headers like: 'Bearer token'.
     This must keep the behaviour your unit tests expect.
     """
+    DEBUG_LOGS = os.environ.get('DEBUG_LOGS') == '1'
+    
     if not auth_header:
+        if DEBUG_LOGS:
+            print("DEBUG: No authorization header provided")
         return None
 
-    parts = auth_header.split()
-    if len(parts) != 2:
-        return None
+    try:
+        parts = auth_header.split()
+        if len(parts) != 2:
+            if DEBUG_LOGS:
+                print(f"DEBUG: Invalid authorization header format: {auth_header}")
+            return None
 
-    scheme, token = parts
-    if scheme.lower() != "bearer":
-        return None
+        scheme, token = parts
+        if scheme.lower() != "bearer":
+            if DEBUG_LOGS:
+                print(f"DEBUG: Invalid scheme in authorization header: {scheme}")
+            return None
 
-    return token
+        if DEBUG_LOGS:
+            print(f"DEBUG: Successfully extracted token: {token}")
+        return token
+    except Exception as e:
+        if DEBUG_LOGS:
+            print(f"DEBUG: Error extracting token: {str(e)}")
+        return None
 
 
 def get_current_user(authorization: Optional[str] = Header(None)) -> User:
@@ -41,21 +56,35 @@ def get_current_user(authorization: Optional[str] = Header(None)) -> User:
     Resolve the current user from the Authorization header.
     Returns 401 for missing/invalid/expired tokens instead of 500.
     """
+    DEBUG_LOGS = os.environ.get('DEBUG_LOGS') == '1'
+    
+    if DEBUG_LOGS:
+        print(f"DEBUG: Authorization header: {authorization}")
+    
     token = extract_bearer_token(authorization)
     if not token:
-        # This behaviour already gives you 401 for profile_without_token -> that test passes.
+        if DEBUG_LOGS:
+            print("DEBUG: No token extracted from authorization header")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing or invalid authorization token",
         )
 
+    if DEBUG_LOGS:
+        print(f"DEBUG: Looking up session for token: {token}")
+    
     user = get_session(token)
     if user is None:
+        if DEBUG_LOGS:
+            print(f"DEBUG: No session found for token: {token}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired session",
         )
 
+    if DEBUG_LOGS:
+        print(f"DEBUG: Found user: {user.username} with role: {user.role}")
+    
     return user
 
 
@@ -101,49 +130,60 @@ def roles_required(roles):
     return decorator
 
 
-def extract_bearer_token(headers):
+# This function is kept for backward compatibility but should be deprecated
+# in favor of the updated extract_bearer_token function above
+def extract_bearer_token_from_headers(headers):
     DEBUG_LOGS = os.environ.get('DEBUG_LOGS') == '1'
     if DEBUG_LOGS:
-        print(f"DEBUG: Headers in extract_bearer_token: {headers}")
-
+        print(f"DEBUG: Headers in extract_bearer_token_from_headers: {headers}")
+    
+    if not headers:
+        if DEBUG_LOGS:
+            print("DEBUG: No headers provided to extract_bearer_token_from_headers")
+        return None
+    
+    if not hasattr(headers, 'get'):
+        if DEBUG_LOGS:
+            print(f"DEBUG: Headers is not a dictionary-like object: {type(headers)}")
+        return None
+    
     auth_header = headers.get('Authorization')
     if not auth_header:
         if DEBUG_LOGS:
-            print("DEBUG: Authorization header not found.")
+            print("DEBUG: Authorization header not found in headers")
         return None
-
-    parts = auth_header.split(' ', 1)
-    if len(parts) != 2:
-        if DEBUG_LOGS:
-            print(f"DEBUG: Invalid Authorization header format: {auth_header}")
-        return None
-
-    scheme, token = parts
-    if scheme.lower() != 'bearer' or not token:
-        if DEBUG_LOGS:
-            print(f"DEBUG: Invalid scheme or empty token: Scheme={scheme}, Token={token}")
-        return None
-    if DEBUG_LOGS:
-        print(f"DEBUG: Extracted token: {token}")
-    return token
+    
+    return extract_bearer_token(auth_header)
 
 def get_user_from_session(handler):
     DEBUG_LOGS = os.environ.get('DEBUG_LOGS') == '1'
     if DEBUG_LOGS:
         print(f"DEBUG: Entering get_user_from_session for path: {handler.path}")
-    token = extract_bearer_token(handler.headers)
+    
+    if not hasattr(handler, 'headers'):
+        if DEBUG_LOGS:
+            print("DEBUG: Handler has no headers attribute")
+        return None
+    
+    token = extract_bearer_token_from_headers(handler.headers)
     if not token:
         if DEBUG_LOGS:
             print("DEBUG: No token extracted from headers in get_user_from_session.")
         return None
+    
+    if DEBUG_LOGS:
+        print(f"DEBUG: Looking up session for token: {token}")
+    
     session_data = session_manager.get_session(token)
     if not session_data:
         if DEBUG_LOGS:
             print(f"DEBUG: No session found for token: {token}")
-    else:
-        if DEBUG_LOGS:
-            print(f"DEBUG: Session found for token {token}, user: {session_data.get('username')}")
-    return session_data if session_data else None
+        return None
+    
+    if DEBUG_LOGS:
+        print(f"DEBUG: Session found for token {token}, user: {session_data.get('username', 'unknown')}")
+    
+    return session_data
 
 def handle_update_profile(handler, session_user):
     data = handler.get_request_data()
