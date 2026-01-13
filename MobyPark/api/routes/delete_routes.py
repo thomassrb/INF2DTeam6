@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional
 from MobyPark.api.authentication import get_current_user, require_roles
 from MobyPark.api.Models.User import User
 
-router = APIRouter()
+router = APIRouter(tags=["delete_routes"])
 
 @router.delete("/parkinglots/{lid}", status_code=status.HTTP_200_OK)
 async def delete_parking_lot(

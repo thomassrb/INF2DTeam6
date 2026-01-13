@@ -19,7 +19,7 @@ from ..Models.Session import Session
 from ..Models.Vehicle import Vehicle
 
 # Create router
-router = APIRouter()
+router = APIRouter(tags=["post_routes"])
 
 # ============================================
 # Request/Response Models

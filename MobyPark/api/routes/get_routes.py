@@ -14,7 +14,7 @@ from MobyPark.api.Models.Payment import Payment
 from MobyPark.api.Models.Session import Session
 
 # Create router
-router = APIRouter()
+router = APIRouter(tags=["get_routes"])
 
 # Response Models
 class ProfileResponse(BaseModel):
