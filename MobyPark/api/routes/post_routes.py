@@ -11,12 +11,14 @@ import os
 
 from .. import session_manager, session_calculator
 from ..authentication import get_current_user, require_roles
-from ..Models.User import User
-from ..Models.ParkingLot import ParkingLot
-from ..Models.Reservation import Reservation
-from ..Models.Payment import Payment
-from ..Models.Session import Session
-from ..Models.Vehicle import Vehicle
+from MobyPark.api.Models import (
+    Vehicle,
+    Session,
+    Payment,
+    Reservation,
+    ParkingLot,
+    ParkingLotCoordinates,
+    User)
 
 # Create router
 router = APIRouter(tags=["post_routes"])

@@ -18,6 +18,25 @@ class AccessPayments:
         self.accesssessions = AccessSessions(conn=conn)
 
 
+    def map_payment(self, payment: dict, tdata: dict):
+        payment_dict = dict(payment)
+        tdata_dict = dict(tdata)
+        payment_dict["created_at"] = datetime.strptime(payment_dict["created_at"], "%Y-%m-%d %H:%M:%S")
+        payment_dict["completed"] = datetime.strptime(payment_dict["completed"], "%Y-%m-%d %H:%M:%S")
+        tdata_dict["date"] = datetime.strptime(tdata_dict["date"], "%Y-%m-%d %H:%M:%S")
+
+        payment_dict["user"] = self.accessusers.get_user_byid(id=payment_dict["user_id"])
+        payment_dict["session"] = self.accesssessions.get_session(id=payment_dict["session_id"])
+        payment_dict["parking_lot"] = self.accessparkinglots.get_parking_lot(id=payment_dict["parking_lot_id"])
+        payment_dict["t_data"] = TransactionData(**tdata_dict)
+
+        del payment_dict["user_id"]
+        del payment_dict["session_id"]
+        del payment_dict["parking_lot_id"]
+
+        return Payment(**payment_dict)
+    
+
     def get_payment(self, id: str):
         query = """
         SELECT * FROM payments
@@ -35,22 +54,7 @@ class AccessPayments:
         if payment is None or tdata is None:
             return None
         
-        payment_dict = dict(payment)
-        tdata_dict = dict(tdata)
-        payment_dict["created_at"] = datetime.strptime(payment_dict["created_at"], "%Y-%m-%d %H:%M:%S")
-        payment_dict["completed"] = datetime.strptime(payment_dict["completed"], "%Y-%m-%d %H:%M:%S")
-        tdata_dict["date"] = datetime.strptime(tdata_dict["date"], "%Y-%m-%d %H:%M:%S")
-
-        payment_dict["user"] = self.accessusers.get_user_byid(id=payment_dict["user_id"])
-        payment_dict["session"] = self.accesssessions.get_session(id=payment_dict["session_id"])
-        payment_dict["parking_lot"] = self.accessparkinglots.get_parking_lot(id=payment_dict["parking_lot_id"])
-        payment_dict["t_data"] = TransactionData(**tdata_dict)
-
-        del payment_dict["user_id"]
-        del payment_dict["session_id"]
-        del payment_dict["parking_lot_id"]
-
-        return Payment(**payment_dict)
+        return self.map_payment(payment=payment, tdata=tdata)
     
 
     def get_all_payments(self):

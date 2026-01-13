@@ -8,37 +8,20 @@ from typing import Optional
 from MobyPark.api.authentication import get_current_user, require_roles
 
 from MobyPark.api import session_calculator as sc
-from MobyPark.api.Models.User import User
-from MobyPark.api.Models.ParkingLot import ParkingLot
-from MobyPark.api.Models.Reservation import Reservation
-from MobyPark.api.Models.Payment import Payment
-from MobyPark.api.Models.Session import Session
+from MobyPark.api.Models import (
+    Vehicle,
+    Session,
+    Payment,
+    Reservation,
+    ParkingLot,
+    ParkingLotCoordinates,
+    User)
 
 # Create router
 router = APIRouter(tags=["get_routes"])
 
 # Response Models
 
-class ParkingLotCoordinates(BaseModel):
-    lng: Optional[float] = None
-    lat: Optional[float] = None
-
-class ParkingLotResponse(BaseModel):
-    id: int
-    name: str
-    location: str
-    address: str
-    capacity: int
-    reserved: int
-    tariff: float = 0.0
-    daytariff: float = 0.0
-    created_at: Optional[str] = None
-    coordinates: Optional[ParkingLotCoordinates] = None
-
-    class Config:
-        json_encoders = {
-            # Handle any custom serialization here if needed
-        }
 
 class BillingItem(BaseModel):
     session: Dict[str, Any]
@@ -54,6 +37,7 @@ async def get_profile(
 ) -> User:
     """Get the profile of the currently authenticated user."""
     return user
+
 
 @router.get("/profile/{user_id}", response_model=User)
 async def get_profile_by_id(
@@ -78,37 +62,18 @@ async def get_profile_by_id(
     
     return target_user
 
-def _convert_to_parking_lot_response(lot: ParkingLot) -> ParkingLotResponse:
-    """Convert a ParkingLot model to a ParkingLotResponse."""
-    if not lot:
-        return None
-    return ParkingLotResponse(
-        id=lot.id,
-        name=lot.name,
-        location=lot.location,
-        address=lot.address,
-        capacity=lot.capacity,
-        reserved=lot.reserved,
-        tariff=float(lot.tariff) if lot.tariff is not None else 0.0,
-        daytariff=float(lot.daytariff) if lot.daytariff is not None else 0.0,
-        created_at=lot.created_at.isoformat() if hasattr(lot, 'created_at') and lot.created_at else None,
-        coordinates=ParkingLotCoordinates(
-            lng=lot.coordinates.lng if hasattr(lot, 'coordinates') and lot.coordinates else None,
-            lat=lot.coordinates.lat if hasattr(lot, 'coordinates') and lot.coordinates else None
-        ) if hasattr(lot, 'coordinates') else None
-    )
 
-@router.get("/parkinglots", response_model=List[ParkingLotResponse])
+@router.get("/parkinglots", response_model=List[ParkingLot])
 async def get_parking_lots():
     """Get all parking lots."""
     from MobyPark.api.app import access_parkinglots
     parking_lots = access_parkinglots.get_all_parking_lots()
-    return [_convert_to_parking_lot_response(lot) for lot in parking_lots if lot is not None]
+    return parking_lots
 
-@router.get("/parkinglots/{lid}", response_model=ParkingLotResponse)
+@router.get("/parkinglots/{lid}", response_model=ParkingLot)
 async def get_parking_lot_details(
     lid: str
-) -> ParkingLotResponse:
+) -> ParkingLot:
     """Get details of a specific parking lot."""
     from MobyPark.api.app import access_parkinglots
     parking_lot = access_parkinglots.get_parking_lot(id=lid)
@@ -117,19 +82,21 @@ async def get_parking_lot_details(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Parking lot not found"
         )
-    return _convert_to_parking_lot_response(parking_lot)
+    return parking_lot
 
-@router.get("/reservations", response_model=List[Dict[str, Any]])
+
+@router.get("/reservations", response_model=List[Reservation])
 async def get_reservations(
     user: User = Depends(get_current_user)
-) -> List[Dict[str, Any]]:
+) -> List[Reservation]:
     """Get all reservations (admin) or user's reservations."""
     from MobyPark.api.app import access_reservations
     if user.role == "ADMIN":
         return access_reservations.get_all_reservations()
     return access_reservations.get_reservations_by_user(user=user)
 
-@router.get("/reservations/{rid}", response_model=Dict[str, Any])
+
+@router.get("/reservations/{rid}", response_model=Reservation)
 async def get_reservation_details(
     rid: str,
     user: User = Depends(get_current_user)
@@ -151,31 +118,33 @@ async def get_reservation_details(
     
     return reservation
 
-@router.get("/vehicles", response_model=List[Dict[str, Any]])
+
+@router.get("/vehicles", response_model=List[Vehicle])
 async def get_vehicles(
     user: User = Depends(get_current_user)
-) -> List[Dict[str, Any]]:
+) -> List[Vehicle]:
     """Get all vehicles (admin) or user's vehicles."""
     from MobyPark.api.app import access_vehicles
     if user.role == "ADMIN":
         return access_vehicles.get_all_vehicles()
     return access_vehicles.get_vehicles_byuser(user=user)
 
-@router.get("/payments", response_model=List[Dict[str, Any]])
+@router.get("/payments", response_model=List[Payment]|List[dict])
 async def get_payments(
     user: User = Depends(get_current_user)
-) -> List[Dict[str, Any]]:
+) -> List[Payment]|List[dict]:
     """Get all payments (admin) or user's payments."""
     from MobyPark.api.app import access_payments
     if user.role == "ADMIN":
         return access_payments.get_all_payments()
     return access_payments.get_payments_by_user(user_id=user)
 
-@router.get("/payments/{pid}", response_model=Dict[str, Any])
+
+@router.get("/payments/{pid}", response_model=Payment)
 async def get_payment_details(
     pid: str,
     user: User = Depends(get_current_user)
-) -> Dict[str, Any]:
+) -> Payment:
     """Get details of a specific payment."""
     from MobyPark.api.app import access_payments
     payment = access_payments.get_payment(id=pid)
@@ -193,20 +162,22 @@ async def get_payment_details(
     
     return payment
 
+
 @router.get("/billing", response_model=List[BillingItem])
 async def get_billing(
     user: User = Depends(get_current_user)
-) -> List[Dict[str, Any]]:
+) -> List[BillingItem]:
     """Get billing information for the current user."""
     from MobyPark.api.app import access_sessions
     sessions = access_sessions.get_sessions_byuser(user=user)
     return _process_billing_sessions(sessions)
 
+
 @router.get("/billing/{username}", response_model=List[BillingItem])
 async def get_user_billing(
     username: str,
     current_user: User = Depends(require_roles("ADMIN"))
-) -> List[Dict[str, Any]]:
+) -> List[BillingItem]:
     """Get billing information for a specific user (admin only)."""
     from MobyPark.api.app import access_users
     from MobyPark.api.app import access_sessions
