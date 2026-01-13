@@ -31,7 +31,7 @@ class RegisterRequest(BaseModel):
     name: str
     phone: str
     email: EmailStr
-    birth_year: str
+    birth_year: int
     role: str = "USER"
 
 class LoginRequest(BaseModel):

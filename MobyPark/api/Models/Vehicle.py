@@ -1,28 +1,15 @@
 from datetime import datetime
+from pydantic import BaseModel
 from .User import User
 
-class Vehicle:
+class Vehicle(BaseModel):
+    user: User
+    licenseplate: str
+    make: str
+    model: str
+    color: str
+    year: int
+    created_at: datetime
+    id: int|None=None
 
-    def __init__(self,
-                  user: User,
-                  licenseplate: str,
-                  make: str,
-                  model: str,
-                  color: str,
-                  year: int,
-                  created_at: datetime,
-                  id: int|None=None):
-        
-        self.id = id
-        self.user = user
-        self.licenseplate = licenseplate
-        self.make = make
-        self.model = model
-        self.color = color
-        self.year = year
-        self.created_at = created_at
-
-
-    def __repr__(self):
-        return self.__dict__
         

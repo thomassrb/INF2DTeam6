@@ -1,44 +1,15 @@
 from datetime import datetime
+from pydantic import BaseModel
 
-class User:
-
-    def __init__(self,
-                 username: str,
-                 name: str,
-                 email: str,
-                 password: str,
-                 created_at: datetime,
-                 phone: str,
-                 role: str,
-                 birth_year: int,
-                 active: bool,
-                 id: int|None=None):
-        
-        self.id = id
-        self.username = username
-        self.name = name
-        self.email = email
-        self.password = password
-        self.created_at = created_at
-        self.phone = phone
-        self.role = role
-        self.birth_year = birth_year
-        self.active = active
-
+class User(BaseModel):
+    username: str
+    name: str
+    email: str
+    password: str
+    created_at: datetime
+    phone: str
+    role: str
+    birth_year: int
+    active: bool
+    id: int|None=None
     
-    def __repr__(self):
-        return self.__dict__
-    
-
-
-
-# id VARCHAR(255) PRIMARY KEY,
-# username VARCHAR(255) NOT NULL UNIQUE,
-# name VARCHAR(255) NOT NULL,
-# email VARCHAR(255) NOT NULL UNIQUE,
-# password VARCHAR(255) NOT NULL,
-# created_at DATETIME NOT NULL,
-# phone VARCHAR(255) NOT NULL,
-# role VARCHAR(255) NOT NULL,
-# birth_year INT NOT NULL,
-# active BOOL NOT NULL

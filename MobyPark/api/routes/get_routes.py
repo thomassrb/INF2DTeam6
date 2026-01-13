@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from typing import Dict, Any, List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
+from typing import Optional
 
 from MobyPark.api.authentication import get_current_user, require_roles
 
@@ -17,14 +18,27 @@ from MobyPark.api.Models.Session import Session
 router = APIRouter(tags=["get_routes"])
 
 # Response Models
-class ProfileResponse(BaseModel):
-    username: str
-    role: str
+
+class ParkingLotCoordinates(BaseModel):
+    lng: Optional[float] = None
+    lat: Optional[float] = None
+
+class ParkingLotResponse(BaseModel):
+    id: int
     name: str
-    email: str
-    phone: str
-    birth_year: str
-    created_at: str
+    location: str
+    address: str
+    capacity: int
+    reserved: int
+    tariff: float = 0.0
+    daytariff: float = 0.0
+    created_at: Optional[str] = None
+    coordinates: Optional[ParkingLotCoordinates] = None
+
+    class Config:
+        json_encoders = {
+            # Handle any custom serialization here if needed
+        }
 
 class BillingItem(BaseModel):
     session: Dict[str, Any]
@@ -34,26 +48,18 @@ class BillingItem(BaseModel):
     payed: float
     balance: float
 
-@router.get("/profile", response_model=ProfileResponse)
+@router.get("/profile", response_model=User)
 async def get_profile(
     user: User = Depends(get_current_user)
-) -> ProfileResponse:
+) -> User:
     """Get the profile of the currently authenticated user."""
-    return ProfileResponse(
-        username=user.username,
-        role=user.role,
-        name=user.name,
-        email=user.email,
-        phone=user.phone,
-        birth_year=user.birth_year,
-        created_at=user.created_at.strftime("%d-%m-%Y")
-    )
+    return user
 
-@router.get("/profile/{user_id}", response_model=ProfileResponse)
+@router.get("/profile/{user_id}", response_model=User)
 async def get_profile_by_id(
     user_id: str,
     current_user: User = Depends(get_current_user)
-) -> ProfileResponse:
+) -> User:
     """Get profile by user ID (admin only or own profile)."""
     from MobyPark.api.app import access_users
     target_user = access_users.get_user_byid(id=user_id)
@@ -70,26 +76,39 @@ async def get_profile_by_id(
             detail="Access denied. You can only view your own profile."
         )
     
-    return ProfileResponse(
-        username=target_user.username,
-        role=target_user.role,
-        name=target_user.name,
-        email=target_user.email,
-        phone=target_user.phone,
-        birth_year=target_user.birth_year,
-        created_at=target_user.created_at.strftime("%d-%m-%Y")
+    return target_user
+
+def _convert_to_parking_lot_response(lot: ParkingLot) -> ParkingLotResponse:
+    """Convert a ParkingLot model to a ParkingLotResponse."""
+    if not lot:
+        return None
+    return ParkingLotResponse(
+        id=lot.id,
+        name=lot.name,
+        location=lot.location,
+        address=lot.address,
+        capacity=lot.capacity,
+        reserved=lot.reserved,
+        tariff=float(lot.tariff) if lot.tariff is not None else 0.0,
+        daytariff=float(lot.daytariff) if lot.daytariff is not None else 0.0,
+        created_at=lot.created_at.isoformat() if hasattr(lot, 'created_at') and lot.created_at else None,
+        coordinates=ParkingLotCoordinates(
+            lng=lot.coordinates.lng if hasattr(lot, 'coordinates') and lot.coordinates else None,
+            lat=lot.coordinates.lat if hasattr(lot, 'coordinates') and lot.coordinates else None
+        ) if hasattr(lot, 'coordinates') else None
     )
 
-@router.get("/parkinglots", response_model=List[Dict[str, Any]])
+@router.get("/parkinglots", response_model=List[ParkingLotResponse])
 async def get_parking_lots():
     """Get all parking lots."""
     from MobyPark.api.app import access_parkinglots
-    return access_parkinglots.get_all_parking_lots()
+    parking_lots = access_parkinglots.get_all_parking_lots()
+    return [_convert_to_parking_lot_response(lot) for lot in parking_lots if lot is not None]
 
-@router.get("/parkinglots/{lid}", response_model=Dict[str, Any])
+@router.get("/parkinglots/{lid}", response_model=ParkingLotResponse)
 async def get_parking_lot_details(
     lid: str
-) -> Dict[str, Any]:
+) -> ParkingLotResponse:
     """Get details of a specific parking lot."""
     from MobyPark.api.app import access_parkinglots
     parking_lot = access_parkinglots.get_parking_lot(id=lid)
@@ -98,7 +117,7 @@ async def get_parking_lot_details(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Parking lot not found"
         )
-    return parking_lot
+    return _convert_to_parking_lot_response(parking_lot)
 
 @router.get("/reservations", response_model=List[Dict[str, Any]])
 async def get_reservations(
