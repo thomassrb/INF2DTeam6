@@ -1,7 +1,25 @@
 import sqlite3
+import math
 from datetime import datetime
+from typing import List, Dict, Any, Optional, Tuple
 from MobyPark.api.Models.ParkingLot import ParkingLot
 from MobyPark.api.Models.ParkingLotCoordinates import ParkingLotCoordinates
+
+def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """
+    Calculate the great circle distance between two points 
+    on the earth specified in decimal degrees.
+    Returns distance in meters.
+    """
+    lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
+    
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+    c = 2 * math.asin(math.sqrt(a))
+    
+    meters = 6371 * c * 1000
+    return round(meters, 2)
 
 class AccessParkingLots:
 
@@ -10,7 +28,18 @@ class AccessParkingLots:
         self.conn = conn.connection
 
 
-    def get_all_parking_lots(self):
+    def get_all_parking_lots(self, lat: float = None, lng: float = None, radius: float = None) -> List[Dict[str, Any]]:
+        """
+        Get all parking lots, optionally filtered by distance from a point.
+        
+        Args:
+            lat: Latitude of the center point
+            lng: Longitude of the center point
+            radius: Maximum distance in meters from the center point
+            
+        Returns:
+            List of parking lots with distance if location is provided
+        """
         try:
             query = """
             SELECT p.*, c.lat, c.lng
@@ -26,7 +55,7 @@ class AccessParkingLots:
             result = []
             for row in parking_lots:
                 row_dict = dict(row)
-                result.append({
+                parking_lot = {
                     "id": str(row_dict["id"]),
                     "name": row_dict.get("name", ""),
                     "location": row_dict.get("location", ""),
@@ -40,7 +69,25 @@ class AccessParkingLots:
                         float(row_dict.get("lng", 0.0))
                     ],
                     "created_at": row_dict.get("created_at") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                })
+                }
+                
+                if lat is not None and lng is not None and 'coordinates' in parking_lot:
+                    lot_lat = parking_lot['coordinates'][0]
+                    lot_lng = parking_lot['coordinates'][1]
+                    if lot_lat is not None and lot_lng is not None:
+                        distance = haversine(lat, lng, lot_lat, lot_lng)
+                        parking_lot['distance'] = distance
+                
+                result.append(parking_lot)
+            
+            if lat is not None and lng is not None and radius is not None:
+                result = [lot for lot in result if 'distance' in lot and lot['distance'] <= radius]
+            
+            if lat is not None and lng is not None:
+                result = sorted(result, key=lambda x: x.get('distance', float('inf')))
+            
+            if lat is not None and lng is not None and len(result) > 5:
+                result = result[:5]
                 
             return result
             
