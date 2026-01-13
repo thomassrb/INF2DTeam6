@@ -206,6 +206,10 @@ class FreeParkingResponse(BaseModel):
     added_by: int
     created_at: Optional[str] = None
 
+class CreateFeedback(BaseModel):
+    lot_id: str
+    rating: int
+    comment: Optional[str] = None
 
 
 def get_current_user(request: Request) -> User:
@@ -1823,3 +1827,63 @@ async def apply_discount_code(
             final_amount=request.amount,
             message="Failed to apply discount code"
         )
+
+@app.post("/feedback", status_code=status.HTTP_201_CREATED)
+async def create_feedback(body: CreateFeedback, user: User = Depends(get_current_user)):
+    """
+    Submit feedback for a specific parking lot.
+    """
+    logger.log(user=user, endpoint="/feedback")
+    from .storage_utils import load_json, save_data
+    import uuid
+    from datetime import datetime
+
+    parking_lot = access_parkinglots.get_parking_lot(body.lot_id)
+    if not parking_lot:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Parking lot not found"
+        )
+
+    feedback_file = os.path.join(DATA_DIR, "feedback.json")
+    try:
+        feedback_list = load_json(feedback_file)
+        if not isinstance(feedback_list, list):
+            feedback_list = []
+    except Exception:
+        feedback_list = []
+
+    new_feedback = {
+        "id": str(uuid.uuid4()),
+        "user_id": user.id,
+        "lot_id": body.lot_id,
+        "rating": body.rating,
+        "comment": body.comment,
+        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+    feedback_list.append(new_feedback)
+    save_data(feedback_file, feedback_list)
+
+    return {"message": "Feedback submitted successfully", "feedback": new_feedback}
+
+@app.get("/feedback")
+async def get_feedback(lot_id: str, user: User = Depends(require_roles("ADMIN"))):
+    """
+    View feedback for a specific parking lot (Admin only).
+    """
+    logger.log(user=user, endpoint=f"/feedback?lot_id={lot_id}")
+    from .storage_utils import load_json
+
+    feedback_file = os.path.join(DATA_DIR, "feedback.json")
+    try:
+        feedback_list = load_json(feedback_file)
+        if not isinstance(feedback_list, list):
+            feedback_list = []
+    except Exception:
+        return []
+
+    # Filter the list by the requested lot_id
+    filtered_feedback = [f for f in feedback_list if f.get("lot_id") == lot_id]
+
+    return filtered_feedback
