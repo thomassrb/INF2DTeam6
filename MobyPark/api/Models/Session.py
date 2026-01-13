@@ -6,7 +6,6 @@ from MobyPark.api.Models.User import User
 class Session:
 
     def __init__(self,
-                 id: int,
                  session_id: int,
                  parking_lot: ParkingLot,
                  vehicle: Vehicle,
@@ -17,7 +16,8 @@ class Session:
                  username: str,
                  duration_minutes: int,
                  cost: float,
-                 payment_status: str):
+                 payment_status: str,
+                 id: int|None=None):
         
         self.id = id
         self.session_id = session_id

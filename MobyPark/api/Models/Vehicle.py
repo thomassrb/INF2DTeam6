@@ -4,14 +4,14 @@ from .User import User
 class Vehicle:
 
     def __init__(self,
-                  id: str,
                   user: User,
                   licenseplate: str,
                   make: str,
                   model: str,
                   color: str,
                   year: int,
-                  created_at: datetime):
+                  created_at: datetime,
+                  id: int|None=None):
         
         self.id = id
         self.user = user

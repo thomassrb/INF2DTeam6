@@ -1,9 +1,9 @@
 from datetime import datetime
+from xxlimited import Str
 
 class User:
 
     def __init__(self,
-                 id: str,
                  username: str,
                  name: str,
                  email: str,
@@ -12,7 +12,8 @@ class User:
                  phone: str,
                  role: str,
                  birth_year: int,
-                 active: bool):
+                 active: bool,
+                 id: int|None=None):
         
         self.id = id
         self.username = username

@@ -1,9 +1,9 @@
 class ParkingLotCoordinates:
 
     def __init__(self,
-                 id: str,
                  lng: float,
-                 lat: float):
+                 lat: float,
+                 id: int|None=None):
     
         self.id = id
         self.lng = lng

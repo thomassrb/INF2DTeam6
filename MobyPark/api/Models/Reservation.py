@@ -6,7 +6,6 @@ from MobyPark.api.Models.User import User
 class Reservation:
 
     def __init__(self,
-                 id: str,
                  user: User,
                  parking_lot: ParkingLot,
                  vehicle: Vehicle,
@@ -14,7 +13,8 @@ class Reservation:
                  end_time: datetime,
                  status: str,
                  created_at: datetime,
-                 cost: float):
+                 cost: float,
+                 id: int|None=None):
         
         self.id = id
         self.user = user

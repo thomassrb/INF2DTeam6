@@ -4,7 +4,6 @@ from .ParkingLotCoordinates import ParkingLotCoordinates
 class ParkingLot:
 
     def __init__(self,
-                 id: str,
                  name: str,
                  location: str,
                  address: str,
@@ -13,7 +12,8 @@ class ParkingLot:
                  tariff: float,
                  daytariff: float,
                  coordinates: ParkingLotCoordinates,
-                 created_at: datetime):
+                 created_at: datetime,
+                 id: int|None=None):
 
         
         self.id = id

@@ -103,10 +103,7 @@ def validate_license_plate(license_plate: Optional[str], licenseplate: Optional[
 # ============================================
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-async def register(
-    register_data: RegisterRequest,
-    current_user: User = Depends(require_roles(["ADMIN"]))
-):
+async def register(register_data: RegisterRequest):
     """Register a new user (admin only)."""
     from MobyPark.api.app import access_users
     # Check if username already exists
