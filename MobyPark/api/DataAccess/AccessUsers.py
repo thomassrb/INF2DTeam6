@@ -21,7 +21,7 @@ class AccessUsers:
             return None
         else:
             result = dict(result)
-        result["created_at"] = datetime.strptime(result["created_at"], "%Y-%m-%d") 
+        result["created_at"] = datetime.strptime(result["created_at"], "%Y-%m-%d %H:%M:%S") 
         return User(**result)
         
 
@@ -36,7 +36,7 @@ class AccessUsers:
             return None
         else:
             result = dict(result)
-            result["created_at"] = datetime.strptime(result["created_at"], "%Y-%m-%d")
+            result["created_at"] = datetime.strptime(result["created_at"], "%Y-%m-%d %H:%M:%S")
             return User(**result)
         
 

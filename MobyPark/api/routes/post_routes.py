@@ -132,7 +132,7 @@ async def register(register_data: RegisterRequest):
         birth_year=register_data.birth_year,
         role=register_data.role,
         active=True,
-        created_at=datetime.now().strftime("%Y-%m-%d")
+        created_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     )
     
     # Save user to database
