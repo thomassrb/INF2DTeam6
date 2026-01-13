@@ -8,7 +8,7 @@ from MobyPark.api.Models.User import User
 from MobyPark.api.authentication import PasswordManager
 
 # Initialize router
-router = APIRouter(prefix="/api", tags=["put_routes"])
+router = APIRouter()
 
 password_manager = PasswordManager()
 
