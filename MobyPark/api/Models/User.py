@@ -1,5 +1,4 @@
 from datetime import datetime
-from xxlimited import Str
 
 class User:
 
