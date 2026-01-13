@@ -101,41 +101,20 @@ def roles_required(roles):
     return decorator
 
 
-def extract_bearer_token(headers):
-    DEBUG_LOGS = os.environ.get('DEBUG_LOGS') == '1'
-    if DEBUG_LOGS:
-        print(f"DEBUG: Headers in extract_bearer_token: {headers}")
-
-    auth_header = headers.get('Authorization')
-    if not auth_header:
-        if DEBUG_LOGS:
-            print("DEBUG: Authorization header not found.")
-        return None
-
-    parts = auth_header.split(' ', 1)
-    if len(parts) != 2:
-        if DEBUG_LOGS:
-            print(f"DEBUG: Invalid Authorization header format: {auth_header}")
-        return None
-
-    scheme, token = parts
-    if scheme.lower() != 'bearer' or not token:
-        if DEBUG_LOGS:
-            print(f"DEBUG: Invalid scheme or empty token: Scheme={scheme}, Token={token}")
-        return None
-    if DEBUG_LOGS:
-        print(f"DEBUG: Extracted token: {token}")
-    return token
-
 def get_user_from_session(handler):
     DEBUG_LOGS = os.environ.get('DEBUG_LOGS') == '1'
     if DEBUG_LOGS:
-        print(f"DEBUG: Entering get_user_from_session for path: {handler.path}")
-    token = extract_bearer_token(handler.headers)
+        print(f"DEBUG: Entering get_user_from_session for path: {getattr(handler, 'path', 'unknown')}")
+    
+    headers = getattr(handler, 'headers', {})
+    auth_header = headers.get('Authorization')
+    token = extract_bearer_token(auth_header)
+    
     if not token:
         if DEBUG_LOGS:
             print("DEBUG: No token extracted from headers in get_user_from_session.")
         return None
+        
     session_data = session_manager.get_session(token)
     if not session_data:
         if DEBUG_LOGS:
@@ -143,6 +122,7 @@ def get_user_from_session(handler):
     else:
         if DEBUG_LOGS:
             print(f"DEBUG: Session found for token {token}, user: {session_data.get('username')}")
+    
     return session_data if session_data else None
 
 def handle_update_profile(handler, session_user):
