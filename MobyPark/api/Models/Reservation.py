@@ -6,8 +6,8 @@ from MobyPark.api.Models.User import User
 
 class Reservation(BaseModel):
     user: User
-    parking_lot: ParkingLot
-    vehicle: Vehicle
+    parking_lot: ParkingLot|None=None
+    vehicle: Vehicle|None=None
     start_time: datetime
     end_time: datetime
     status: str

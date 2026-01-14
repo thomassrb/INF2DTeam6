@@ -9,11 +9,11 @@ class Payment(BaseModel):
     id: str
     amount: float
     initiator: str
-    user: User
+    user: User|None=None
     created_at: datetime
-    completed: datetime
+    completed: datetime|None=None
     hash: str
     session: Session
-    parking_lot: ParkingLot
+    parking_lot: ParkingLot|None=None
     t_data: TransactionData
 

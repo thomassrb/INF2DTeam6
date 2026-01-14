@@ -6,8 +6,8 @@ from MobyPark.api.Models.User import User
 
 class Session(BaseModel):
     session_id: int
-    parking_lot: ParkingLot
-    vehicle: Vehicle
+    parking_lot: ParkingLot|None=None
+    vehicle: Vehicle|None=None
     licenseplate: str
     started: datetime
     stopped: datetime

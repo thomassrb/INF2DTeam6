@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from .User import User
 
 class Vehicle(BaseModel):
-    user: User
+    user: User|None=None
     licenseplate: str
     make: str
     model: str
