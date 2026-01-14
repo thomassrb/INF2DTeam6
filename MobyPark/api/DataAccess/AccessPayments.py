@@ -2,7 +2,7 @@ import sqlite3
 from MobyPark.api.DBConnection import DBConnection
 from MobyPark.api.Models.Payment import Payment
 from MobyPark.api.Models.TransanctionData import TransactionData
-from MobyPark.api.Models.User import User
+from MobyPark.api.Models import User, Session
 from MobyPark.api.DataAccess.AccessUsers import AccessUsers
 from MobyPark.api.DataAccess.AccessParkingLots import AccessParkingLots
 from MobyPark.api.DataAccess.AccessSessions import AccessSessions
@@ -58,14 +58,14 @@ class AccessPayments:
     
 
     def get_all_payments(self):
-        query = """"
+        query = """
         SELECT p.*, t.* FROM payments p
         JOIN t_data t ON t.id = p.id;
         """
         self.cursor.execute(query)
         payments = self.cursor.fetchall()
 
-        return payments
+        return list(map(lambda x: self.map_payment(x), payments))
 
 
     def get_payments_by_user(self, user:User) -> list[Payment]:
@@ -79,7 +79,7 @@ class AccessPayments:
 
         return payments
     
-    
+
     def add_payment(self, payment: Payment):
         query = """
         INSERT INTO payments

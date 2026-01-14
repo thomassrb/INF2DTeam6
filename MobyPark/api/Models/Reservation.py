@@ -5,7 +5,7 @@ from MobyPark.api.Models.ParkingLot import ParkingLot
 from MobyPark.api.Models.User import User
 
 class Reservation(BaseModel):
-    user: User
+    user: User|None=None
     parking_lot: ParkingLot|None=None
     vehicle: Vehicle|None=None
     start_time: datetime

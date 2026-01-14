@@ -4,7 +4,6 @@ from hashlib import md5
 import math
 import uuid
 
-from MobyPark.api.storage_utils import load_payment_data
 from MobyPark.api.Models.User import User
 from MobyPark.api.Models.ParkingLot import ParkingLot
 
@@ -42,7 +41,8 @@ def calculate_price(parkinglot, session: User):
 def generate_payment_hash(sid, data):
     # Hier generated die en md5 hash voor de betaling
     lp = data.licenseplate
-    return md5(str(sid + lp).encode("utf-8")).hexdigest()
+    raw = f"{sid}{lp}"  
+    return md5(raw.encode("utf-8")).hexdigest()
 
 
 def generate_transaction_validation_hash():
@@ -51,11 +51,9 @@ def generate_transaction_validation_hash():
 
 def check_payment_amount(tx_hash):
     # Deze functie returned het bedrag van een transactie
-
-    payments = load_payment_data()
+    from MobyPark.api.app import access_payments
+    payment = access_payments.get_payment(id=tx_hash)
 
     return sum(
-        payment.get("amount", 0)                    
-        for payment in payments                     
-        if payment.get("transaction") == tx_hash    
+        payment.amount                
     )

@@ -24,8 +24,8 @@ router = APIRouter(tags=["get_routes"])
 
 
 class BillingItem(BaseModel):
-    session: Dict[str, Any]
-    parking: Dict[str, Any]
+    session: dict
+    parking: dict
     amount: float
     thash: str
     payed: float
@@ -129,7 +129,7 @@ async def get_vehicles(
         return access_vehicles.get_all_vehicles()
     return access_vehicles.get_vehicles_byuser(user=user)
 
-@router.get("/payments", response_model=List[Payment]|List[dict])
+@router.get("/payments", response_model=List[Payment])
 async def get_payments(
     user: User = Depends(get_current_user)
 ) -> List[Payment]|List[dict]:
@@ -181,7 +181,7 @@ async def get_user_billing(
     """Get billing information for a specific user (admin only)."""
     from MobyPark.api.app import access_users
     from MobyPark.api.app import access_sessions
-    target_user = access_users.get_user_by_username(username=username)
+    target_user = access_users.get_user_byusername(username=username)
     if not target_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -191,7 +191,7 @@ async def get_user_billing(
     sessions = access_sessions.get_sessions_byuser(user=target_user)
     return _process_billing_sessions(sessions)
 
-def _process_billing_sessions(sessions: List[Session]) -> List[Dict[str, Any]]:
+def _process_billing_sessions(sessions: List[Session]) -> List[BillingItem]:
     """Helper function to process sessions into billing items."""
     billing_items = []
     for session in sessions:
@@ -199,24 +199,24 @@ def _process_billing_sessions(sessions: List[Session]) -> List[Dict[str, Any]]:
         transaction = sc.generate_payment_hash(session.id, session)
         payed = sc.check_payment_amount(transaction)
         
-        billing_items.append({
-            "session": {
+        billing_items.append(BillingItem(
+            session = {
                 "licenseplate": session.licenseplate,
                 "started": session.started,
                 "stopped": session.stopped,
                 "hours": hours,
                 "days": days
             },
-            "parking": {
+            parking = {
                 "name": session.parking_lot.name,
                 "location": session.parking_lot.location,
                 "tariff": session.parking_lot.tariff,
                 "daytariff": session.parking_lot.daytariff
             },
-            "amount": amount,
-            "thash": transaction,
-            "payed": payed,
-            "balance": amount - payed
-        })
+            amount = amount,
+            thash = transaction,
+            payed = payed,
+            balance = amount - payed
+        ))
     return billing_items
     
