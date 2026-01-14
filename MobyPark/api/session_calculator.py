@@ -47,13 +47,3 @@ def generate_payment_hash(sid, data):
 
 def generate_transaction_validation_hash():
     return str(uuid.uuid4())
-
-
-def check_payment_amount(tx_hash):
-    # Deze functie returned het bedrag van een transactie
-    from MobyPark.api.app import access_payments
-    payment = access_payments.get_payment(id=tx_hash)
-
-    return sum(
-        payment.amount                
-    )

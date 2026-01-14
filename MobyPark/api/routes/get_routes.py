@@ -193,11 +193,12 @@ async def get_user_billing(
 
 def _process_billing_sessions(sessions: List[Session]) -> List[BillingItem]:
     """Helper function to process sessions into billing items."""
+    from MobyPark.api.app import access_payments
     billing_items = []
     for session in sessions:
         amount, hours, days = sc.calculate_price(session.parking_lot, session)
         transaction = sc.generate_payment_hash(session.id, session)
-        payed = sc.check_payment_amount(transaction)
+        payed = access_payments.get_payment_by_session(session).amount
         
         billing_items.append(BillingItem(
             session = {

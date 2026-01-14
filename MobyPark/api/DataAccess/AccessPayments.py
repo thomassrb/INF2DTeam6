@@ -57,6 +57,18 @@ class AccessPayments:
         return self.map_payment(payment=payment, tdata=tdata)
     
 
+    def get_payment_by_session(self, session: Session):
+        query = """
+        SELECT id FROM payments
+        WHERE session_id = @id;
+        """
+        self.cursor.execute(query, session.__dict__)
+        pid = self.cursor.fetchone()
+        payment = self.get_payment(pid['id'])
+
+        return payment
+
+
     def get_all_payments(self):
         query = """
         SELECT p.*, t.* FROM payments p
