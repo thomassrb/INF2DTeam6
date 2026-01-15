@@ -9,10 +9,10 @@ class Session(BaseModel):
     vehicle: Vehicle|None=None
     licenseplate: str
     started: datetime
-    stopped: datetime
-    user: User
+    stopped: datetime|None=None
+    user: User|None=None
     username: str
-    duration_minutes: int
+    duration_minutes: int|None=None
     cost: float
     payment_status: str
     id: int|None=None

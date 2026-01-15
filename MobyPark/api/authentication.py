@@ -59,7 +59,7 @@ def get_current_user(authorization: Optional[str] = Header(None)) -> User:
     return user
 
 
-def require_roles(*roles: str):
+def require_roles(roles: list[str]):
     """
     Dependency factory to guard endpoints by role.
     Example: Depends(require_roles("ADMIN"))

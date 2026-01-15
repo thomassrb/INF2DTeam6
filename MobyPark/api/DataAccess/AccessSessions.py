@@ -59,10 +59,10 @@ class AccessSessions:
     def get_pending_session_bylicenseplate(self, licenseplate: str):
         query = """
         SELECT id FROM sessions
-        WHERE stopped = ?
+        WHERE payment_status = ?
         AND licenseplate = ?;
         """
-        self.cursor.execute(query, [None, licenseplate])
+        self.cursor.execute(query, ["pending", licenseplate])
         id = self.cursor.fetchone()
 
         return self.get_session(id=id["id"])

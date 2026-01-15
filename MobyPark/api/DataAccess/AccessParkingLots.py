@@ -53,8 +53,8 @@ class AccessParkingLots:
         DELETE FROM parking_lots_coordinates
         WHERE id = :id;
         """
-        self.cursor.execute(query, parkinglot.__dict__)
         self.cursor.execute(coordinate_query, parkinglot.__dict__)
+        self.cursor.execute(query, parkinglot.__dict__)
         self.conn.commit()
 
 

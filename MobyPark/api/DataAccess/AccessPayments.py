@@ -63,7 +63,7 @@ class AccessPayments:
         WHERE session_id = @id;
         """
         self.cursor.execute(query, session.__dict__)
-        pid = self.cursor.fetchone()
+        pid = dict(self.cursor.fetchone())
         payment = self.get_payment(pid['id'])
 
         return payment
@@ -157,10 +157,10 @@ class AccessPayments:
         DELETE FROM payments
         WHERE id = :id;
         """
-        coordinate_query = """ 
+        tdata_query = """ 
         DELETE FROM t_data
         WHERE id = :id;
         """
+        self.cursor.execute(tdata_query, payment.__dict__)
         self.cursor.execute(query, payment.__dict__)
-        self.cursor.execute(coordinate_query, payment.__dict__)
         self.conn.commit()

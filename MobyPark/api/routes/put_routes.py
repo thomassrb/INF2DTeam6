@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Path, Body
 from pydantic import BaseModel
 
 from MobyPark.api.authentication import get_current_user, require_roles
-from MobyPark.api.Models.User import User
+from MobyPark.api.Models import User
 from MobyPark.api.authentication import PasswordManager
 
 # Initialize router

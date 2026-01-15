@@ -177,6 +177,7 @@ def require_roles(*roles: str):
         return user
 
     return dependency
+
 class SessionStartRequest(BaseModel):
     license_plate: Optional[str] = None
     licenseplate: Optional[str] = None

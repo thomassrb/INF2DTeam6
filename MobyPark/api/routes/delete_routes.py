@@ -9,7 +9,7 @@ router = APIRouter(tags=["delete_routes"])
 @router.delete("/parkinglots/{lid}", status_code=status.HTTP_200_OK)
 async def delete_parking_lot(
     lid: str,
-    user: User = Depends(require_roles("ADMIN"))
+    user: User = Depends(require_roles(["ADMIN"]))
 ) -> Dict[str, str]:
     """
     Delete a specific parking lot by ID.
@@ -29,7 +29,7 @@ async def delete_parking_lot(
 
 @router.delete("/parkinglots/", status_code=status.HTTP_200_OK)
 async def delete_all_parking_lots(
-    user: User = Depends(require_roles("ADMIN"))
+    user: User = Depends(require_roles(["ADMIN"]))
 ) -> Dict[str, str]:
     """
     Delete all parking lots.

@@ -187,9 +187,9 @@ async def get_user_billing(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
-    
     sessions = access_sessions.get_sessions_byuser(user=target_user)
     return _process_billing_sessions(sessions)
+
 
 def _process_billing_sessions(sessions: List[Session]) -> List[BillingItem]:
     """Helper function to process sessions into billing items."""

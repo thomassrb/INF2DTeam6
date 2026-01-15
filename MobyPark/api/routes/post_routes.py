@@ -36,6 +36,15 @@ class RegisterRequest(BaseModel):
     birth_year: int
     role: str = "USER"
 
+class ParkingLotCreate(BaseModel):
+    name: str
+    location: str
+    capacity: int
+    tariff: float
+    daytariff: float
+    address: str
+    coordinates: ParkingLotCoordinates
+
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -52,13 +61,6 @@ class SessionStopRequest(BaseModel):
     license_plate: Optional[str] = None
     licenseplate: Optional[str] = None
 
-class VehicleCreate(BaseModel):
-    licenseplate: str
-    make: Optional[str] = None
-    model: Optional[str] = None
-    color: Optional[str] = None
-    year: Optional[str] = None
-
 class PaymentCreate(BaseModel):
     transaction: str
     amount: float
@@ -68,15 +70,6 @@ class RefundCreate(BaseModel):
     amount: float
     transaction: Optional[str] = None
     coupled_to: Optional[str] = None
-
-class ParkingLotCreate(BaseModel):
-    name: str
-    location: str
-    capacity: int
-    tariff: float
-    daytariff: float
-    address: str
-    coordinates: List[float]
 
 class ReservationCreate(BaseModel):
     parkinglot: str
@@ -139,8 +132,8 @@ async def register(register_data: RegisterRequest):
     
     # Save user to database
     access_users.add_user(user=new_user)
-    
     return {"message": "User created"}
+
 
 @router.post("/login", response_model=LoginResponse)
 async def login(login_data: LoginRequest):
@@ -180,6 +173,7 @@ async def login(login_data: LoginRequest):
         "session_token": token
     }
 
+
 @router.post("/logout")
 async def logout(
     request: Request,
@@ -204,29 +198,20 @@ async def create_parking_lot(
 ):
     """Create a new parking lot (admin only)."""
     from MobyPark.api.app import access_parkinglots
-    # Validate coordinates
-    if len(parking_data.coordinates) != 2 or \
-       not all(isinstance(coord, (int, float)) for coord in parking_data.coordinates):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Coordinates must be a list of two numbers"
-        )
-    
-    # Create parking lot
     parking_lot = ParkingLot(
-        name=parking_data.name,
-        location=parking_data.location,
-        capacity=parking_data.capacity,
-        hourly_rate=parking_data.tariff,
-        day_rate=parking_data.daytariff,
-        address=parking_data.address,
-        coordinates=parking_data.coordinates,
-        reserved=0
+        name = parking_data.name,
+        location = parking_data.location,
+        address = parking_data.address,
+        capacity = parking_data.capacity,
+        reserved = 0,
+        tariff = parking_data.tariff,
+        daytariff = parking_data.daytariff,
+        coordinates = parking_data.coordinates,
+        created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     )
-    
     access_parkinglots.add_parking_lot(parkinglot=parking_lot)
     
-    return {"Server message": f"Parking lot saved under ID: {parking_lot.id}"}
+    return {"Server message": f"Parking lot saved under ID: {parking_data.id}"}
 
 # ============================================
 # Session Routes
@@ -259,20 +244,21 @@ async def start_session(
     session = Session(
         parking_lot=parking_lot,
         user=current_user,
-        license_plate=license_plate,
+        licenseplate=license_plate,
         started=datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
         payment_status="pending",
         username=current_user.username
     )
     
     # Add session to database
-    if not access_sessions.add_session(session=session):
+    if access_sessions.get_pending_session_bylicenseplate(licenseplate=license_plate):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot start a session when another session for this license plate is already started."
         )
     
     return {"Server message": f"Session started for: {license_plate} under id: {session.id}"}
+
 
 @router.post("/parking-lots/{lid}/sessions/stop")
 async def stop_session(
@@ -317,7 +303,7 @@ async def stop_session(
 
 @router.post("/vehicles", status_code=status.HTTP_201_CREATED)
 async def create_vehicle(
-    vehicle_data: VehicleCreate,
+    vehicle_data: Vehicle,
     current_user: User = Depends(get_current_user)
 ):
     """Register a new vehicle for the current user."""
@@ -403,9 +389,10 @@ async def refund_payment(
     
     # Create refund payment
     refund = Payment(
-        transaction=transaction_id,
+        id=transaction_id,
         amount=-abs(refund_data.amount),  # Negative amount for refund
-        initiator=current_user,
+        initiator=current_user.username,
+        user=current_user,
         created_at=datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
         completed=False,
         coupled_to=refund_data.coupled_to,
