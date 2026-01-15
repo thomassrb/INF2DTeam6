@@ -198,6 +198,7 @@ def _process_billing_sessions(sessions: List[Session]) -> List[BillingItem]:
     for session in sessions:
         amount, hours, days = sc.calculate_price(session.parking_lot, session)
         transaction = sc.generate_payment_hash(session.id, session)
+        # dit werkt nog voor geen klote, oude aanpak met hash misschien weer proberen
         payed = access_payments.get_payment_by_session(session).amount
         
         billing_items.append(BillingItem(

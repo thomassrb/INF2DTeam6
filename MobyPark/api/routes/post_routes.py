@@ -53,13 +53,8 @@ class LoginResponse(BaseModel):
     message: str
     session_token: str
 
-class SessionStartRequest(BaseModel):
-    license_plate: Optional[str] = None
-    licenseplate: Optional[str] = None
-
-class SessionStopRequest(BaseModel):
-    license_plate: Optional[str] = None
-    licenseplate: Optional[str] = None
+class SessionRequest(BaseModel):
+    license_plate: str = None
 
 class PaymentCreate(BaseModel):
     transaction: str
@@ -83,9 +78,9 @@ class ReservationCreate(BaseModel):
 # Helper Functions
 # ============================================
 
-def validate_license_plate(license_plate: Optional[str], licenseplate: Optional[str]) -> str:
+def validate_license_plate(license_plate: str) -> str:
     """Helper to handle both license_plate and licenseplate fields."""
-    lp = license_plate or licenseplate
+    lp = license_plate
     if not lp or not isinstance(lp, str) or not lp.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -221,7 +216,7 @@ async def create_parking_lot(
 @router.post("/parkinglots/{lid}/sessions/start")
 async def start_session(
     lid: str,
-    session_data: SessionStartRequest,
+    session_data: SessionRequest,
     current_user: User = Depends(get_current_user)
 ):
     """Start a new parking session."""
@@ -237,8 +232,7 @@ async def start_session(
     
     # Validate license plate
     license_plate = validate_license_plate(
-        session_data.license_plate, 
-        session_data.licenseplate
+        session_data.license_plate
     )
     
     # Create session
@@ -264,7 +258,7 @@ async def start_session(
 @router.post("/parkinglots/{lid}/sessions/stop")
 async def stop_session(
     lid: str,
-    session_data: SessionStopRequest,
+    session_data: SessionRequest,
     current_user: User = Depends(get_current_user)
 ):
     """Stop an active parking session."""
@@ -280,8 +274,7 @@ async def stop_session(
     
     # Validate license plate
     license_plate = validate_license_plate(
-        session_data.license_plate,
-        session_data.licenseplate
+        session_data.license_plate
     )
     
     # Get active session
@@ -293,7 +286,7 @@ async def stop_session(
         )
     
     # Update session
-    session.stopped = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+    session.stopped = datetime.now().replace(microsecond=0)
     access_sessions.update_session(session=session)
     
     return {"Server message": f"Session stopped for: {license_plate}"}
@@ -355,11 +348,13 @@ async def create_payment(
     from MobyPark.api.app import access_payments
     # Create payment
     payment = Payment(
-        transaction=payment_data.transaction,
+        id=payment_data.transaction,
+        user=current_user,
         amount=payment_data.amount,
-        initiator=current_user,
+        initiator=current_user.username,
         created_at=datetime.now().replace(microsecond=0),
         completed=None,
+        session= None, #hoort session te zijn maar ik ga opnieuw kijken of dit nodig is
         t_data=payment_data.t_data,
         hash=session_calculator.generate_transaction_validation_hash()
     )
