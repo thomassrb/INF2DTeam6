@@ -15,7 +15,7 @@ from MobyPark.api.Models import (
     Vehicle,
     Session,
     Payment,
-    Reservation,
+    TransactionData,
     ParkingLot,
     ParkingLotCoordinates,
     User)
@@ -64,7 +64,7 @@ class SessionStopRequest(BaseModel):
 class PaymentCreate(BaseModel):
     transaction: str
     amount: float
-    t_data: Dict[str, Any]
+    t_data: TransactionData
 
 class RefundCreate(BaseModel):
     amount: float
@@ -127,7 +127,7 @@ async def register(register_data: RegisterRequest):
         birth_year=register_data.birth_year,
         role=register_data.role,
         active=True,
-        created_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        created_at=datetime.now().replace(microsecond=0)
     )
     
     # Save user to database
@@ -191,7 +191,7 @@ async def logout(
 # Parking Lot Routes
 # ============================================
 
-@router.post("/parking-lots", status_code=status.HTTP_201_CREATED)
+@router.post("/parkinglots", status_code=status.HTTP_201_CREATED)
 async def create_parking_lot(
     parking_data: ParkingLotCreate,
     current_user: User = Depends(require_roles(["ADMIN"]))
@@ -199,6 +199,7 @@ async def create_parking_lot(
     """Create a new parking lot (admin only)."""
     from MobyPark.api.app import access_parkinglots
     parking_lot = ParkingLot(
+        id = None,
         name = parking_data.name,
         location = parking_data.location,
         address = parking_data.address,
@@ -207,17 +208,17 @@ async def create_parking_lot(
         tariff = parking_data.tariff,
         daytariff = parking_data.daytariff,
         coordinates = parking_data.coordinates,
-        created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        created_at = datetime.now().replace(microsecond=0)
     )
     access_parkinglots.add_parking_lot(parkinglot=parking_lot)
     
-    return {"Server message": f"Parking lot saved under ID: {parking_data.id}"}
+    return {"Server message": f"Parking lot saved under ID: {parking_lot.id}"}
 
 # ============================================
 # Session Routes
 # ============================================
 
-@router.post("/parking-lots/{lid}/sessions/start")
+@router.post("/parkinglots/{lid}/sessions/start")
 async def start_session(
     lid: str,
     session_data: SessionStartRequest,
@@ -245,7 +246,7 @@ async def start_session(
         parking_lot=parking_lot,
         user=current_user,
         licenseplate=license_plate,
-        started=datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
+        started=datetime.now().replace(microsecond=0),
         payment_status="pending",
         username=current_user.username
     )
@@ -260,7 +261,7 @@ async def start_session(
     return {"Server message": f"Session started for: {license_plate} under id: {session.id}"}
 
 
-@router.post("/parking-lots/{lid}/sessions/stop")
+@router.post("/parkinglots/{lid}/sessions/stop")
 async def stop_session(
     lid: str,
     session_data: SessionStopRequest,
@@ -318,12 +319,12 @@ async def create_vehicle(
     # Create vehicle
     vehicle = Vehicle(
         user=current_user,
-        license_plate=vehicle_data.licenseplate,
+        licenseplate=vehicle_data.licenseplate,
         make=vehicle_data.make,
         model=vehicle_data.model,
         color=vehicle_data.color,
         year=vehicle_data.year,
-        created_at=datetime.now().strftime("%Y-%m-%d")
+        created_at=datetime.now().replace(microsecond=0)
     )
     
     # Save vehicle
@@ -333,7 +334,7 @@ async def create_vehicle(
         "status": "Success",
         "vehicle": {
             "id": vehicle.id,
-            "license_plate": vehicle.license_plate,
+            "license_plate": vehicle.licenseplate,
             "make": vehicle.make,
             "model": vehicle.model,
             "color": vehicle.color,
@@ -357,8 +358,8 @@ async def create_payment(
         transaction=payment_data.transaction,
         amount=payment_data.amount,
         initiator=current_user,
-        created_at=datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
-        completed=False,
+        created_at=datetime.now().replace(microsecond=0),
+        completed=None,
         t_data=payment_data.t_data,
         hash=session_calculator.generate_transaction_validation_hash()
     )

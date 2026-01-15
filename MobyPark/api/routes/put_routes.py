@@ -45,7 +45,7 @@ class PaymentUpdate(BaseModel):
     t_data: Dict[str, Any]
 
 # Routes
-@router.put("/parking-lots/{lid}")
+@router.put("/parkinglots/{lid}")
 async def update_parking_lot(
     lid: str = Path(..., description="The ID of the parking lot to update"),
     update_data: ParkingLotUpdate = Body(...),
