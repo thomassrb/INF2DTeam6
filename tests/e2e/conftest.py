@@ -15,7 +15,6 @@ TEST_DB_PATH = TEST_DATA_DIR / "test.db"
 
 TEST_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-#  ---
 def wait_for_server(url: str, timeout_sec: int = 20) -> None:
     start = time.time()
     last_err = None
@@ -75,24 +74,23 @@ def make_user_and_login():
 
         username = f"e2e_{role.lower()}_{uuid.uuid4().hex[:8]}"
         password = "E2ePassw0rd!"
-        # Registeren
         reg = requests.post(
-            f"{BASE_URL}/register",
+            f"{BASE_URL}/api/register",
             json={
                 "username": username,
                 "password": password,
                 "name": username,
                 "phone": "0000000000",
                 "email": f"{username}@example.com",
-                "birth_year": "2000",
+                "birth_year": 2000,
                 "role": role,
             },
             timeout=5,
         )
-        assert reg.status_code in (200, 201, 409)
+        assert reg.status_code in (200, 201, 409), f"Registration failed: {reg.text}"
 
         login = requests.post(
-            f"{BASE_URL}/login",
+            f"{BASE_URL}/api/login",
             json={"username": username, "password": password},
             timeout=5,
         )
