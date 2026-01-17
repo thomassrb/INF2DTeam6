@@ -13,6 +13,8 @@ class AccessVehicles:
         self.accessusers = AccessUsers(conn=conn)
 
     def map_vehicle(self, vehicle):
+        if vehicle is None:
+            return None
         vehicle_dict = dict(vehicle)
         vehicle_dict["created_at"] = datetime.strptime(vehicle_dict["created_at"], "%Y-%m-%d %H:%M:%S")
         vehicle_dict["user"] = self.accessusers.get_user_byid(id=vehicle_dict["user_id"])
@@ -53,7 +55,6 @@ class AccessVehicles:
         """
         self.cursor.execute(query, [licenseplate])
         vehicle_dict = self.cursor.fetchone()
-        
         return self.map_vehicle(vehicle_dict)
         
 
