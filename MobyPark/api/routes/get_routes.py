@@ -54,7 +54,7 @@ async def get_profile_by_id(
             detail="User not found"
         )
     
-    if current_user.role != "ADMIN" and current_user.id != user_id:
+    if current_user.role != "ADMIN" and str(current_user.id) != str(user_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied. You can only view your own profile."
