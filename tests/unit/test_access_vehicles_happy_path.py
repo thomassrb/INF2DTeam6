@@ -58,8 +58,6 @@ def test_access_vehicles_get_by_licenseplate_missing_returns_none(tmp_path):
 
     access_vehicles = AccessVehicles(conn=conn)
 
-    # This currently crashes if get_vehicle_bylicenseplate doesn't handle None.
-    # If your implementation returns None correctly, this test will pass.
     assert access_vehicles.get_vehicle_bylicenseplate("DOES-NOT-EXIST") is None
 
     conn.close_connection()

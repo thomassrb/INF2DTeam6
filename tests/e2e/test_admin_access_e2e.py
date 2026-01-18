@@ -48,7 +48,6 @@ def test_admin_can_create_then_delete_parking_lot(server_process, admin_token):
     lots = rlist.json()
     assert isinstance(lots, list)
 
-    # Best-effort: try to locate the lot by name and delete it if delete endpoint exists.
     created = next((l for l in lots if l.get("name") == payload["name"]), None)
     if not created:
         pytest.skip("Parking lot list response does not include created lot")

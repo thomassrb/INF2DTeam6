@@ -7,7 +7,6 @@ BASE = "http://localhost:8000"
 
 
 def test_admin_can_create_and_list_parkinglot_via_parkinglots_endpoint(server_process, admin_token):
-    # Use the endpoints that exist in the backend today: /api/parkinglots
     payload = {
         "name": f"E2E Lot {int(time.time())}",
         "location": "E2E City",

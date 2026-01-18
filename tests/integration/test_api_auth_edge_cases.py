@@ -46,7 +46,6 @@ def test_register_duplicate_username_returns_409(client: TestClient):
     r1 = client.post("/api/register", json=payload)
     assert r1.status_code == 201, r1.text
 
-    # same username, different email still conflicts (username unique)
     payload2 = dict(payload)
     payload2["email"] = f"{username}_2@example.com"
     r2 = client.post("/api/register", json=payload2)

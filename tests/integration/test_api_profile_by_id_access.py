@@ -72,18 +72,15 @@ def test_profile_by_id_access_control(client: TestClient):
     other_id = r_other.json().get("id")
     assert other_id is not None
 
-    # User can fetch their own profile by id
     r = client.get(f"/api/profile/{my_id}", headers={"Authorization": f"Bearer {user_token}"})
     if r.status_code in (404, 405):
         pytest.skip("/api/profile/{user_id} endpoint not implemented")
     assert r.status_code == 200, r.text
     assert r.json().get("id") == my_id
 
-    # User cannot fetch someone else's profile by id
     r = client.get(f"/api/profile/{other_id}", headers={"Authorization": f"Bearer {user_token}"})
     assert r.status_code in (403, 404)
 
-    # Admin can fetch someone else's profile by id
     r = client.get(f"/api/profile/{other_id}", headers={"Authorization": f"Bearer {admin_token}"})
     assert r.status_code == 200, r.text
     assert r.json().get("id") == other_id
