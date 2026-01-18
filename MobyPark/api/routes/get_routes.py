@@ -4,10 +4,10 @@ from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional
-
 from MobyPark.api.authentication import get_current_user, require_roles
 
 from MobyPark.api import session_calculator as sc
+from fastapi import Request
 from MobyPark.api.Models import (
     Vehicle,
     Session,
@@ -33,18 +33,28 @@ class BillingItem(BaseModel):
 
 @router.get("/profile", response_model=User)
 async def get_profile(
+    request: Request,
     user: User = Depends(get_current_user)
 ) -> User:
     """Get the profile of the currently authenticated user."""
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
     return user
 
 
 @router.get("/profile/{user_id}", response_model=User)
 async def get_profile_by_id(
+    request: Request,
     user_id: str,
     current_user: User = Depends(get_current_user)
 ) -> User:
     """Get profile by user ID (admin only or own profile)."""
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(current_user, endpoint)
+
     from MobyPark.api.app import access_users
     target_user = access_users.get_user_byid(id=user_id)
     
@@ -64,17 +74,31 @@ async def get_profile_by_id(
 
 
 @router.get("/parkinglots", response_model=List[ParkingLot])
-async def get_parking_lots():
+async def get_parking_lots(
+    request: Request,
+    current_user: User = Depends(get_current_user())
+    ):
     """Get all parking lots."""
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(current_user, endpoint)
+
     from MobyPark.api.app import access_parkinglots
     parking_lots = access_parkinglots.get_all_parking_lots()
     return parking_lots
 
+
 @router.get("/parkinglots/{lid}", response_model=ParkingLot)
 async def get_parking_lot_details(
-    lid: str
+    request: Request,
+    lid: str,
+    current_user: User = Depends(get_current_user())
 ) -> ParkingLot:
     """Get details of a specific parking lot."""
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(current_user, endpoint)
+
     from MobyPark.api.app import access_parkinglots
     parking_lot = access_parkinglots.get_parking_lot(id=lid)
     if not parking_lot:
@@ -87,9 +111,14 @@ async def get_parking_lot_details(
 
 @router.get("/reservations", response_model=List[Reservation])
 async def get_reservations(
+    request: Request,
     user: User = Depends(get_current_user)
 ) -> List[Reservation]:
     """Get all reservations (admin) or user's reservations."""
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
     from MobyPark.api.app import access_reservations
     if user.role == "ADMIN":
         return access_reservations.get_all_reservations()
@@ -98,10 +127,15 @@ async def get_reservations(
 
 @router.get("/reservations/{rid}", response_model=Reservation)
 async def get_reservation_details(
+    request: Request,
     rid: str,
     user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """Get details of a specific reservation."""
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
     from MobyPark.api.app import access_reservations
     reservation = access_reservations.get_reservation(id=rid)
     if not reservation:
@@ -121,19 +155,30 @@ async def get_reservation_details(
 
 @router.get("/vehicles", response_model=List[Vehicle])
 async def get_vehicles(
+    request: Request,
     user: User = Depends(get_current_user)
 ) -> List[Vehicle]:
     """Get all vehicles (admin) or user's vehicles."""
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
     from MobyPark.api.app import access_vehicles
     if user.role == "ADMIN":
         return access_vehicles.get_all_vehicles()
     return access_vehicles.get_vehicles_byuser(user=user)
 
+
 @router.get("/payments", response_model=List[Payment])
 async def get_payments(
+    request: Request,
     user: User = Depends(get_current_user)
 ) -> List[Payment]|List[dict]:
     """Get all payments (admin) or user's payments."""
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
     from MobyPark.api.app import access_payments
     if user.role == "ADMIN":
         return access_payments.get_all_payments()
@@ -142,10 +187,15 @@ async def get_payments(
 
 @router.get("/payments/{pid}", response_model=Payment)
 async def get_payment_details(
+    request: Request,
     pid: str,
     user: User = Depends(get_current_user)
 ) -> Payment:
     """Get details of a specific payment."""
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
     from MobyPark.api.app import access_payments
     payment = access_payments.get_payment(id=pid)
     if not payment:
@@ -165,9 +215,14 @@ async def get_payment_details(
 
 @router.get("/billing", response_model=List[BillingItem])
 async def get_billing(
+    request: Request,
     user: User = Depends(get_current_user)
 ) -> List[BillingItem]:
     """Get billing information for the current user."""
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
     from MobyPark.api.app import access_sessions
     sessions = access_sessions.get_sessions_byuser(user=user)
     return _process_billing_sessions(sessions)
@@ -175,10 +230,15 @@ async def get_billing(
 
 @router.get("/billing/{username}", response_model=List[BillingItem])
 async def get_user_billing(
+    request: Request,
     username: str,
     current_user: User = Depends(require_roles("ADMIN"))
 ) -> List[BillingItem]:
     """Get billing information for a specific user (admin only)."""
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(current_user, endpoint)
+
     from MobyPark.api.app import access_users
     from MobyPark.api.app import access_sessions
     target_user = access_users.get_user_byusername(username=username)
@@ -191,8 +251,16 @@ async def get_user_billing(
     return _process_billing_sessions(sessions)
 
 
-def _process_billing_sessions(sessions: List[Session]) -> List[BillingItem]:
+def _process_billing_sessions(
+        request: Request,
+        sessions: List[Session],
+        current_user: User = Depends(get_current_user())
+        ) -> List[BillingItem]:
     """Helper function to process sessions into billing items."""
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(current_user, endpoint)
+
     from MobyPark.api.app import access_payments
     billing_items = []
     for session in sessions:

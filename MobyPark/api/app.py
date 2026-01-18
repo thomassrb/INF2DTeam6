@@ -14,12 +14,15 @@ from fastapi.responses import PlainTextResponse, JSONResponse
 from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 from MobyPark.api.DBConnection import DBConnection
-from MobyPark.api.DataAccess.AccessParkingLots import AccessParkingLots
-from MobyPark.api.DataAccess.AccessPayments import AccessPayments
-from MobyPark.api.DataAccess.AccessReservations import AccessReservations
-from MobyPark.api.DataAccess.AccessSessions import AccessSessions
-from MobyPark.api.DataAccess.AccessUsers import AccessUsers
-from MobyPark.api.DataAccess.AccessVehicles import AccessVehicles
+from MobyPark.api.DataAccess import (
+    AccessParkingLots,
+    AccessPayments,
+    AccessReservations,
+    AccessSessions,
+    AccessUsers,
+    AccessVehicles,
+    Logger
+)
 from MobyPark.api.storage_utils import load_parking_lot_data,load_reservation_data,save_parking_lot_data,save_reservation_data,load_vehicles_data,save_vehicles_data,load_user_data,save_user_data,load_payment_data,save_payment_data
 
 from MobyPark.api.Models.User import User
@@ -42,6 +45,13 @@ DATA_DIR = (
 )
 os.makedirs(DATA_DIR, exist_ok=True)
 
+LOG_DIR = (
+    os.environ.get("MOBYPARK_LOG_DIR")
+    or os.environ.get("MOBYPARK_LOG_DIR")
+    or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Logs")
+)
+os.makedirs(DATA_DIR, exist_ok=True)
+
 db_path = os.path.join(DATA_DIR, "MobyParkData.db")
 connection = DBConnection(database_path=db_path)
 access_parkinglots = AccessParkingLots(conn=connection)
@@ -50,6 +60,7 @@ access_reservations = AccessReservations(conn=connection)
 access_sessions = AccessSessions(conn=connection)
 access_users = AccessUsers(conn=connection)
 access_vehicles = AccessVehicles(conn=connection)
+Logger = Logger(path=LOG_DIR)
 
 app = FastAPI(title="MobyPark API", version="1.0.0")
 

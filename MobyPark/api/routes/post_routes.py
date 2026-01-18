@@ -3,6 +3,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field, EmailStr, validator
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+from fastapi import Request
 import uuid
 import re
 import hashlib
@@ -11,6 +12,7 @@ import os
 
 from .. import session_manager, session_calculator
 from ..authentication import get_current_user, require_roles
+from MobyPark.api.DataAccess import Logger
 from MobyPark.api.Models import (
     Vehicle,
     Session,
@@ -107,7 +109,10 @@ def _parse_dt(value: str) -> datetime:
 # ============================================
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-async def register(register_data: RegisterRequest):
+async def register(
+    register_data: RegisterRequest,
+    request: Request
+    ):
     """Register a new user (admin only)."""
     from MobyPark.api.app import access_users
     # Check if username already exists
@@ -141,6 +146,8 @@ async def register(register_data: RegisterRequest):
     
     # Save user to database
     access_users.add_user(user=new_user)
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(new_user, endpoint)
     return {"message": "User created"}
 
 # ============================================
@@ -148,10 +155,16 @@ async def register(register_data: RegisterRequest):
 # ============================================
 
 @router.post("/login", response_model=LoginResponse)
-async def login(login_data: LoginRequest):
+async def login(
+    login_data: LoginRequest,
+    request: Request,
+    ):
     """Authenticate user and return session token."""
     from MobyPark.api.app import access_users
     user = access_users.get_user_byusername(username=login_data.username)
+
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
     
     if not user:
         raise HTTPException(
@@ -195,6 +208,9 @@ async def logout(
     current_user: User = Depends(get_current_user)
 ):
     """Invalidate the current session."""
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(current_user, endpoint)
+
     auth_header = request.headers.get("Authorization")
     if auth_header:
         token = auth_header.split(" ")[1] if " " in auth_header else auth_header
@@ -209,9 +225,13 @@ async def logout(
 @router.post("/parkinglots", status_code=status.HTTP_201_CREATED)
 async def create_parking_lot(
     parking_data: ParkingLotCreate,
+    request: Request,
     current_user: User = Depends(require_roles(["ADMIN"]))
 ):
     """Create a new parking lot (admin only)."""
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(current_user, endpoint)
+
     from MobyPark.api.app import access_parkinglots
     parking_lot = ParkingLot(
         id = None,
@@ -235,9 +255,13 @@ async def create_parking_lot(
 
 @router.post("/reservations", status_code=status.HTTP_201_CREATED)
 async def create_reservation(
+    request: Request,
     reservation_data: ReservationCreate,
     current_user: User = Depends(get_current_user)
 ):
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(current_user, endpoint)
+
     from MobyPark.api.app import access_reservations, access_parkinglots, access_users, access_vehicles
 
     target_username = reservation_data.user or current_user.username
@@ -285,9 +309,13 @@ async def create_reservation(
 async def start_session(
     lid: str,
     session_data: SessionRequest,
+    request: Request,
     current_user: User = Depends(get_current_user)
 ):
     """Start a new parking session."""
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(current_user, endpoint)
+
     from MobyPark.api.app import access_sessions
     from MobyPark.api.app import access_parkinglots
     # Get parking lot
@@ -330,9 +358,13 @@ async def start_session(
 async def stop_session(
     lid: str,
     session_data: SessionRequest,
+    request: Request,
     current_user: User = Depends(get_current_user)
 ):
     """Stop an active parking session."""
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(current_user, endpoint)
+
     from MobyPark.api.app import access_sessions
     from MobyPark.api.app import access_parkinglots
     # Get parking lot
@@ -369,9 +401,13 @@ async def stop_session(
 @router.post("/vehicles", status_code=status.HTTP_201_CREATED)
 async def create_vehicle(
     vehicle_data: Vehicle,
+    request: Request,
     current_user: User = Depends(get_current_user)
 ):
     """Register a new vehicle for the current user."""
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(current_user, endpoint)
+
     from MobyPark.api.app import access_vehicles
     # Check if vehicle already exists
     if access_vehicles.get_vehicle_bylicenseplate(licenseplate=vehicle_data.licenseplate):
@@ -413,9 +449,13 @@ async def create_vehicle(
 @router.post("/payments", status_code=status.HTTP_201_CREATED)
 async def create_payment(
     payment_data: PaymentCreate,
+    request: Request,
     current_user: User = Depends(get_current_user)
 ):
     """Create a new payment."""
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(current_user, endpoint)
+
     from MobyPark.api.app import access_payments, access_sessions
     session = access_sessions.get_session(id=payment_data.session_id)
 
@@ -450,9 +490,13 @@ async def create_payment(
 @router.post("/payments/refund", status_code=status.HTTP_201_CREATED)
 async def refund_payment(
     refund_data: RefundCreate,
+    request: Request,
     current_user: User = Depends(require_roles(["ADMIN"]))
 ):
     """Create a refund payment (admin only)."""
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(current_user, endpoint)
+
     from MobyPark.api.app import access_payments, access_sessions
     # Generate transaction ID if not provided
     transaction_id = refund_data.transaction or str(uuid.uuid4())
@@ -492,12 +536,16 @@ async def refund_payment(
 
 @router.post("/debug/reset")
 async def debug_reset(
+    request: Request,
     current_user: User = Depends(require_roles(["ADMIN"]))
 ):
     """
     Reset all data (admin only).
     WARNING: This will delete all data in the database!
     """
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(current_user, endpoint)
+    
     from MobyPark.api.app import connection
     # Truncate all tables
     connection.cursor.execute(

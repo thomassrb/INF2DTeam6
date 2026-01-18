@@ -3,18 +3,24 @@ from fastapi.responses import JSONResponse
 from typing import Dict, Any, Optional
 from MobyPark.api.authentication import get_current_user, require_roles
 from MobyPark.api.Models.User import User
+from fastapi import Request
 
 router = APIRouter(tags=["delete_routes"])
 
 @router.delete("/parkinglots/{lid}", status_code=status.HTTP_200_OK)
 async def delete_parking_lot(
     lid: str,
+    request: Request,
     user: User = Depends(require_roles(["ADMIN"]))
 ) -> Dict[str, str]:
     """
     Delete a specific parking lot by ID.
     Admin only.
     """
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
     from MobyPark.api.app import access_parkinglots
     parking_lot = access_parkinglots.get_parking_lot(id=lid)
     if not parking_lot:
@@ -29,19 +35,26 @@ async def delete_parking_lot(
 
 @router.delete("/parkinglots/", status_code=status.HTTP_200_OK)
 async def delete_all_parking_lots(
+    request: Request,
     user: User = Depends(require_roles(["ADMIN"]))
 ) -> Dict[str, str]:
     """
     Delete all parking lots.
     Admin only.
     """
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
     from MobyPark.api.app import connection
     connection.cursor.execute("TRUNCATE TABLE parking_lots, parking_lots_coordinates")
     # Audit log would be handled by middleware or logging system
     return {"message": "All parking lots deleted"}
 
+
 @router.delete("/reservations/{rid}", status_code=status.HTTP_200_OK)
 async def delete_reservation(
+    request: Request,
     rid: str,
     user: User = Depends(get_current_user)
 ) -> Dict[str, str]:
@@ -49,6 +62,10 @@ async def delete_reservation(
     Delete a specific reservation.
     Users can only delete their own reservations unless they are admins.
     """
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
     from MobyPark.api.app import access_reservations
     from MobyPark.api.app import access_parkinglots
     reservation = access_reservations.get_reservation(id=rid)
@@ -77,14 +94,20 @@ async def delete_reservation(
     access_reservations.delete_reservation(reservation=reservation)
     return {"status": "Deleted"}
 
+
 @router.delete("/reservations/", status_code=status.HTTP_200_OK)
 async def delete_all_reservations(
+    request: Request,
     user: User = Depends(get_current_user)
 ) -> Dict[str, str]:
     """
     Delete all reservations.
     Admins can delete all reservations, users can only delete their own.
     """
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
     from MobyPark.api.app import access_reservations
     from MobyPark.api.app import access_parkinglots
     from MobyPark.api.app import connection
@@ -115,6 +138,7 @@ async def delete_all_reservations(
 
 @router.delete("/vehicles/{vid}", status_code=status.HTTP_200_OK)
 async def delete_vehicle(
+    request: Request,
     vid: str,
     user: User = Depends(get_current_user)
 ) -> Dict[str, str]:
@@ -122,6 +146,10 @@ async def delete_vehicle(
     Delete a specific vehicle.
     Users can only delete their own vehicles unless they are admins.
     """
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
     from MobyPark.api.app import access_vehicles
     vehicle = access_vehicles.get_vehicle(id=vid)
     if not vehicle:
@@ -142,6 +170,7 @@ async def delete_vehicle(
 
 @router.delete("/sessions/{sid}", status_code=status.HTTP_200_OK)
 async def delete_session(
+    request: Request,
     sid: str,
     user: User = Depends(require_roles("ADMIN"))
 ) -> Dict[str, str]:
@@ -149,6 +178,10 @@ async def delete_session(
     Delete a specific session.
     Admin only.
     """
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
     from MobyPark.api.app import access_sessions
     if not sid.isnumeric():
         raise HTTPException(

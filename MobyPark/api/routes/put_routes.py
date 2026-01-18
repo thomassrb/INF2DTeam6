@@ -2,10 +2,12 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Path, Body
 from pydantic import BaseModel
+from fastapi import Request
 
 from MobyPark.api.authentication import get_current_user, require_roles
 from MobyPark.api.Models import User
 from MobyPark.api.authentication import PasswordManager
+from MobyPark.api.DataAccess import Logger
 
 # Initialize router
 router = APIRouter(tags=["put_routes"])
@@ -47,6 +49,7 @@ class PaymentUpdate(BaseModel):
 # Routes
 @router.put("/parkinglots/{lid}")
 async def update_parking_lot(
+    request: Request,
     lid: str = Path(..., description="The ID of the parking lot to update"),
     update_data: ParkingLotUpdate = Body(...),
     current_user: User = Depends(require_roles(["ADMIN"]))
@@ -54,6 +57,9 @@ async def update_parking_lot(
     """
     Update a parking lot's information. Admin only.
     """
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(current_user, endpoint)
+
     from MobyPark.api.app import access_parkinglots
     parking_lot = access_parkinglots.get_parking_lot(id=lid)
     
@@ -77,6 +83,7 @@ async def update_parking_lot(
 
 @router.put("/profile/{user_id}")
 async def update_profile_by_id(
+    request: Request,
     user_id: str = Path(..., description="The ID of the user to update"),
     update_data: ProfileUpdate = Body(...),
     current_user: User = Depends(get_current_user)
@@ -84,6 +91,9 @@ async def update_profile_by_id(
     """
     Update a user's profile. Users can update their own profile, admins can update any profile.
     """
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(current_user, endpoint)
+
     from MobyPark.api.app import access_users
     target_user = access_users.get_user_byid(id=user_id)
     
@@ -117,8 +127,10 @@ async def update_profile_by_id(
     
     return {"message": "User updated successfully"}
 
+
 @router.put("/reservations/{reservation_id}")
 async def update_reservation(
+    request: Request,
     reservation_id: str = Path(..., description="The ID of the reservation to update"),
     update_data: ReservationUpdate = Body(...),
     current_user: User = Depends(get_current_user)
@@ -126,6 +138,9 @@ async def update_reservation(
     """
     Update a reservation. Users can update their own reservations, admins can update any reservation.
     """
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(current_user, endpoint)
+
     from MobyPark.api.app import access_reservations
     reservation = access_reservations.get_reservation(id=reservation_id)
     
@@ -162,8 +177,10 @@ async def update_reservation(
     
     return {"status": "Updated", "reservation": update_data_dict}
 
+
 @router.put("/vehicles/{vehicle_id}")
 async def update_vehicle(
+    request: Request,
     vehicle_id: str = Path(..., description="The ID of the vehicle to update"),
     update_data: VehicleUpdate = Body(...),
     current_user: User = Depends(get_current_user)
@@ -171,6 +188,9 @@ async def update_vehicle(
     """
     Update a vehicle. Users can update their own vehicles.
     """
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(current_user, endpoint)
+
     from MobyPark.api.app import access_vehicles
     vehicle = access_vehicles.get_vehicle(id=vehicle_id)
     
@@ -199,8 +219,10 @@ async def update_vehicle(
     
     return {"status": "Success", "vehicle_id": vehicle_id}
 
+
 @router.put("/payments/{payment_id}")
 async def update_payment(
+    request: Request,
     payment_id: str = Path(..., description="The ID of the payment to update"),
     update_data: PaymentUpdate = Body(...),
     current_user: User = Depends(get_current_user)
@@ -208,6 +230,9 @@ async def update_payment(
     """
     Update a payment. This is typically used to mark a payment as completed.
     """
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(current_user, endpoint)
+    
     from MobyPark.api.app import access_payments
     payment = access_payments.get_payment(id=payment_id)
     
@@ -233,8 +258,7 @@ async def update_payment(
             setattr(payment.t_data, key, value)
     
     # Mark as completed
-    payment.completed = True
-    payment.completed_at = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+    payment.completed = datetime.now().strftime("%d-%m-%Y %H:%M:%S")
     
     access_payments.update_payment(payment=payment)
     # TODO: Add audit logging
