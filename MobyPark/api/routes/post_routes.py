@@ -274,7 +274,7 @@ async def create_reservation(
 
     parking_lot.reserved = (parking_lot.reserved or 0) + 1
     access_parkinglots.update_parking_lot(parkinglot=parking_lot)
-    return {"status": "Created", "reservation": reservation.model_dump()}
+    return {"status": "Created", "reservation": reservation.dict()}
 
 # ============================================
 # Session Routes

@@ -26,7 +26,6 @@ def create_parking_lot(admin_token: str, name: str) -> str:
     if r.status_code == 404:
         pytest.skip("/api/parkinglots endpoint not implemented")
     assert r.status_code in (200, 201), r.text
-    # API usually returns a message like: "Parking lot saved under ID: {id}"
     try:
         body = r.json()
     except Exception:
@@ -37,7 +36,6 @@ def create_parking_lot(admin_token: str, name: str) -> str:
     if m:
         return m.group(1)
 
-    # Fallback: fetch list and match by unique address
     rlist = requests.get(f"{BASE}/api/parkinglots", timeout=5)
     assert rlist.status_code == 200, rlist.text
     lots = rlist.json()
@@ -71,7 +69,6 @@ def test_billing_for_user_after_session(server_process, admin_token, user_token)
     )
     assert r2.status_code == 200, r2.text
 
-    # Admin queries gedeelte
     rb = requests.get(
         f"{BASE}/api/billing/{username}",
         headers={"Authorization": f"Bearer {admin_token}"},

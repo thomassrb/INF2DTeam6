@@ -8,7 +8,6 @@ def test_dbconnection_creates_core_tables(tmp_path):
     conn.cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
     table_names = {row[0] for row in conn.cursor.fetchall()}
 
-    # Core tables we rely on in DataAccess and routes
     assert "users" in table_names
     assert "parking_lots" in table_names
     assert "parking_lots_coordinates" in table_names
