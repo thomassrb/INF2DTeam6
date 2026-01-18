@@ -71,7 +71,7 @@ class AccessReservations:
     
 
     def add_reservation(self, reservation: Reservation):
-        query = """"
+        query = """
         INSERT INTO reservations
             (user_id, parking_lot_id, vehicle_id, start_time, end_time, status, created_at, cost)
         VALUES

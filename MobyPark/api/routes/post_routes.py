@@ -16,6 +16,7 @@ from MobyPark.api.Models import (
     Session,
     Payment,
     TransactionData,
+    Reservation,
     ParkingLot,
     ParkingLotCoordinates,
     User)
@@ -55,6 +56,7 @@ class LoginResponse(BaseModel):
 
 class SessionRequest(BaseModel):
     license_plate: str = None
+    licenseplate: str = None
 
 class PaymentCreate(BaseModel):
     transaction: str
@@ -87,6 +89,15 @@ def validate_license_plate(license_plate: str) -> str:
             detail="License plate is required"
         )
     return lp
+
+def _parse_dt(value: str) -> datetime:
+    try:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid datetime format (expected YYYY-MM-DD HH:MM:SS)"
+        )
 
 # ============================================
 # Authentication Routes
@@ -129,6 +140,9 @@ async def register(register_data: RegisterRequest):
     access_users.add_user(user=new_user)
     return {"message": "User created"}
 
+# ============================================
+# Login Route
+# ============================================
 
 @router.post("/login", response_model=LoginResponse)
 async def login(login_data: LoginRequest):
@@ -168,6 +182,9 @@ async def login(login_data: LoginRequest):
         "session_token": token
     }
 
+# ============================================
+# Logout Route
+# ============================================
 
 @router.post("/logout")
 async def logout(
@@ -210,6 +227,54 @@ async def create_parking_lot(
     return {"Server message": f"Parking lot saved under ID: {parking_lot.id}"}
 
 # ============================================
+# Reservation Routes
+# ============================================
+
+@router.post("/reservations", status_code=status.HTTP_201_CREATED)
+async def create_reservation(
+    reservation_data: ReservationCreate,
+    current_user: User = Depends(get_current_user)
+):
+    from MobyPark.api.app import access_reservations, access_parkinglots, access_users, access_vehicles
+
+    target_username = reservation_data.user or current_user.username
+    if current_user.role != "ADMIN" and target_username != current_user.username:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    target_user = access_users.get_user_byusername(username=target_username)
+    if not target_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    parking_lot = access_parkinglots.get_parking_lot(id=reservation_data.parkinglot)
+    if not parking_lot:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parking lot not found")
+
+    lp = reservation_data.license_plate or reservation_data.licenseplate
+    lp = validate_license_plate(lp)
+    vehicle = access_vehicles.get_vehicle_bylicenseplate(licenseplate=lp)
+    if not vehicle:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vehicle not found")
+
+    start_dt = _parse_dt(reservation_data.start_time)
+    end_dt = _parse_dt(reservation_data.end_time)
+    if end_dt <= start_dt:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="End time must be after start time")
+
+    reservation = Reservation(
+        user=target_user,
+        parking_lot=parking_lot,
+        vehicle=vehicle,
+        start_time=start_dt,
+        end_time=end_dt,
+        status="CREATED",
+        created_at=datetime.now().replace(microsecond=0),
+        cost=0.0,
+        id=None,
+    )
+    access_reservations.add_reservation(reservation=reservation)
+    return {"status": "Created", "reservation": reservation.model_dump()}
+
+# ============================================
 # Session Routes
 # ============================================
 
@@ -232,7 +297,7 @@ async def start_session(
     
     # Validate license plate
     license_plate = validate_license_plate(
-        session_data.license_plate
+        session_data.license_plate or session_data.licenseplate
     )
     
     # Create session
@@ -241,6 +306,8 @@ async def start_session(
         user=current_user,
         licenseplate=license_plate,
         started=datetime.now().replace(microsecond=0),
+        duration_minutes=None,
+        cost=0.0,
         payment_status="pending",
         username=current_user.username
     )
@@ -251,9 +318,10 @@ async def start_session(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot start a session when another session for this license plate is already started."
         )
-    
-    return {"Server message": f"Session started for: {license_plate} under id: {session.id}"}
 
+    access_sessions.add_session(session=session)
+
+    return {"Server message": f"Session started for: {license_plate} under id: {session.id}"}
 
 @router.post("/parkinglots/{lid}/sessions/stop")
 async def stop_session(
@@ -274,7 +342,7 @@ async def stop_session(
     
     # Validate license plate
     license_plate = validate_license_plate(
-        session_data.license_plate
+        session_data.license_plate or session_data.licenseplate
     )
     
     # Get active session

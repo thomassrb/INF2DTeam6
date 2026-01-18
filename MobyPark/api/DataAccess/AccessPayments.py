@@ -60,13 +60,14 @@ class AccessPayments:
     def get_payment_by_session(self, session: Session):
         query = """
         SELECT id FROM payments
-        WHERE session_id = @id;
+        WHERE session_id = ?;
         """
-        self.cursor.execute(query, session.__dict__)
-        pid = dict(self.cursor.fetchone())
-        payment = self.get_payment(pid['id'])
-
-        return payment
+        self.cursor.execute(query, [session.id])
+        row = self.cursor.fetchone()
+        if row is None:
+            return None
+        pid = dict(row)
+        return self.get_payment(pid["id"])
 
 
     def get_all_payments(self):

@@ -26,10 +26,10 @@ def test_create_parking_lot_without_capacity_returns_400(server_process, admin_t
         "tariff": 2.0,
         "daytariff": 10.0,
         "address": "X",
-        "coordinates": {"latitude": 1.0, "longitude": 2.0},
+        "coordinates": {"lat": 1.0, "lng": 2.0},
     }
     r = requests.post(
-        f"{BASE}/api/parking-lots", 
+        f"{BASE}/api/parkinglots", 
         json=payload, 
         headers={"Authorization": f"Bearer {admin_token}"}, 
         timeout=5
@@ -45,20 +45,20 @@ def test_start_session_without_license_plate_returns_400(server_process, admin_t
         "tariff": 1.0,
         "daytariff": 9.0,
         "address": "Nietparkeren",
-        "coordinates": {"latitude": 1.0, "longitude": 2.0},
+        "coordinates": {"lat": 1.0, "lng": 2.0},
     }
     
     cr = requests.post(
-        f"{BASE}/api/parking-lots", 
+        f"{BASE}/api/parkinglots", 
         json=payload, 
         headers={"Authorization": f"Bearer {admin_token}"}, 
         timeout=5
     )
     if cr.status_code == 404:
-        pytest.skip("/api/parking-lots endpoint not implemented")
+        pytest.skip("/api/parkinglots endpoint not implemented")
     assert cr.status_code in (200, 201)
     
-    lots = requests.get(f"{BASE}/api/parking-lots", timeout=5).json()
+    lots = requests.get(f"{BASE}/api/parkinglots", timeout=5).json()
     lot = next((lot for lot in lots if lot.get("name") == name), None)
     assert lot is not None
     lot_id = lot.get("id")
@@ -66,7 +66,7 @@ def test_start_session_without_license_plate_returns_400(server_process, admin_t
 
     _, u_tok = user_token
     r = requests.post(
-        f"{BASE}/api/parking-lots/{lot_id}/sessions/start",
+        f"{BASE}/api/parkinglots/{lot_id}/sessions/start",
         json={},
         headers={"Authorization": f"Bearer {u_tok}"},
         timeout=5,
@@ -111,7 +111,63 @@ def test_create_reservation_for_nonexistent_parking_lot_returns_404(server_proce
     assert r.status_code in (404, 405)
 
 def test_get_nonexistent_parking_lot_returns_404(server_process):
-    r = requests.get(f"{BASE}/api/parking-lots/nonexistent-lot-id", timeout=5)
+    r = requests.get(f"{BASE}/api/parkinglots/nonexistent-lot-id", timeout=5)
     assert r.status_code == 404
     body = r.json()
     assert "not found" in str(body.get("detail", "")).lower() or body
+
+def test_create_parking_lot_as_user_forbidden(server_process, admin_token, user_token):
+    _, u_tok = user_token
+    payload = {
+        "name": "E2E lot user",
+        "location": "E2E Loc",
+        "address": "E2E Addr user",
+        "capacity": 10,
+        "tariff": 1.25,
+        "daytariff": 10.0,
+        "coordinates": {"lat": 1.0, "lng": 2.0},
+    }
+    r = requests.post(
+        f"{BASE}/api/parkinglots", 
+        json=payload, 
+        headers={"Authorization": f"Bearer {u_tok}"}, 
+        timeout=5
+    )
+    assert r.status_code in (401, 403, 404)
+
+def test_start_session_missing_license_plate(server_process, admin_token, user_token):
+    name = "E2E lot missing plate"
+    payload = {
+        "name": name,
+        "location": "E2E Loc",
+        "address": f"E2E Addr {name}",
+        "capacity": 10,
+        "tariff": 1.25,
+        "daytariff": 10.0,
+        "coordinates": {"lat": 1.0, "lng": 2.0},
+    }
+    
+    cr = requests.post(
+        f"{BASE}/api/parkinglots", 
+        json=payload, 
+        headers={"Authorization": f"Bearer {admin_token}"}, 
+        timeout=5
+    )
+    if cr.status_code == 404:
+        pytest.skip("/api/parkinglots endpoint not implemented")
+    assert cr.status_code in (200, 201)
+    
+    lots = requests.get(f"{BASE}/api/parkinglots", timeout=5).json()
+    lot = next((lot for lot in lots if lot.get("name") == name), None)
+    assert lot is not None
+    lot_id = lot.get("id")
+    assert lot_id is not None
+
+    _, u_tok = user_token
+    r = requests.post(
+        f"{BASE}/api/parkinglots/{lot_id}/sessions/start",
+        json={},
+        headers={"Authorization": f"Bearer {u_tok}"},
+        timeout=5,
+    )
+    assert r.status_code in (400, 422)
