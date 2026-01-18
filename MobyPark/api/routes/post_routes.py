@@ -61,10 +61,13 @@ class SessionRequest(BaseModel):
 class PaymentCreate(BaseModel):
     transaction: str
     amount: float
+    session_id: int
     t_data: TransactionData
 
 class RefundCreate(BaseModel):
     amount: float
+    session_id: int
+    t_data: TransactionData
     transaction: Optional[str] = None
     coupled_to: Optional[str] = None
 
@@ -413,7 +416,7 @@ async def create_payment(
     current_user: User = Depends(get_current_user)
 ):
     """Create a new payment."""
-    from MobyPark.api.app import access_payments
+    from MobyPark.api.app import access_payments, access_sessions
     # Create payment
     payment = Payment(
         id=payment_data.transaction,
@@ -422,7 +425,7 @@ async def create_payment(
         initiator=current_user.username,
         created_at=datetime.now().replace(microsecond=0),
         completed=None,
-        session= None, #hoort session te zijn maar ik ga opnieuw kijken of dit nodig is
+        session=access_sessions.get_session(id=payment_data.session_id),
         t_data=payment_data.t_data,
         hash=session_calculator.generate_transaction_validation_hash()
     )
@@ -433,9 +436,9 @@ async def create_payment(
     return {
         "status": "Success",
         "payment": {
-            "transaction": payment.transaction,
+            "transaction": payment.id,
             "amount": payment.amount,
-            "initiator": payment.initiator.username,
+            "initiator": payment.initiator,
             "created_at": payment.created_at,
             "completed": payment.completed
         }
@@ -447,7 +450,7 @@ async def refund_payment(
     current_user: User = Depends(require_roles(["ADMIN"]))
 ):
     """Create a refund payment (admin only)."""
-    from MobyPark.api.app import access_payments
+    from MobyPark.api.app import access_payments, access_sessions
     # Generate transaction ID if not provided
     transaction_id = refund_data.transaction or str(uuid.uuid4())
     
@@ -457,9 +460,9 @@ async def refund_payment(
         amount=-abs(refund_data.amount),  # Negative amount for refund
         initiator=current_user.username,
         user=current_user,
-        created_at=datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
-        completed=False,
-        coupled_to=refund_data.coupled_to,
+        created_at=datetime.now().replace(microsecond=0),
+        completed=None,
+        session=access_sessions.get_session(id=refund_data.session_id),
         hash=session_calculator.generate_transaction_validation_hash()
     )
     
@@ -469,10 +472,10 @@ async def refund_payment(
     return {
         "status": "Success",
         "refund": {
-            "transaction": refund.transaction,
+            "transaction": refund.id,
             "amount": refund.amount,
-            "initiator": refund.initiator.username,
-            "coupled_to": refund.coupled_to,
+            "initiator": refund.initiator,
+            "coupled_to": refund_data.coupled_to,
             "created_at": refund.created_at
         }
     }
