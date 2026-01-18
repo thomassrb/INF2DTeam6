@@ -417,6 +417,8 @@ async def create_payment(
 ):
     """Create a new payment."""
     from MobyPark.api.app import access_payments, access_sessions
+    session = access_sessions.get_session(id=payment_data.session_id)
+
     # Create payment
     payment = Payment(
         id=payment_data.transaction,
@@ -425,7 +427,8 @@ async def create_payment(
         initiator=current_user.username,
         created_at=datetime.now().replace(microsecond=0),
         completed=None,
-        session=access_sessions.get_session(id=payment_data.session_id),
+        session=session,
+        parking_lot=session.parking_lot,
         t_data=payment_data.t_data,
         hash=session_calculator.generate_transaction_validation_hash()
     )
@@ -453,6 +456,7 @@ async def refund_payment(
     from MobyPark.api.app import access_payments, access_sessions
     # Generate transaction ID if not provided
     transaction_id = refund_data.transaction or str(uuid.uuid4())
+    session = access_sessions.get_session(id=refund_data.session_id)
     
     # Create refund payment
     refund = Payment(
@@ -462,8 +466,10 @@ async def refund_payment(
         user=current_user,
         created_at=datetime.now().replace(microsecond=0),
         completed=None,
-        session=access_sessions.get_session(id=refund_data.session_id),
-        hash=session_calculator.generate_transaction_validation_hash()
+        session=session,
+        parking_lot=session.parking_lot,
+        hash=session_calculator.generate_transaction_validation_hash(),
+        t_data=refund_data.t_data
     )
     
     # Save refund
