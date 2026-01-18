@@ -48,3 +48,46 @@ def test_access_parkinglots_get_missing_returns_none(tmp_path):
     assert access.get_parking_lot(id=999999) is None
 
     conn.close_connection()
+
+
+def test_access_parkinglots_update_and_delete(tmp_path):
+    db_path = tmp_path / "test.db"
+    conn = DBConnection(str(db_path))
+    access = AccessParkingLots(conn=conn)
+
+    now = datetime.now().replace(microsecond=0)
+    coords = ParkingLotCoordinates(lng=4.0, lat=52.0)
+    lot = ParkingLot(
+        id=None,
+        name="Unit Lot",
+        location="Unit City",
+        address="Unit Address 2",
+        capacity=10,
+        reserved=0,
+        tariff=2.0,
+        daytariff=10.0,
+        coordinates=coords,
+        created_at=now,
+    )
+
+    ok = access.add_parking_lot(parkinglot=lot)
+    assert ok is True
+    assert lot.id is not None
+
+    lot.name = "Renamed Lot"
+    lot.capacity = 20
+    lot.coordinates.lng = 5.0
+    lot.coordinates.lat = 53.0
+    access.update_parking_lot(parkinglot=lot)
+
+    fetched = access.get_parking_lot(id=lot.id)
+    assert fetched is not None
+    assert fetched.name == "Renamed Lot"
+    assert fetched.capacity == 20
+    assert fetched.coordinates.lng == 5.0
+    assert fetched.coordinates.lat == 53.0
+
+    access.delete_parking_lot(parkinglot=fetched)
+    assert access.get_parking_lot(id=lot.id) is None
+
+    conn.close_connection()

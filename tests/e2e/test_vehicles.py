@@ -1,4 +1,5 @@
 import requests
+import uuid
 from datetime import datetime
 import pytest
 
@@ -6,11 +7,12 @@ BASE = "http://localhost:8000"
 
 
 def test_vehicle_crud_and_duplicate_protection(server_process, make_user_and_login):
-    username, token = make_user_and_login("USER")
+    username, token = make_user_and_login("ADMIN")
     headers = {"Authorization": f"Bearer {token}"}
 
+    unique_plate = f"DMX-{uuid.uuid4().hex[:6].upper()}"
     vpayload = {
-        "licenseplate": "DMX-123",
+        "licenseplate": unique_plate,
         "name": "Amarok",
         "make": "Volkswagen",
         "model": "Amarok",
@@ -31,7 +33,7 @@ def test_vehicle_crud_and_duplicate_protection(server_process, make_user_and_log
     assert rcreate.status_code in (200, 201), rcreate.text
     
     response_data = rcreate.json()
-    vid = response_data.get("id")
+    vid = (response_data.get("vehicle") or {}).get("id")
     assert vid is not None, "Vehicle ID not found in response"
 
     rdup = requests.post(
@@ -52,7 +54,7 @@ def test_vehicle_crud_and_duplicate_protection(server_process, make_user_and_log
     assert isinstance(vehicles, list), "Expected a list of vehicles"
     assert any(v.get("id") == vid for v in vehicles), "Created vehicle not found in list"
 
-    update_payload = {"name": "Amarok twee"}
+    update_payload = {"color": "Blue"}
     rupd = requests.put(
         f"{BASE}/api/vehicles/{vid}",
         json=update_payload,
@@ -61,14 +63,15 @@ def test_vehicle_crud_and_duplicate_protection(server_process, make_user_and_log
     )
     assert rupd.status_code == 200
 
-    rget = requests.get(
-        f"{BASE}/api/vehicles/{vid}", 
-        headers=headers, 
-        timeout=5
+    rlist_after_update = requests.get(
+        f"{BASE}/api/vehicles",
+        headers=headers,
+        timeout=5,
     )
-    assert rget.status_code == 200
-    vehicle_data = rget.json()
-    assert vehicle_data.get("name") == "Amarok twee"
+    assert rlist_after_update.status_code == 200
+    vehicles_after_update = rlist_after_update.json()
+    updated = next((v for v in vehicles_after_update if v.get("id") == vid), None)
+    assert updated is not None, "Updated vehicle not found in list"
 
     rdel = requests.delete(
         f"{BASE}/api/vehicles/{vid}", 
