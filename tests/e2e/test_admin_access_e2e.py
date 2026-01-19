@@ -43,7 +43,7 @@ def test_admin_can_create_then_delete_parking_lot(server_process, admin_token):
         pytest.skip("/api/parkinglots endpoint not implemented")
     assert rcreate.status_code in (200, 201), rcreate.text
 
-    rlist = requests.get(f"{BASE_URL}/api/parkinglots", timeout=5)
+    rlist = requests.get(f"{BASE_URL}/api/parkinglots", headers=headers, timeout=5)
     assert rlist.status_code == 200
     lots = rlist.json()
     assert isinstance(lots, list)

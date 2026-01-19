@@ -78,7 +78,7 @@ def _create_parking_lot(client: TestClient, admin_token: str) -> str:
         pytest.skip("/api/parkinglots endpoint not implemented")
     assert r.status_code in (200, 201), r.text
 
-    rlist = client.get("/api/parkinglots")
+    rlist = client.get("/api/parkinglots", headers={"Authorization": f"Bearer {admin_token}"})
     assert rlist.status_code == 200, rlist.text
     lots = rlist.json()
     lot = next((l for l in lots if l.get("address") == payload["address"]), None)

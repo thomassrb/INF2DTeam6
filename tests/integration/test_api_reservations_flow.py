@@ -73,7 +73,7 @@ def _create_parking_lot(client: TestClient, token: str) -> str:
         pytest.skip("/api/parkinglots endpoint not implemented")
     assert r.status_code in (200, 201), r.text
 
-    rlist = client.get("/api/parkinglots")
+    rlist = client.get("/api/parkinglots", headers={"Authorization": f"Bearer {token}"})
     assert rlist.status_code == 200, rlist.text
     lots = rlist.json()
     lot = next((l for l in lots if l.get("address") == payload["address"]), None)
@@ -150,7 +150,7 @@ def test_reservations_create_list_get_delete_and_access_control(client: TestClie
         pytest.skip("DELETE /api/reservations/{id} endpoint not implemented")
     assert rdel.status_code == 200, rdel.text
 
-    rlot = client.get(f"/api/parkinglots/{lot_id}")
+    rlot = client.get(f"/api/parkinglots/{lot_id}", headers={"Authorization": f"Bearer {user_token}"})
     assert rlot.status_code == 200, rlot.text
     lot = rlot.json()
     assert lot.get("reserved") in (0, "0")

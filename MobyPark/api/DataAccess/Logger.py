@@ -49,15 +49,16 @@ class Logger:
         )
         self.logger.addHandler(console_handler)
 
-    def log(self, user: User, endpoint: str):
+    def log(self, user: Union[User, Any], endpoint: str):
         username = user.username if hasattr(user, 'username') else str(user)
+        role = user.role if hasattr(user, 'role') else 'unknown'
 
         self.logger.info(
             "API Request",
             extra={
                 'endpoint': endpoint,
                 'user': username,
-                'role': user.role
+                'role': role
             }
         )
 

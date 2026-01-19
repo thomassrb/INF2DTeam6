@@ -25,7 +25,11 @@ def test_admin_can_create_and_list_parkinglot_via_parkinglots_endpoint(server_pr
     )
     assert r.status_code in (200, 201), r.text
 
-    rlist = requests.get(f"{BASE}/api/parkinglots", timeout=5)
+    rlist = requests.get(
+        f"{BASE}/api/parkinglots",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        timeout=5
+    )
     assert rlist.status_code == 200
     lots = rlist.json()
     assert isinstance(lots, list)

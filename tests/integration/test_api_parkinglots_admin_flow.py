@@ -97,7 +97,7 @@ def test_admin_can_create_parking_lot_and_list(client: TestClient):
         pytest.skip("/api/parkinglots endpoint not implemented")
     assert rcreate.status_code in (200, 201), rcreate.text
 
-    rlist = client.get("/api/parkinglots")
+    rlist = client.get("/api/parkinglots", headers=headers)
     assert rlist.status_code == 200, rlist.text
     lots = rlist.json()
     assert isinstance(lots, list)

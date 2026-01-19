@@ -268,15 +268,8 @@ async def get_user_billing(
     return _process_billing_sessions(sessions)
 
 
-def _process_billing_sessions(
-        request: Request,
-        sessions: List[Session],
-        current_user: User = Depends(get_current_user)
-        ) -> List[BillingItem]:
+def _process_billing_sessions(sessions: List[Session]) -> List[BillingItem]:
     """Helper function to process sessions into billing items."""
-    from MobyPark.api.app import Logger
-    endpoint = f"{request.method} {request.url.path}"
-    Logger.log(current_user, endpoint)
 
     from MobyPark.api.app import access_payments
     billing_items = []
