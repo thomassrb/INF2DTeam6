@@ -14,8 +14,9 @@ from MobyPark.api.Models import (
     Payment,
     Reservation,
     ParkingLot,
-    ParkingLotCoordinates,
-    User)
+    User,
+    DiscountCodeResponse,
+)
 
 # Create router
 router = APIRouter(tags=["get_routes"])
@@ -274,7 +275,6 @@ def _process_billing_sessions(
     for session in sessions:
         amount, hours, days = sc.calculate_price(session.parking_lot, session)
         transaction = sc.generate_payment_hash(session.id, session)
-        # dit werkt nog voor geen klote, oude aanpak met hash misschien weer proberen
         payment = access_payments.get_payment_by_session(session)
         payed = payment.amount if payment is not None else 0.0
         
@@ -303,7 +303,7 @@ def _process_billing_sessions(
 @router.get("/discount-codes/free-parking", response_model=List[FreeParkingResponse])
 async def list_free_parking_plates(
     request: Request,
-    user: User = Depends(require_roles("ADMIN"))
+    user: User = Depends(require_roles(["ADMIN"]))
 ):
     from MobyPark.api.app import Logger
     endpoint = f"{request.method} {request.url.path}"
@@ -322,5 +322,55 @@ async def list_free_parking_plates(
             for plate in plates
         ]
     except Exception as e:
-        # logger.log(f"Error listing free parking plates: {str(e)}", level="error")
+        #TODO: logger.log(f"Error listing free parking plates: {str(e)}", level="error")
         raise HTTPException(status_code=500, detail="Internal server error")
+    
+
+@router.get("/discount-codes", response_model=List[DiscountCodeResponse])
+async def list_discount_codes(
+    request: Request,
+    user: User = Depends(require_roles(["ADMIN"]))
+):
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
+    from MobyPark.api.app import access_discount_codes
+    try:
+        codes = access_discount_codes.get_all_discount_codes()
+        # Convert dictionary to DiscountCode objects if needed
+        if codes and isinstance(codes[0], dict):
+            return codes  # Already in the correct format for Pydantic
+        return [code.to_dict() for code in codes]
+    except Exception as e:
+        #TODO: logger.error(f"Error listing discount codes: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve discount codes")
+
+
+@router.get("/discount-codes/{code_id}", response_model=DiscountCodeResponse)
+async def get_discount_code(
+    request: Request,
+    code_id: int,
+    user: User = Depends(require_roles("ADMIN"))
+):
+    """
+    Get a discount code by its ID
+    """
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
+    from MobyPark.api.app import access_discount_codes
+    try:
+        code = access_discount_codes.get_discount_code_by_id(code_id)
+        if not code:
+            raise HTTPException(status_code=404, detail="Discount code not found")
+            
+        if hasattr(code, 'to_dict'):
+            return code.to_dict()
+        return code
+        
+    except Exception as e:
+        #TODO: logger.error(f"Error getting discount code: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve discount code")
+

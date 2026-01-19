@@ -114,6 +114,33 @@ class DBConnection:
             FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
         );
 
+        CREATE TABLE IF NOT EXISTS discount_codes (
+            id INTEGER PRIMARY KEY,
+            code TEXT NOT NULL UNIQUE,
+            discount_percentage INTEGER NOT NULL,
+            max_uses INTEGER,
+            uses INTEGER DEFAULT 0,
+            valid_from TIMESTAMP,
+            valid_until TIMESTAMP,
+            created_by INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_active BOOLEAN DEFAULT 1,
+            location_rules TEXT,
+            time_rules TEXT,
+            FOREIGN KEY (created_by) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS discount_code_usage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            amount_before_discount REAL NOT NULL,
+            discount_amount REAL NOT NULL,
+            used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (code_id) REFERENCES discount_codes(id),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+
         CREATE TABLE IF NOT EXISTS free_parking_plates(
             id INTEGER PRIMARY KEY,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

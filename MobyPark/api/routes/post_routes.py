@@ -21,7 +21,12 @@ from MobyPark.api.Models import (
     Reservation,
     ParkingLot,
     ParkingLotCoordinates,
-    User)
+    User,
+    DiscountCodeResponse,
+    generate_discount_code,
+    DiscountCodeCreate,
+    ApplyDiscountRequest,
+    ApplyDiscountResponse)
 
 # Create router
 router = APIRouter(tags=["post_routes"])
@@ -573,6 +578,107 @@ async def add_free_parking_plate(
         # logger.log(f"Error adding free parking plate: {str(e)}")
         
         raise HTTPException(status_code=500, detail="Internal server error")
+    
+
+@router.post("/discount-codes", response_model=DiscountCodeResponse, status_code=201)
+async def create_discount_code(
+    code_data: DiscountCodeCreate,
+    user: User = Depends(require_roles("ADMIN"))
+):
+    """Create a new discount code with optional location and time rules"""
+    from MobyPark.api.app import access_discount_codes
+    try:
+        code = code_data.code if code_data.code else generate_discount_code()
+        
+        discount_data = {
+            'code': code,
+            'discount_percentage': code_data.discount_percentage,
+            'max_uses': code_data.max_uses,
+            'valid_from': code_data.valid_from.isoformat() if code_data.valid_from else None,
+            'valid_until': code_data.valid_until.isoformat() if code_data.valid_until else None,
+            'created_by': user.id,
+            'is_active': True,
+            'location_rules': code_data.location_rules,
+            'time_rules': code_data.time_rules
+        }
+        
+        created_code = access_discount_codes.create_discount_code(discount_data)
+        
+        if hasattr(created_code, 'to_dict'):
+            return created_code.to_dict()
+        return created_code
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        #TODO: logger.log(f"Error creating discount code: {str(e)}", level="error")
+        raise HTTPException(status_code=500, detail="Failed to create discount code")
+
+
+@router.post("/payments/apply-discount", response_model=ApplyDiscountResponse)
+async def apply_discount_code(
+    request: ApplyDiscountRequest,
+    user: User = Depends(get_current_user)
+):
+    from MobyPark.api.app import access_discount_codes, access_free_parking, access_vehicles
+    if not request.code:
+        return ApplyDiscountResponse(
+            success=False,
+            discount_amount=0,
+            final_amount=request.amount,
+            message="No discount code provided"
+        )
+    
+    try:
+        if request.code.upper() == "GRATIS":
+            vehicles = access_vehicles.get_vehicles_by_user_id(user.id)
+            for vehicle in vehicles:
+                if access_free_parking.is_plate_free_parking(vehicle.licenseplate):
+                    return ApplyDiscountResponse(
+                        success=True,
+                        discount_amount=request.amount,
+                        final_amount=0,
+                        message="100% discount applied (GRATIS)"
+                    )
+            
+            return ApplyDiscountResponse(
+                success=False,
+                discount_amount=0,
+                final_amount=request.amount,
+                message="GRATIS code is only available for vehicles with free parking privileges"
+            )
+        
+        final_amount, message = access_discount_codes.apply_discount_code(
+            request.code, 
+            user.id, 
+            request.amount
+        )
+        
+        discount_amount = request.amount - final_amount
+        
+        return ApplyDiscountResponse(
+            success=True,
+            discount_amount=discount_amount,
+            final_amount=final_amount,
+            message=message or f"Discount applied"
+        )
+        
+    except ValueError as e:
+        return ApplyDiscountResponse(
+            success=False,
+            discount_amount=0,
+            final_amount=request.amount,
+            message=str(e)
+        )
+    except Exception as e:
+        #TODO: logger.log(f"Error applying discount code: {str(e)}", level="error")
+        return ApplyDiscountResponse(
+            success=False,
+            discount_amount=0,
+            final_amount=request.amount,
+            message="Failed to apply discount code"
+        )
+
 
 # ============================================
 # Admin Routes

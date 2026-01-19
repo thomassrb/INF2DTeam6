@@ -247,3 +247,28 @@ async def remove_free_parking_plate(
     except Exception as e:
         # logger.log(f"Error removing free parking plate: {str(e)}", level="error")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.delete("/discount-codes/{code_id}", status_code=200)
+async def delete_discount_code(
+    request: Request,
+    code_id: int,
+    user: User = Depends(require_roles("ADMIN"))
+):
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
+    from MobyPark.api.app import access_discount_codes
+    try:
+        success = access_discount_codes.delete_discount_code(code_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Discount code not found")
+            
+        return {"status": "success", "message": "Discount code deleted"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        # logger.log(f"Error deleting discount code: {str(e)}", level="error")
+        raise HTTPException(status_code=500, detail="Failed to delete discount code")

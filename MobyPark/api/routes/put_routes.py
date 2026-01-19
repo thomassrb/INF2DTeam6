@@ -5,7 +5,10 @@ from pydantic import BaseModel
 from fastapi import Request
 
 from MobyPark.api.authentication import get_current_user, require_roles
-from MobyPark.api.Models import User
+from MobyPark.api.Models import (
+    User,
+    DiscountCodeResponse
+    )
 from MobyPark.api.authentication import PasswordManager
 from MobyPark.api.DataAccess import Logger
 
@@ -57,6 +60,7 @@ async def update_parking_lot(
     """
     Update a parking lot's information. Admin only.
     """
+    from MobyPark.api.app import Logger
     endpoint = f"{request.method} {request.url.path}"
     Logger.log(current_user, endpoint)
 
@@ -91,6 +95,7 @@ async def update_profile_by_id(
     """
     Update a user's profile. Users can update their own profile, admins can update any profile.
     """
+    from MobyPark.api.app import Logger
     endpoint = f"{request.method} {request.url.path}"
     Logger.log(current_user, endpoint)
 
@@ -138,6 +143,7 @@ async def update_reservation(
     """
     Update a reservation. Users can update their own reservations, admins can update any reservation.
     """
+    from MobyPark.api.app import Logger
     endpoint = f"{request.method} {request.url.path}"
     Logger.log(current_user, endpoint)
 
@@ -188,6 +194,7 @@ async def update_vehicle(
     """
     Update a vehicle. Users can update their own vehicles.
     """
+    from MobyPark.api.app import Logger
     endpoint = f"{request.method} {request.url.path}"
     Logger.log(current_user, endpoint)
 
@@ -230,6 +237,7 @@ async def update_payment(
     """
     Update a payment. This is typically used to mark a payment as completed.
     """
+    from MobyPark.api.app import Logger
     endpoint = f"{request.method} {request.url.path}"
     Logger.log(current_user, endpoint)
     
@@ -266,4 +274,95 @@ async def update_payment(
     return {"status": "Success", "payment_id": payment_id}
 
 
+@router.put("/discount-codes/{code_id}", response_model=DiscountCodeResponse)
+async def update_discount_code(
+    request: Request,
+    code_id: int,
+    code_data: dict,
+    user: User = Depends(require_roles("ADMIN"))
+):
+    """Update a discount code"""
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
 
+    from MobyPark.api.app import access_discount_codes
+    try:
+        # Get existing code
+        existing_code = access_discount_codes.get_discount_code_by_id(code_id)
+        if not existing_code:
+            raise HTTPException(status_code=404, detail="Discount code not found")
+        
+        # Convert to dict if needed
+        if hasattr(existing_code, 'to_dict'):
+            existing_code = existing_code.to_dict()
+        
+        # Prepare updates
+        updates = {}
+        for field in ['code', 'discount_percentage', 'max_uses', 'valid_from', 
+                     'valid_until', 'is_active', 'location_rules', 'time_rules']:
+            if field in code_data and code_data[field] is not None:
+                updates[field] = code_data[field]
+        
+        if not updates:
+            return existing_code
+        
+        # Update the code
+        updated_code = access_discount_codes.update_discount_code(code_id, **updates)
+        if not updated_code:
+            raise HTTPException(status_code=500, detail="Failed to update discount code")
+            
+        # Return the updated code
+        if hasattr(updated_code, 'to_dict'):
+            return updated_code.to_dict()
+        return updated_code
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        #TODO: logger.error(f"Error updating discount code: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update discount code")
+
+
+@router.put("/discount-codes/{code_id}", response_model=DiscountCodeResponse)
+async def update_discount_code(
+    request: Request,
+    code_id: int,
+    code_data: dict,
+    user: User = Depends(require_roles("ADMIN"))
+):
+    """Update a discount code"""
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
+    from MobyPark.api.app import access_discount_codes
+    try:
+        existing_code = access_discount_codes.get_discount_code_by_id(code_id)
+        if not existing_code:
+            raise HTTPException(status_code=404, detail="Discount code not found")
+        
+        if hasattr(existing_code, 'to_dict'):
+            existing_code = existing_code.to_dict()
+        
+        updates = {}
+        for field in ['code', 'discount_percentage', 'max_uses', 'valid_from', 'valid_until', 'is_active', 'location_rules', 'time_rules']:
+            if field in code_data and code_data[field] is not None:
+                updates[field] = code_data[field]
+        
+        if not updates:
+            return existing_code
+        
+        updated_code = access_discount_codes.update_discount_code(code_id, **updates)
+        if not updated_code:
+            raise HTTPException(status_code=500, detail="Failed to update discount code")
+            
+        if hasattr(updated_code, 'to_dict'):
+            return updated_code.to_dict()
+        return updated_code
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        #TODO: logger.error(f"Error updating discount code: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update discount code")
