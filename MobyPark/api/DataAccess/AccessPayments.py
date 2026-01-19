@@ -2,7 +2,7 @@ import sqlite3
 from MobyPark.api.DBConnection import DBConnection
 from MobyPark.api.Models.Payment import Payment
 from MobyPark.api.Models.TransanctionData import TransactionData
-from MobyPark.api.Models.User import User
+from MobyPark.api.Models import User, Session
 from MobyPark.api.DataAccess.AccessUsers import AccessUsers
 from MobyPark.api.DataAccess.AccessParkingLots import AccessParkingLots
 from MobyPark.api.DataAccess.AccessSessions import AccessSessions
@@ -18,23 +18,7 @@ class AccessPayments:
         self.accesssessions = AccessSessions(conn=conn)
 
 
-    def get_payment(self, id: str):
-        query = """
-        SELECT * FROM payments
-        WHERE id = ?;
-        """
-        tdata_query = """
-        SELECT * FROM t_data
-        WHERE id = ?;
-        """
-        self.cursor.execute(query, [id])
-        payment = self.cursor.fetchone()
-        self.cursor.execute(tdata_query, [id])
-        tdata = self.cursor.fetchone()
-
-        if payment is None or tdata is None:
-            return None
-        
+    def map_payment(self, payment: dict, tdata: dict):
         payment_dict = dict(payment)
         tdata_dict = dict(tdata)
         payment_dict["created_at"] = datetime.strptime(payment_dict["created_at"], "%Y-%m-%d %H:%M:%S")
@@ -53,15 +37,48 @@ class AccessPayments:
         return Payment(**payment_dict)
     
 
+    def get_payment(self, id: str):
+        query = """
+        SELECT * FROM payments
+        WHERE id = ?;
+        """
+        tdata_query = """
+        SELECT * FROM t_data
+        WHERE id = ?;
+        """
+        self.cursor.execute(query, [id])
+        payment = self.cursor.fetchone()
+        self.cursor.execute(tdata_query, [id])
+        tdata = self.cursor.fetchone()
+
+        if payment is None or tdata is None:
+            return None
+        
+        return self.map_payment(payment=payment, tdata=tdata)
+    
+
+    def get_payment_by_session(self, session: Session):
+        query = """
+        SELECT id FROM payments
+        WHERE session_id = ?;
+        """
+        self.cursor.execute(query, [session.id])
+        row = self.cursor.fetchone()
+        if row is None:
+            return None
+        pid = dict(row)
+        return self.get_payment(pid["id"])
+
+
     def get_all_payments(self):
-        query = """"
+        query = """
         SELECT p.*, t.* FROM payments p
         JOIN t_data t ON t.id = p.id;
         """
         self.cursor.execute(query)
         payments = self.cursor.fetchall()
 
-        return payments
+        return list(map(lambda x: self.map_payment(x), payments))
 
 
     def get_payments_by_user(self, user:User) -> list[Payment]:
@@ -75,7 +92,7 @@ class AccessPayments:
 
         return payments
     
-    
+
     def add_payment(self, payment: Payment):
         query = """
         INSERT INTO payments
@@ -141,10 +158,14 @@ class AccessPayments:
         DELETE FROM payments
         WHERE id = :id;
         """
-        coordinate_query = """ 
+        tdata_query = """ 
         DELETE FROM t_data
         WHERE id = :id;
         """
-        self.cursor.execute(query, payment.__dict__)
-        self.cursor.execute(coordinate_query, payment.__dict__)
-        self.conn.commit()
+        try:
+            self.cursor.execute(tdata_query, payment.__dict__)
+            self.cursor.execute(query, payment.__dict__)
+            self.conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False

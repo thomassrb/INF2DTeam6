@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import os
 import sys
 import pathlib
@@ -10,130 +11,292 @@ if project_root not in sys.path:
 from ..authentication import login_required, roles_required
 from ..app import access_vehicles, access_parkinglots, access_payments, access_reservations, access_sessions, access_users, connection
 from ..Models.User import User
+=======
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
+from typing import Dict, Any, Optional
+from MobyPark.api.authentication import get_current_user, require_roles
+from MobyPark.api.Models.User import User
+from fastapi import Request
+>>>>>>> nieuw_intergration_test
 
+router = APIRouter(tags=["delete_routes"])
 
-class delete_routes:
-    @roles_required(['ADMIN'])
-    def _handle_delete_parking_lot(self, session_user):
-        lid = None
-        path_parts = self.path.split('/')
-        if len(path_parts) > 2 and path_parts[2]:
-            lid = path_parts[2]
+@router.delete("/parkinglots/{lid}", status_code=status.HTTP_200_OK)
+async def delete_parking_lot(
+    lid: str,
+    request: Request,
+    user: User = Depends(require_roles(["ADMIN"]))
+) -> Dict[str, str]:
+    """
+    Delete a specific parking lot by ID.
+    Admin only.
+    """
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
 
-        if lid:
-            parking_lot = access_parkinglots.get_parking_lot(id=lid)
-            if not parking_lot:
-                self.send_json_response(404, "application/json", {"error": "Parking lot not found"})
-                return
-            access_parkinglots.delete_parking_lot(parkinglot=parking_lot)
-            self.audit_logger.audit(session_user, action="delete_parking_lot", target=lid)
-            self.send_json_response(200, "application/json", {"message": f"Parking lot {lid} deleted"})
-        else:
-            connection.cursor.execute("TRUNCATE TABLE parking_lots, parking_lots_coordinates") # lijkt me erg riskant
-            self.audit_logger.audit(session_user, action="delete_all_parking_lots")
-            self.send_json_response(200, "application/json", {"message": "All parking lots deleted"})
+    from MobyPark.api.app import access_parkinglots
+    parking_lot = access_parkinglots.get_parking_lot(id=lid)
+    if not parking_lot:
+        Logger.error(f"Parking lot not found with ID: {lid}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Parking lot not found"
+        )
     
+    if not access_parkinglots.delete_parking_lot(parkinglot=parking_lot):
+        Logger.error(f"Failed to delete parking lot {lid}: parking lot still has references")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Parkinglot still has references"
+        )
+    # Audit log would be handled by middleware or logging system
+    return {"message": f"Parking lot {lid} deleted"}
 
-    @login_required
-    def _handle_delete_reservation(self, session_user: User):
-        rid = self.path.replace("/reservations/", "")
-        reservation = access_reservations.get_reservation(id=rid)
 
-        if not rid:
-            if session_user.role == "ADMIN":
-                for res_id, reservation in list(reservations.items()):
-                    pid = reservation["parkinglot"]
-                    if parking_lots[pid]["reserved"] > 0:
-                        parking_lots[pid]["reserved"] -= 1
-                reservations.clear()
-                save_reservation_data(reservations)
-                save_parking_lot_data(parking_lots)
-                self.audit_logger.audit(session_user, action="delete_all_reservations_by_admin")
-                self.send_json_response(200, "application/json", {"status": "All reservations deleted by admin"})
-                return
-            else:
-                user_reservations_to_delete = access_reservations.get_reservations_by_user(user=session_user)
-                if not user_reservations_to_delete:
-                    self.send_json_response(404, "application/json", {"error": "No reservations found for this user"})
-                    return
-                for res_id in user_reservations_to_delete:
-                    reservation = reservations[res_id]
-                    pid = reservation["parkinglot"]
-                    if parking_lots[pid]["reserved"] > 0:
-                        parking_lots[pid]["reserved"] -= 1
-                    del reservations[res_id]
-                save_reservation_data(reservations)
-                save_parking_lot_data(parking_lots)
-                self.audit_logger.audit(session_user, action="delete_all_user_reservations")
-                self.send_json_response(200, "application/json", {"status": "All user reservations deleted"})
-                return
+@router.delete("/parkinglots/", status_code=status.HTTP_200_OK)
+async def delete_all_parking_lots(
+    request: Request,
+    user: User = Depends(require_roles(["ADMIN"]))
+) -> Dict[str, str]:
+    """
+    Delete all parking lots.
+    Admin only.
+    """
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
 
-        if rid not in reservations:
-            self.send_json_response(404, "application/json", {"error": "Reservation not found"})
-            return
+    from MobyPark.api.app import connection
+    connection.cursor.execute("TRUNCATE TABLE parking_lots, parking_lots_coordinates")
+    # Audit log would be handled by middleware or logging system
+    return {"message": "All parking lots deleted"}
 
-        if not (session_user["role"] == "ADMIN") and not session_user["username"] == reservations[rid].get("user"):
-            self.send_json_response(403, "application/json", {"error": "Access denied"})
-            return
 
-        reservation_to_delete = reservations[rid]
-        pid = reservation_to_delete["parkinglot"]
+@router.delete("/reservations/{rid}", status_code=status.HTTP_200_OK)
+async def delete_reservation(
+    request: Request,
+    rid: str,
+    user: User = Depends(get_current_user)
+) -> Dict[str, str]:
+    """
+    Delete a specific reservation.
+    Users can only delete their own reservations unless they are admins.
+    """
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
 
-        if parking_lots[pid]["reserved"] > 0:
-            parking_lots[pid]["reserved"] -= 1
-        else:
-            self.send_json_response(400, "application/json", {"error": "Parking lot reserved count is already zero"})
-            return
+    from MobyPark.api.app import access_reservations
+    from MobyPark.api.app import access_parkinglots
+    reservation = access_reservations.get_reservation(id=rid)
+    if not reservation:
+        Logger.error(f"Reservation not found with ID: {rid}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Reservation not found"
+        )
 
-        del reservations[rid]
-        save_reservation_data(reservations)
-        save_parking_lot_data(parking_lots)
-        self.send_json_response(200, "application/json", {"status": "Deleted"})
+    if user.role != "ADMIN" and user != reservation.user:
+        Logger.error(f"Access denied: User {user.id} tried to access reservation {rid} without permission")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
 
-    @login_required
-    def _handle_delete_vehicle(self, session_user):
-        vid = self.path.replace("/vehicles/", "")
+    parking_lot = reservation.parking_lot
+    if parking_lot.reserved > 0:
+        parking_lot.reserved -= 1
+    else:
+        Logger.error(f"Parking lot {parking_lot.id} reserved count is already zero")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Parking lot reserved count is already zero"
+        )
 
-        vehicles = load_vehicles_data()
-        user_vehicles = vehicles.get(session_user["username"], [])
+    access_parkinglots.update_parking_lot(parkinglot=parking_lot)
+    if not access_reservations.delete_reservation(reservation=reservation):
+        Logger.error(f"Failed to delete reservation {rid}: parking lot still has references")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Parkinglot still has references"
+        )
+    return {"status": "Deleted"}
 
-        if not user_vehicles:
-            self.send_json_response(404, "application/json", {"error": "User vehicles not found"})
-            return
 
-        original_len = len(user_vehicles)
-        user_vehicles = [v for v in user_vehicles if v.get('id') != vid]
+@router.delete("/reservations/", status_code=status.HTTP_200_OK)
+async def delete_all_reservations(
+    request: Request,
+    user: User = Depends(get_current_user)
+) -> Dict[str, str]:
+    """
+    Delete all reservations.
+    Admins can delete all reservations, users can only delete their own.
+    """
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
 
-        if len(user_vehicles) == original_len:
-            self.send_json_response(404, "application/json", {"error": "Vehicle not found"})
-            return
-
-        vehicles[session_user["username"]] = user_vehicles
-        save_vehicles_data(vehicles)
-        self.audit_logger.audit(session_user, action="delete_vehicle", target=vid)
-        self.send_json_response(200, "application/json", {"status": "Deleted"})
-
-    @roles_required(['ADMIN'])
-    def _handle_delete_session(self, session_user):
-        lid = self.path.split("/")[2]
-        parking_lot = access_parkinglots.get_parking_lot(id=lid)
+    from MobyPark.api.app import access_reservations
+    from MobyPark.api.app import access_parkinglots
+    from MobyPark.api.app import connection
+    parking_lots = access_parkinglots.get_all_parking_lots()
+    
+    if user.role == "ADMIN":
+        connection.cursor.execute("TRUNCATE TABLE reservations")
+        for parking_lot in parking_lots:
+            parking_lot.reserved = 0
+            access_parkinglots.update_parking_lot(parkinglot=parking_lot)
+        return {"status": "All reservations deleted by admin"}
+    else:
+        user_reservations = access_reservations.get_reservations_by_user(user=user)
+        if not user_reservations:
+            Logger.error(f"No reservations found for user {user.id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No reservations found for this user"
+            )
+            
+        for reservation in user_reservations:
+            parking_lot = reservation.parking_lot
+            parking_lot.reserved -= 1
+            access_parkinglots.update_parking_lot(parkinglot=parking_lot)
+            access_reservations.delete_reservation(reservation=reservation)
+            access_reservations
         
-        if not parking_lot:
-            self.send_json_response(404, "application/json", {"error": "Parking lot not found"})
-            return
+        return {"status": "All user reservations deleted"}
+
+
+@router.delete("/vehicles/{vid}", status_code=status.HTTP_200_OK)
+async def delete_vehicle(
+    request: Request,
+    vid: str,
+    user: User = Depends(get_current_user)
+) -> Dict[str, str]:
+    """
+    Delete a specific vehicle.
+    Users can only delete their own vehicles unless they are admins.
+    """
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
+    from MobyPark.api.app import access_vehicles
+    vehicle = access_vehicles.get_vehicle(id=vid)
+    if not vehicle:
+        Logger.error(f"Vehicle not found with ID: {vid}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Vehicle not found"
+        )
+
+    if user.role != "ADMIN" and user != vehicle.user:
+        Logger.error(f"Access denied: User {user.id} tried to access vehicle {vid} without permission")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+
+    if not access_vehicles.delete_vehicle(vehicle=vehicle):
+        Logger.error(f"Failed to delete vehicle {vid}: vehicle still has references")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Vehicle still has references"
+        )
+    return {"status": "Deleted"}
+
+
+@router.delete("/sessions/{sid}", status_code=status.HTTP_200_OK)
+async def delete_session(
+    request: Request,
+    sid: str,
+    user: User = Depends(require_roles("ADMIN"))
+) -> Dict[str, str]:
+    """
+    Delete a specific session.
+    Admin only.
+    """
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
+    from MobyPark.api.app import access_sessions
+    if not sid.isnumeric():
+        Logger.error(f"Invalid session ID format: {sid}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Session ID must be a number"
+        )
+
+    session = access_sessions.get_session(id=sid)
+    if not session:
+        Logger.error(f"Session not found with ID: {sid}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found"
+        )
+    
+    if not access_sessions.delete_session(session):
+        Logger.error(f"Failed to delete session {sid}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete session"
+        )
+    
+    return {"message": "Session deleted"}
+
+
+@router.delete("/discount-codes/free-parking/{license_plate}", status_code=200)
+async def remove_free_parking_plate(
+    request: Request,
+    license_plate: str,
+    user: User = Depends(require_roles("ADMIN"))
+):
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
+    from ..app import access_free_parking
+    try:
+        success = access_free_parking.remove_free_parking_plate(license_plate)
+        if not success:
+            raise HTTPException(
+                status_code=404,
+                detail=f"License plate {license_plate} not found in free parking whitelist"
+            )
+            
+        return {
+            "status": "success",
+            "message": f"License plate {license_plate} removed from free parking whitelist"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        # logger.log(f"Error removing free parking plate: {str(e)}", level="error")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.delete("/discount-codes/{code_id}", status_code=200)
+async def delete_discount_code(
+    request: Request,
+    code_id: int,
+    user: User = Depends(require_roles("ADMIN"))
+):
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
+    from MobyPark.api.app import access_discount_codes
+    try:
+        success = access_discount_codes.delete_discount_code(code_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Discount code not found")
+            
+        return {"status": "success", "message": "Discount code deleted"}
         
-        sessions = load_json(f'pdata/p{lid}-sessions.json')
-        sid = self.path.split("/")[-1]
-        
-        if not sid.isnumeric():
-            self.send_json_response(400, "application/json", {"error": "Session ID is required, cannot delete all sessions"})
-            return
-                
-        if sid not in sessions:
-            self.send_json_response(404, "application/json", {"error": "Session not found"})
-            return
-        
-        del sessions[sid]
-        save_data(f'pdata/p{lid}-sessions.json', sessions)
-        self.audit_logger.audit(session_user, action="delete_session", target={"parking_lot": lid, "session": sid})
-        self.send_json_response(200, "application/json", {"message": "Session deleted"})
+    except HTTPException:
+        raise
+    except Exception as e:
+        # logger.log(f"Error deleting discount code: {str(e)}", level="error")
+        raise HTTPException(status_code=500, detail="Failed to delete discount code")

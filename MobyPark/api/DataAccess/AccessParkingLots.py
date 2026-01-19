@@ -28,6 +28,7 @@ class AccessParkingLots:
         self.conn = conn.connection
 
 
+<<<<<<< HEAD
     def get_all_parking_lots(self, lat: float = None, lng: float = None, radius: float = None) -> List[Dict[str, Any]]:
         """
         Get all parking lots, optionally filtered by distance from a point.
@@ -94,6 +95,17 @@ class AccessParkingLots:
         except Exception as e:
             print(f"Error in get_all_parking_lots: {str(e)}")
             raise
+=======
+    def get_all_parking_lots(self):
+        query = """
+        SELECT id FROM parking_lots;
+        """
+        self.cursor.execute(query)
+        parking_lot_ids = self.cursor.fetchall()
+        parking_lots = list(map(lambda id: self.get_parking_lot(id=id["id"]), parking_lot_ids))
+
+        return parking_lots
+>>>>>>> nieuw_intergration_test
     
     
     def get_parking_lot(self, lot_id: str):
@@ -144,9 +156,13 @@ class AccessParkingLots:
         DELETE FROM parking_lots_coordinates
         WHERE id = :id;
         """
-        self.cursor.execute(query, parkinglot.__dict__)
-        self.cursor.execute(coordinate_query, parkinglot.__dict__)
-        self.conn.commit()
+        try:
+            self.cursor.execute(coordinate_query, parkinglot.__dict__)
+            self.cursor.execute(query, parkinglot.__dict__)
+            self.conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
 
 
     def add_parking_lot(self, parkinglot: ParkingLot):
@@ -170,8 +186,9 @@ class AccessParkingLots:
             parkinglot.coordinates.id = id
             self.cursor.execute(coordinates_query, parkinglot.coordinates.__dict__)
             self.conn.commit()
+            return True
         except sqlite3.IntegrityError as e:
-            print(e)
+            return False
 
 
     def update_parking_lot(self, parkinglot: ParkingLot):

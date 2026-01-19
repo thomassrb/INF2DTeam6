@@ -27,6 +27,7 @@ class AccessDiscountCodes:
                 "connection must be a sqlite3.Connection, sqlite3.Cursor, or DBConnection"
             )
             
+<<<<<<< HEAD
         self._create_tables()
         self._update_schema()
 
@@ -86,6 +87,8 @@ class AccessDiscountCodes:
         """Clean up the cursor if we own it"""
         if hasattr(self, '_owns_cursor') and self._owns_cursor and self.cursor:
             self.cursor.close()
+=======
+>>>>>>> nieuw_intergration_test
 
     def _row_to_dict(self, row) -> Optional[Dict[str, Any]]:
         """Convert a database row to a dictionary"""
@@ -103,6 +106,10 @@ class AccessDiscountCodes:
                     
         return result
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> nieuw_intergration_test
     def get_discount_code_by_id(self, code_id: int) -> Optional[Dict[str, Any]]:
         """Get a discount code by its ID"""
         self.cursor.execute("SELECT * FROM discount_codes WHERE id = ?", (code_id,))

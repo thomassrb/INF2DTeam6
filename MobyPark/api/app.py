@@ -1,9 +1,7 @@
-# Standaard imports
-import hashlib
-import glob as _glob
+from typing import Optional, Dict, Any
 import os
-import pathlib
 import sys
+<<<<<<< HEAD
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -61,25 +59,66 @@ from .storage_utils import (
 )
 
 # project root path
+=======
+import pathlib
+import hashlib
+from MobyPark.api import authentication
+>>>>>>> nieuw_intergration_test
 project_root = str(pathlib.Path(__file__).resolve().parent.parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+from typing import Any
+from fastapi import FastAPI, Depends, HTTPException, Request, status, responses
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse, JSONResponse
+from pydantic import BaseModel
+from fastapi.responses import JSONResponse
+from MobyPark.api.DBConnection import DBConnection
+from MobyPark.api.DataAccess import (
+    AccessParkingLots,
+    AccessPayments,
+    AccessReservations,
+    AccessSessions,
+    AccessUsers,
+    AccessVehicles,
+    AccessFreeParking,
+    AccessDiscountCodes,
+    AccessFeedback,
+    AccessAnalytics,
+    Logger
+)
 
 from MobyPark.api.Models.User import User
 from MobyPark.api.Models.ParkingLot import ParkingLot
 from MobyPark.api.Models.ParkingLotCoordinates import ParkingLotCoordinates
+<<<<<<< HEAD
 from MobyPark.api.DataAccess.Logger import Logger
 from MobyPark.api import session_manager
 from MobyPark.middleware.performance_tracer import PerformanceTracer
+=======
+from MobyPark.api import session_manager
+from MobyPark.api.routes.delete_routes import router as delete_router
+from MobyPark.api.routes.get_routes import router as get_router
+from MobyPark.api.routes.post_routes import router as post_router
+from MobyPark.api.routes.put_routes import router as put_router
+>>>>>>> nieuw_intergration_test
 from typing import Optional
 import os
 
 get_current_user = authentication.get_current_user 
 require_roles = authentication.require_roles
+# Gebruik dezelfde data directory als de rest van het project
 DATA_DIR = (
     os.environ.get("MOBYPARK_DB_DIR")
     or os.environ.get("MOBYPARK_DATA_DIR")
     or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "MobyPark-api-data", "pdata")
+)
+os.makedirs(DATA_DIR, exist_ok=True)
+
+LOG_DIR = (
+    os.environ.get("MOBYPARK_LOG_DIR")
+    or os.environ.get("MOBYPARK_LOG_DIR")
+    or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Logs")
 )
 os.makedirs(DATA_DIR, exist_ok=True)
 
@@ -104,6 +143,7 @@ with connection.connection as conn:
 
 access_users = AccessUsers(conn=connection)
 access_vehicles = AccessVehicles(conn=connection)
+<<<<<<< HEAD
 access_parkinglots = AccessParkingLots(conn=connection)
 access_reservations = AccessReservations(conn=connection)
 access_sessions = AccessSessions(conn=connection)
@@ -114,13 +154,23 @@ access_analytics = AccessAnalytics(connection)
 
 log_path = os.path.join(DATA_DIR, "access-dd-mm-yyyy.log")
 logger = Logger(path=log_path)
+=======
+access_free_parking = AccessFreeParking(connection=connection)
+access_discount_codes = AccessDiscountCodes(connection=connection)
+access_feedback = AccessFeedback(connection=connection)
+access_analytics = AccessAnalytics(conn=connection)
+>>>>>>> nieuw_intergration_test
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from middleware.performance_tracer import PerformanceTracer
+log_path = os.path.join(DATA_DIR, "access.log")
+Logger = Logger(path=log_path)
 
 app = FastAPI(title="MobyPark API", version="1.0.0")
 
-app.add_middleware(PerformanceTracer)
+# Include the routers
+app.include_router(get_router, prefix="/api")
+app.include_router(post_router, prefix="/api")
+app.include_router(delete_router, prefix="/api")
+app.include_router(put_router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,
@@ -134,6 +184,7 @@ app.add_middleware(
 from fastapi.responses import JSONResponse
 from typing import Any
 
+# Simple in-memory index so we can reliably detect active sessions per lot+license plate
 ACTIVE_SESSION_KEYS: set[str] = set()
 
 BILLING_DATA: dict[str, list[dict]] = {}
@@ -253,6 +304,7 @@ def require_roles(*roles: str):
         return user
 
     return dependency
+
 class SessionStartRequest(BaseModel):
     license_plate: Optional[str] = None
     licenseplate: Optional[str] = None
@@ -272,6 +324,7 @@ async def start_session(body: SessionStartRequest, user: User = Depends(get_curr
 async def root():
     return "👍 200 OK - MobyPark API is running"
 
+<<<<<<< HEAD
 
 @app.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(body: RegisterRequest):
@@ -1978,3 +2031,5 @@ async def get_revenue_analytics(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve revenue data: {str(e)}"
         )
+=======
+>>>>>>> nieuw_intergration_test

@@ -1,4 +1,9 @@
+<<<<<<< HEAD
 from ..Models.FreeParking import FreeParking
+=======
+from ..Models import FreeParking
+from .AccessUsers import AccessUsers
+>>>>>>> nieuw_intergration_test
 from datetime import datetime
 from typing import Optional, List
 
@@ -6,6 +11,10 @@ class AccessFreeParking:
     def __init__(self, connection):
         self.connection = connection.connection
         self.cursor = self.connection.cursor()
+<<<<<<< HEAD
+=======
+        self.access_users = AccessUsers(conn=connection)
+>>>>>>> nieuw_intergration_test
 
     def add_free_parking_plate(self, license_plate: str, added_by: int) -> FreeParking:
         """Add a license plate to the free parking whitelist"""
@@ -35,7 +44,11 @@ class AccessFreeParking:
             return FreeParking(
                 id=row['id'],
                 license_plate=row['license_plate'],
+<<<<<<< HEAD
                 added_by=row['added_by'],
+=======
+                added_by=self.access_users.get_user_byid(id=row['added_by']),
+>>>>>>> nieuw_intergration_test
                 created_at=created_at
             )
         return None
@@ -63,7 +76,11 @@ class AccessFreeParking:
                 FreeParking(
                     id=row['id'],
                     license_plate=row['license_plate'],
+<<<<<<< HEAD
                     added_by=row['added_by'],
+=======
+                    added_by=self.access_users.get_user_byid(id=row['added_by']),
+>>>>>>> nieuw_intergration_test
                     created_at=created_at
                 )
             )

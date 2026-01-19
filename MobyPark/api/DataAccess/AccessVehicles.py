@@ -14,6 +14,17 @@ class AccessVehicles:
         self.accessusers = AccessUsers(conn=conn)
 
 
+    def map_vehicle(self, vehicle):
+        if vehicle is None:
+            return None
+        vehicle_dict = dict(vehicle)
+        vehicle_dict["created_at"] = datetime.strptime(vehicle_dict["created_at"], "%Y-%m-%d %H:%M:%S")
+        vehicle_dict["user"] = self.accessusers.get_user_byid(id=vehicle_dict["user_id"])
+        del vehicle_dict["user_id"]
+
+        return Vehicle(**vehicle_dict)
+    
+
     def get_vehicle(self, id):
         query = """
         SELECT * FROM vehicles
@@ -24,6 +35,7 @@ class AccessVehicles:
         if vehicle is None:
             return None
         else:
+<<<<<<< HEAD
             vehicle_dict = dict(vehicle)
             vehicle_dict["created_at"] = datetime.strptime(vehicle_dict["created_at"], "%Y-%m-%d %H:%M:%S")
 
@@ -35,11 +47,14 @@ class AccessVehicles:
             vehicle_dict["user"] = self.accessusers.get_user_byid(id=vehicle_dict["user_id"])
             del vehicle_dict["user_id"]
             return Vehicle(**vehicle_dict)
+=======
+            return self.map_vehicle(vehicle)
+>>>>>>> nieuw_intergration_test
         
 
     def get_vehicles_byuser(self, user: User):
         query = """
-        SELECT id FROM users
+        SELECT id FROM vehicles
         WHERE user_id = ?;
         """
         self.cursor.execute(query, [user.id])
@@ -47,16 +62,26 @@ class AccessVehicles:
         vehicles = list(map(lambda id: self.get_vehicle(id=id["id"]), vehicle_ids))
 
         return vehicles
+    
+
+    def get_vehicle_bylicenseplate(self, licenseplate: str):
+        query = """
+        SELECT * FROM vehicles
+        WHERE licenseplate = ?;
+        """
+        self.cursor.execute(query, [licenseplate])
+        vehicle_dict = self.cursor.fetchone()
+        return self.map_vehicle(vehicle_dict)
         
 
     def get_all_vehicles(self):
-        query = """"
+        query = """
         SELECT * FROM vehicles
         """
         self.cursor.execute(query)
         vehicles = self.cursor.fetchall()
 
-        return vehicles
+        return list(map(lambda x: self.map_vehicle(x), vehicles))
 
 
     def add_vehicle(self, vehicle: Vehicle):
@@ -79,8 +104,9 @@ class AccessVehicles:
             self.cursor.execute(query, vehicle_dict)
             vehicle.id = self.cursor.fetchone()[0]
             self.conn.commit()
+            return True
         except sqlite3.IntegrityError as e:
-            print(e)
+            return False
 
 
     def update_vehicle(self, vehicle):
@@ -111,5 +137,9 @@ class AccessVehicles:
         DELETE FROM vehicles
         WHERE id = :id;
         """
-        self.cursor.execute(query, vehicle.__dict__)
-        self.conn.commit()
+        try:
+            self.cursor.execute(query, vehicle.__dict__)
+            self.conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
