@@ -23,6 +23,7 @@ from MobyPark.api.DataAccess import (
     AccessVehicles,
     AccessFreeParking,
     AccessDiscountCodes,
+    AccessFeedback,
     Logger
 )
 
@@ -63,6 +64,8 @@ access_users = AccessUsers(conn=connection)
 access_vehicles = AccessVehicles(conn=connection)
 access_free_parking = AccessFreeParking(connection=connection)
 access_discount_codes = AccessDiscountCodes(connection=connection)
+access_feedback = AccessFeedback(connection=connection)
+
 Logger = Logger(path=LOG_DIR)
 
 app = FastAPI(title="MobyPark API", version="1.0.0")

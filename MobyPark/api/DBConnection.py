@@ -153,6 +153,17 @@ class DBConnection:
             id INTEGER PRIMARY KEY,
             discount INT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS feedback(
+            id INTEGER PRIMARY KEY,
+            user_id INTEGER,
+            parking_lot_id INTEGER NOT NULL,
+            rating INTEGER NOT NULL,
+            comment TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (parking_lot_id) REFERENCES parking_lots(id),
+            FOREIGN KEY (user_id) REGERENCES users(id)
+        );
         """
 
         self.cursor.executescript(users_table_query)

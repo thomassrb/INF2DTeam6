@@ -17,6 +17,7 @@ from MobyPark.api.Models import (
     Vehicle,
     Session,
     Payment,
+    Feedback,
     TransactionData,
     Reservation,
     ParkingLot,
@@ -97,6 +98,12 @@ class FreeParkingResponse(BaseModel):
 class FreeParkingRequest(BaseModel):
     license_plate: str
 
+
+class CreateFeedback(BaseModel):
+    lot_id: str
+    rating: int
+    comment: Optional[str] = None
+
 # ============================================
 # Helper Functions
 # ============================================
@@ -162,6 +169,7 @@ async def register(
     
     # Save user to database
     access_users.add_user(user=new_user)
+    from MobyPark.api.app import Logger
     endpoint = f"{request.method} {request.url.path}"
     Logger.log(new_user, endpoint)
     return {"message": "User created"}
@@ -179,6 +187,7 @@ async def login(
     from MobyPark.api.app import access_users
     user = access_users.get_user_byusername(username=login_data.username)
 
+    from MobyPark.api.app import Logger
     endpoint = f"{request.method} {request.url.path}"
     Logger.log(user, endpoint)
     
@@ -224,6 +233,7 @@ async def logout(
     current_user: User = Depends(get_current_user)
 ):
     """Invalidate the current session."""
+    from MobyPark.api.app import Logger
     endpoint = f"{request.method} {request.url.path}"
     Logger.log(current_user, endpoint)
 
@@ -245,6 +255,7 @@ async def create_parking_lot(
     current_user: User = Depends(require_roles(["ADMIN"]))
 ):
     """Create a new parking lot (admin only)."""
+    from MobyPark.api.app import Logger
     endpoint = f"{request.method} {request.url.path}"
     Logger.log(current_user, endpoint)
 
@@ -274,6 +285,7 @@ async def create_reservation(
     reservation_data: ReservationCreate,
     current_user: User = Depends(get_current_user)
 ):
+    from MobyPark.api.app import Logger
     endpoint = f"{request.method} {request.url.path}"
     Logger.log(current_user, endpoint)
 
@@ -331,6 +343,7 @@ async def start_session(
     current_user: User = Depends(get_current_user)
 ):
     """Start a new parking session."""
+    from MobyPark.api.app import Logger
     endpoint = f"{request.method} {request.url.path}"
     Logger.log(current_user, endpoint)
 
@@ -372,6 +385,7 @@ async def start_session(
 
     return {"Server message": f"Session started for: {license_plate} under id: {session.id}"}
 
+
 @router.post("/parkinglots/{lid}/sessions/stop")
 async def stop_session(
     lid: str,
@@ -380,6 +394,7 @@ async def stop_session(
     current_user: User = Depends(get_current_user)
 ):
     """Stop an active parking session."""
+    from MobyPark.api.app import Logger
     endpoint = f"{request.method} {request.url.path}"
     Logger.log(current_user, endpoint)
 
@@ -423,6 +438,7 @@ async def create_vehicle(
     current_user: User = Depends(get_current_user)
 ):
     """Register a new vehicle for the current user."""
+    from MobyPark.api.app import Logger
     endpoint = f"{request.method} {request.url.path}"
     Logger.log(current_user, endpoint)
 
@@ -471,6 +487,7 @@ async def create_payment(
     current_user: User = Depends(get_current_user)
 ):
     """Create a new payment."""
+    from MobyPark.api.app import Logger
     endpoint = f"{request.method} {request.url.path}"
     Logger.log(current_user, endpoint)
 
@@ -512,6 +529,7 @@ async def refund_payment(
     current_user: User = Depends(require_roles(["ADMIN"]))
 ):
     """Create a refund payment (admin only)."""
+    from MobyPark.api.app import Logger
     endpoint = f"{request.method} {request.url.path}"
     Logger.log(current_user, endpoint)
 
@@ -582,10 +600,15 @@ async def add_free_parking_plate(
 
 @router.post("/discount-codes", response_model=DiscountCodeResponse, status_code=201)
 async def create_discount_code(
+    request: Request,
     code_data: DiscountCodeCreate,
     user: User = Depends(require_roles("ADMIN"))
 ):
     """Create a new discount code with optional location and time rules"""
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
     from MobyPark.api.app import access_discount_codes
     try:
         code = code_data.code if code_data.code else generate_discount_code()
@@ -680,6 +703,38 @@ async def apply_discount_code(
         )
 
 
+@router.post("/feedback", status_code=status.HTTP_201_CREATED)
+async def create_feedback(
+    request: Request,
+    body: CreateFeedback,
+    user: User = Depends(get_current_user)):
+    """
+    Submit feedback for a specific parking lot.
+    """
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
+    from MobyPark.api.app import access_feedback, access_parkinglots
+    parking_lot = access_parkinglots.get_parking_lot(body.lot_id)
+    if not parking_lot:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Parking lot not found"
+        )
+
+    new_feedback = Feedback(
+        user_id = user.id,
+        lot_id = body.lot_id,
+        rating = body.rating,
+        comment = body.comment,
+        created_at = datetime.now().replace(microsecond=0)
+    )
+    access_feedback.add_feedback(feedback=new_feedback)
+
+    return {"message": "Feedback submitted successfully", "feedback": new_feedback}
+
+
 # ============================================
 # Admin Routes
 # ============================================
@@ -693,6 +748,7 @@ async def debug_reset(
     Reset all data (admin only).
     WARNING: This will delete all data in the database!
     """
+    from MobyPark.api.app import Logger
     endpoint = f"{request.method} {request.url.path}"
     Logger.log(current_user, endpoint)
     

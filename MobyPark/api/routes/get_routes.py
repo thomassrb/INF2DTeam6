@@ -351,7 +351,7 @@ async def list_discount_codes(
 async def get_discount_code(
     request: Request,
     code_id: int,
-    user: User = Depends(require_roles("ADMIN"))
+    user: User = Depends(require_roles(["ADMIN"]))
 ):
     """
     Get a discount code by its ID
@@ -374,3 +374,21 @@ async def get_discount_code(
         #TODO: logger.error(f"Error getting discount code: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to retrieve discount code")
 
+
+@router.get("/feedback")
+async def get_feedback(
+    request: Request,
+    lot_id: str,
+    user: User = Depends(require_roles(["ADMIN"]))):
+    """
+    View feedback for a specific parking lot (Admin only).
+    """
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
+    from MobyPark.api.app import access_feedback
+    filtered_feedback = access_feedback.get_feedback_by_parkinglot_id(parkinglot_id=lot_id)
+
+    return filtered_feedback
+    

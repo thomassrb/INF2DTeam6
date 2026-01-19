@@ -17,3 +17,4 @@ from .DiscountCode import (
     ApplyDiscountRequest,
     ApplyDiscountResponse
 )
+from .Feedback import Feedback
