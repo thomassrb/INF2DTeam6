@@ -31,6 +31,14 @@ class BillingItem(BaseModel):
     payed: float
     balance: float
 
+
+class FreeParkingResponse(BaseModel):
+    id: int
+    license_plate: str
+    added_by: int
+    created_at: Optional[str] = None
+
+
 @router.get("/profile", response_model=User)
 async def get_profile(
     request: Request,
@@ -291,3 +299,28 @@ def _process_billing_sessions(
         ))
     return billing_items
     
+
+@router.get("/discount-codes/free-parking", response_model=List[FreeParkingResponse])
+async def list_free_parking_plates(
+    request: Request,
+    user: User = Depends(require_roles("ADMIN"))
+):
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
+    from ..app import access_free_parking
+    try:
+        plates = access_free_parking.get_all_free_parking_plates()
+        return [
+            {
+                "id": plate.id,
+                "license_plate": plate.license_plate,
+                "added_by": plate.added_by,
+                "created_at": plate.created_at.isoformat() if plate.created_at else None
+            }
+            for plate in plates
+        ]
+    except Exception as e:
+        # logger.log(f"Error listing free parking plates: {str(e)}", level="error")
+        raise HTTPException(status_code=500, detail="Internal server error")

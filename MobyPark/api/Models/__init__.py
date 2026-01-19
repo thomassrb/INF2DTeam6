@@ -6,3 +6,4 @@ from .Session import Session
 from .TransanctionData import TransactionData
 from .User import User
 from .Vehicle import Vehicle
+from .FreeParking import FreeParking

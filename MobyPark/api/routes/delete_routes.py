@@ -217,3 +217,33 @@ async def delete_session(
         )
     
     return {"message": "Session deleted"}
+
+
+@router.delete("/discount-codes/free-parking/{license_plate}", status_code=200)
+async def remove_free_parking_plate(
+    request: Request,
+    license_plate: str,
+    user: User = Depends(require_roles("ADMIN"))
+):
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
+    from ..app import access_free_parking
+    try:
+        success = access_free_parking.remove_free_parking_plate(license_plate)
+        if not success:
+            raise HTTPException(
+                status_code=404,
+                detail=f"License plate {license_plate} not found in free parking whitelist"
+            )
+            
+        return {
+            "status": "success",
+            "message": f"License plate {license_plate} removed from free parking whitelist"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        # logger.log(f"Error removing free parking plate: {str(e)}", level="error")
+        raise HTTPException(status_code=500, detail="Internal server error")

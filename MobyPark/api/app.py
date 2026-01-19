@@ -21,6 +21,7 @@ from MobyPark.api.DataAccess import (
     AccessSessions,
     AccessUsers,
     AccessVehicles,
+    AccessFreeParking,
     Logger
 )
 from MobyPark.api.storage_utils import load_parking_lot_data,load_reservation_data,save_parking_lot_data,save_reservation_data,load_vehicles_data,save_vehicles_data,load_user_data,save_user_data,load_payment_data,save_payment_data
@@ -60,6 +61,7 @@ access_reservations = AccessReservations(conn=connection)
 access_sessions = AccessSessions(conn=connection)
 access_users = AccessUsers(conn=connection)
 access_vehicles = AccessVehicles(conn=connection)
+access_free_parking = AccessFreeParking(connection=connection)
 Logger = Logger(path=LOG_DIR)
 
 app = FastAPI(title="MobyPark API", version="1.0.0")

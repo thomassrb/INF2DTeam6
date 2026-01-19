@@ -114,6 +114,14 @@ class DBConnection:
             FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
         );
 
+        CREATE TABLE IF NOT EXISTS free_parking_plates(
+            id INTEGER PRIMARY KEY,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            license_plate VARCHAR(255) NOT NULL,
+            added_by INTEGER NOT NULL,
+            FOREIGN KEY (added_by) REFERENCES users(id)
+        );
+
         CREATE TABLE IF NOT EXISTS discounts(
             id INTEGER PRIMARY KEY,
             discount INT NOT NULL

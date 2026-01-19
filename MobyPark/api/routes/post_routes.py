@@ -81,6 +81,17 @@ class ReservationCreate(BaseModel):
     license_plate: Optional[str] = None
     licenseplate: Optional[str] = None
 
+
+class FreeParkingResponse(BaseModel):
+    id: int
+    license_plate: str
+    added_by: int
+    created_at: Optional[str] = None
+
+
+class FreeParkingRequest(BaseModel):
+    license_plate: str
+
 # ============================================
 # Helper Functions
 # ============================================
@@ -531,6 +542,37 @@ async def refund_payment(
             "created_at": refund.created_at
         }
     }
+
+
+@router.post("/discount-codes/free-parking", response_model=FreeParkingResponse, status_code=201)
+async def add_free_parking_plate(
+    request_path: Request,
+    request: FreeParkingRequest,
+    user: User = Depends(require_roles("ADMIN"))
+):
+    from MobyPark.api.app import Logger
+    endpoint = f"{request_path.method} {request_path.url.path}"
+    Logger.log(user, endpoint)
+
+    from ..app import access_free_parking
+    try:
+        free_parking = access_free_parking.add_free_parking_plate(
+            license_plate=request.license_plate,
+            added_by=user
+        )
+        
+        return {
+            "id": free_parking.id,
+            "license_plate": free_parking.license_plate,
+            "added_by": free_parking.added_by,
+            "created_at": free_parking.created_at.isoformat() if free_parking.created_at else None
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        # logger.log(f"Error adding free parking plate: {str(e)}")
+        
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # ============================================
 # Admin Routes
