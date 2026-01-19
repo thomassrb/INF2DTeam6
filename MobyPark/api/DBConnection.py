@@ -149,11 +149,6 @@ class DBConnection:
             FOREIGN KEY (added_by) REFERENCES users(id)
         );
 
-        CREATE TABLE IF NOT EXISTS discounts(
-            id INTEGER PRIMARY KEY,
-            discount INT NOT NULL
-        );
-
         CREATE TABLE IF NOT EXISTS feedback(
             id INTEGER PRIMARY KEY,
             user_id INTEGER,
