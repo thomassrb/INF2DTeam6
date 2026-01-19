@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 import sqlite3
+from ..DBConnection import DBConnection
 
 class AccessAnalytics:
-    def __init__(self, conn):
+    def __init__(self, conn: DBConnection):
         self.cursor = conn.cursor
         self.conn = conn.connection
 

@@ -27,65 +27,6 @@ class AccessDiscountCodes:
                 "connection must be a sqlite3.Connection, sqlite3.Cursor, or DBConnection"
             )
             
-        self._create_tables()
-        self._update_schema()
-
-    def _update_schema(self):
-        """Update the database schema if needed"""
-        try:
-            self.cursor.execute("PRAGMA table_info(discount_codes)")
-            columns = [col[1] for col in self.cursor.fetchall()]
-            
-            if 'location_rules' not in columns:
-                self.cursor.execute("ALTER TABLE discount_codes ADD COLUMN location_rules TEXT")
-                
-            if 'time_rules' not in columns:
-                self.cursor.execute("ALTER TABLE discount_codes ADD COLUMN time_rules TEXT")
-                
-            self.connection.commit()
-        except Exception as e:
-            self.connection.rollback()
-            logger.error(f"Error updating schema: {str(e)}", exc_info=True)
-            raise
-
-    def _create_tables(self):
-        """Create necessary tables if they don't exist"""
-        self.cursor.execute("""
-        CREATE TABLE IF NOT EXISTS discount_codes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            code TEXT NOT NULL UNIQUE,
-            discount_percentage INTEGER NOT NULL,
-            max_uses INTEGER,
-            uses INTEGER DEFAULT 0,
-            valid_from TIMESTAMP,
-            valid_until TIMESTAMP,
-            created_by INTEGER,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            is_active BOOLEAN DEFAULT 1,
-            location_rules TEXT,
-            time_rules TEXT,
-            FOREIGN KEY (created_by) REFERENCES users(id)
-        )
-        """)
-        
-        self.cursor.execute("""
-        CREATE TABLE IF NOT EXISTS discount_code_usage (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            code_id INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
-            amount_before_discount REAL NOT NULL,
-            discount_amount REAL NOT NULL,
-            used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (code_id) REFERENCES discount_codes(id),
-            FOREIGN KEY (user_id) REFERENCES users(id)
-        )
-        """)
-        self.connection.commit()
-
-    def __del__(self):
-        """Clean up the cursor if we own it"""
-        if hasattr(self, '_owns_cursor') and self._owns_cursor and self.cursor:
-            self.cursor.close()
 
     def _row_to_dict(self, row) -> Optional[Dict[str, Any]]:
         """Convert a database row to a dictionary"""
@@ -102,6 +43,7 @@ class AccessDiscountCodes:
                     result[field] = None
                     
         return result
+
 
     def get_discount_code_by_id(self, code_id: int) -> Optional[Dict[str, Any]]:
         """Get a discount code by its ID"""

@@ -16,18 +16,7 @@ class AccessReservations:
         self.accessusers = AccessUsers(conn=conn)
         self.accessparkinglots = AccessParkingLots(conn=conn)
 
-
-    def get_reservation(self, id: str):
-        query = """
-        SELECT * FROM reservations
-        WHERE id = ?;
-        """
-        self.cursor.execute(query, [id])
-        reservation = self.cursor.fetchone()
-
-        if reservation is None:
-            return None
-        
+    def map_reservation(self, reservation: dict):
         reservation_dict = dict(reservation)
         reservation_dict["start_time"] = datetime.strptime(reservation_dict["start_time"], "%Y-%m-%d %H:%M:%S")
         reservation_dict["end_time"] = datetime.strptime(reservation_dict["end_time"], "%Y-%m-%d %H:%M:%S")
@@ -44,12 +33,27 @@ class AccessReservations:
         return Reservation(**reservation_dict)
     
 
+    def get_reservation(self, id: str):
+        query = """
+        SELECT * FROM reservations
+        WHERE id = ?;
+        """
+        self.cursor.execute(query, [id])
+        reservation = self.cursor.fetchone()
+
+        if reservation is None:
+            return None
+
+        return self.map_reservation(reservation)
+    
+
     def get_all_reservations(self):
-        query = """"
+        query = """
         SELECT * FROM reservations
         """
         self.cursor.execute(query)
-        reservations = self.cursor.fetchall()
+        reservations_raw = self.cursor.fetchall()
+        reservations = list(map(lambda x: self.map_reservation(x), reservations_raw))
 
         return reservations
 
@@ -67,7 +71,7 @@ class AccessReservations:
     
 
     def add_reservation(self, reservation: Reservation):
-        query = """"
+        query = """
         INSERT INTO reservations
             (user_id, parking_lot_id, vehicle_id, start_time, end_time, status, created_at, cost)
         VALUES
@@ -118,6 +122,10 @@ class AccessReservations:
         DELETE FROM reservations
         WHERE id = :id;
         """
-        self.cursor.execute(query, reservation.__dict__)
-        self.conn.commit()
+        try:
+            self.cursor.execute(query, reservation.__dict__)
+            self.conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
         

@@ -3,7 +3,7 @@ import sqlite3
 class DBConnection:
 
     def __init__(self, database_path):
-        self.connection = sqlite3.connect(database_path)
+        self.connection = sqlite3.connect(database_path, check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
         self.cursor = self.connection.cursor()
         
@@ -66,11 +66,11 @@ class DBConnection:
             licenseplate VARCHAR(255) NOT NULL,
             vehicle_id INTEGER,
             started DATETIME NOT NULL,
-            stopped DATETIME NOT NULL,
+            stopped DATETIME,
             username VARCHAR(255) NOT NULL,
             user_id INTEGER,
-            duration_minutes INT NOT NULL,
-            cost DECIMAL(10,2) NOT NULL,
+            duration_minutes INT,
+            cost DECIMAL(10,2),
             payment_status VARCHAR(255) NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id),
             FOREIGN KEY (parking_lot_id) REFERENCES parking_lots(id),
@@ -83,7 +83,7 @@ class DBConnection:
             initiator VARCHAR(255) NOT NULL,
             user_id INTEGER NOT NULL,
             created_at DATETIME NOT NULL,
-            completed DATETIME NOT NULL,
+            completed DATETIME,
             hash VARCHAR(255) NOT NULL,
             session_id INTEGER NOT NULL,
             parking_lot_id INTEGER NOT NULL,
@@ -117,9 +117,50 @@ class DBConnection:
             FOREIGN KEY (vehicle_id) REFERENCES vehicles(id)
         );
 
-        CREATE TABLE IF NOT EXISTS discounts(
+        CREATE TABLE IF NOT EXISTS discount_codes (
             id INTEGER PRIMARY KEY,
-            discount INT NOT NULL
+            code TEXT NOT NULL UNIQUE,
+            discount_percentage INTEGER NOT NULL,
+            max_uses INTEGER,
+            uses INTEGER DEFAULT 0,
+            valid_from TIMESTAMP,
+            valid_until TIMESTAMP,
+            created_by INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_active BOOLEAN DEFAULT 1,
+            location_rules TEXT,
+            time_rules TEXT,
+            FOREIGN KEY (created_by) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS discount_code_usage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            amount_before_discount REAL NOT NULL,
+            discount_amount REAL NOT NULL,
+            used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (code_id) REFERENCES discount_codes(id),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS free_parking_plates(
+            id INTEGER PRIMARY KEY,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            license_plate VARCHAR(255) NOT NULL,
+            added_by INTEGER NOT NULL,
+            FOREIGN KEY (added_by) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS feedback(
+            id INTEGER PRIMARY KEY,
+            user_id INTEGER,
+            parking_lot_id INTEGER NOT NULL,
+            rating INTEGER NOT NULL,
+            comment TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (parking_lot_id) REFERENCES parking_lots(id),
+            FOREIGN KEY (user_id) REFERENCES users(id)
         );
         """
 
