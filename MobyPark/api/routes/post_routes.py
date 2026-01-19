@@ -249,7 +249,6 @@ async def create_parking_lot(
     
     return {"Server message": f"Parking lot saved under ID: {parking_lot.id}"}
 
-# ============================================
 # Reservation Routes
 # ============================================
 
@@ -299,7 +298,10 @@ async def create_reservation(
         id=None,
     )
     access_reservations.add_reservation(reservation=reservation)
-    return {"status": "Created", "reservation": reservation.model_dump()}
+
+    parking_lot.reserved = (parking_lot.reserved or 0) + 1
+    access_parkinglots.update_parking_lot(parkinglot=parking_lot)
+    return {"status": "Created", "reservation": reservation.dict()}
 
 # ============================================
 # Session Routes

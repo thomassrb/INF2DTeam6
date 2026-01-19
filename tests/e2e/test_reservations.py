@@ -66,7 +66,6 @@ def test_user_can_create_and_view_and_delete_reservation(server_process, make_us
     )
     assert rv.status_code in (200, 201, 409), rv.text
 
-    # reserveren parking
     res_payload = {
         "parkinglot": lot_id,
         "license_plate": plate,
@@ -88,7 +87,6 @@ def test_user_can_create_and_view_and_delete_reservation(server_process, make_us
     rid = r.json().get("reservation", {}).get("id") or r.json().get("id")
     assert rid
 
-    # list met reservations, zou de nieuwe er bij moeten stoppen
     rlist = requests.get(
         f"{BASE}/api/reservations",
         headers={"Authorization": f"Bearer {token}"},
@@ -109,7 +107,6 @@ def test_user_can_create_and_view_and_delete_reservation(server_process, make_us
         pytest.skip("/api/reservations endpoint not implemented")
     assert rdet.status_code == 200
 
-    # andere gebruiker zou niet hier bij moeten kunnen
     other_user, other_tok = make_user_and_login("USER")
     rforbidden = requests.get(
         f"{BASE}/api/reservations/{rid}",
@@ -118,7 +115,6 @@ def test_user_can_create_and_view_and_delete_reservation(server_process, make_us
     )
     assert rforbidden.status_code == 403
 
-    # deleeten van de reservation
     rdel = requests.delete(
         f"{BASE}/api/reservations/{rid}",
         headers={"Authorization": f"Bearer {token}"},

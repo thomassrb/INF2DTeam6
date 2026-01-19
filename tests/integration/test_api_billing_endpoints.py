@@ -68,7 +68,6 @@ def test_billing_user_and_admin_username_billing(client: TestClient):
     username, user_token = _register_and_login(client, role="USER")
     _, admin_token = _register_and_login(client, role="ADMIN")
 
-    # Normal user billing should return a list (often empty if no sessions exist)
     r = client.get("/api/billing", headers={"Authorization": f"Bearer {user_token}"})
     if r.status_code in (404, 405):
         pytest.skip("/api/billing endpoint not implemented")
@@ -77,7 +76,6 @@ def test_billing_user_and_admin_username_billing(client: TestClient):
     assert r.status_code == 200, r.text
     assert isinstance(r.json(), list)
 
-    # User cannot access other-user billing endpoint
     r = client.get(
         f"/api/billing/{username}",
         headers={"Authorization": f"Bearer {user_token}"},
@@ -86,7 +84,6 @@ def test_billing_user_and_admin_username_billing(client: TestClient):
         pytest.skip("/api/billing/{username} endpoint not implemented")
     assert r.status_code in (401, 403)
 
-    # Admin can access user billing endpoint
     r = client.get(
         f"/api/billing/{username}",
         headers={"Authorization": f"Bearer {admin_token}"},

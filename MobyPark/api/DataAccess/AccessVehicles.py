@@ -39,7 +39,7 @@ class AccessVehicles:
 
     def get_vehicles_byuser(self, user: User):
         query = """
-        SELECT id FROM users
+        SELECT id FROM vehicles
         WHERE user_id = ?;
         """
         self.cursor.execute(query, [user.id])
