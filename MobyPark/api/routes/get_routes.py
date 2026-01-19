@@ -85,7 +85,7 @@ async def get_profile_by_id(
 @router.get("/parkinglots", response_model=List[ParkingLot])
 async def get_parking_lots(
     request: Request,
-    current_user: User = Depends(get_current_user())
+    current_user: User = Depends(get_current_user)
     ):
     """Get all parking lots."""
     from MobyPark.api.app import Logger
@@ -101,7 +101,7 @@ async def get_parking_lots(
 async def get_parking_lot_details(
     request: Request,
     lid: str,
-    current_user: User = Depends(get_current_user())
+    current_user: User = Depends(get_current_user)
 ) -> ParkingLot:
     """Get details of a specific parking lot."""
     from MobyPark.api.app import Logger
@@ -241,7 +241,7 @@ async def get_billing(
 async def get_user_billing(
     request: Request,
     username: str,
-    current_user: User = Depends(require_roles("ADMIN"))
+    current_user: User = Depends(require_roles(["ADMIN"]))
 ) -> List[BillingItem]:
     """Get billing information for a specific user (admin only)."""
     from MobyPark.api.app import Logger
@@ -263,7 +263,7 @@ async def get_user_billing(
 def _process_billing_sessions(
         request: Request,
         sessions: List[Session],
-        current_user: User = Depends(get_current_user())
+        current_user: User = Depends(get_current_user)
         ) -> List[BillingItem]:
     """Helper function to process sessions into billing items."""
     from MobyPark.api.app import Logger

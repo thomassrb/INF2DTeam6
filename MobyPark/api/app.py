@@ -66,7 +66,8 @@ access_free_parking = AccessFreeParking(connection=connection)
 access_discount_codes = AccessDiscountCodes(connection=connection)
 access_feedback = AccessFeedback(connection=connection)
 
-Logger = Logger(path=LOG_DIR)
+log_path = os.path.join(DATA_DIR, "access.log")
+Logger = Logger(path=log_path)
 
 app = FastAPI(title="MobyPark API", version="1.0.0")
 

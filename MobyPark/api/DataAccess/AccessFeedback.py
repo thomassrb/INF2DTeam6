@@ -8,8 +8,8 @@ class AccessFeedback:
     def __init__(self, connection: DBConnection):
         self.connection = connection.connection
         self.cursor = self.connection.cursor()
-        self.access_parking_lots = AccessParkingLots(conn=self.connection)
-        self.access_users = AccessUsers(conn=self.connection)
+        self.access_parking_lots = AccessParkingLots(conn=connection)
+        self.access_users = AccessUsers(conn=connection)
 
 
     def map_feedback(self, feedback):

@@ -1,5 +1,5 @@
 from ..Models import FreeParking
-from DataAccess import AccessUsers
+from .AccessUsers import AccessUsers
 from datetime import datetime
 from typing import Optional, List
 
@@ -7,7 +7,7 @@ class AccessFreeParking:
     def __init__(self, connection):
         self.connection = connection.connection
         self.cursor = self.connection.cursor()
-        self.access_users = AccessUsers(conn=self.connection)
+        self.access_users = AccessUsers(conn=connection)
 
     def add_free_parking_plate(self, license_plate: str, added_by: int) -> FreeParking:
         """Add a license plate to the free parking whitelist"""

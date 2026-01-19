@@ -162,7 +162,7 @@ class DBConnection:
             comment TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (parking_lot_id) REFERENCES parking_lots(id),
-            FOREIGN KEY (user_id) REGERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id)
         );
         """
 
