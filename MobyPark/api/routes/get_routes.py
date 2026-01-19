@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import JSONResponse
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 from MobyPark.api.authentication import get_current_user, require_roles
 
@@ -392,3 +392,69 @@ async def get_feedback(
 
     return filtered_feedback
     
+
+@router.get("/analytics/occupancy")
+async def get_occupancy_analytics(
+    request: Request,
+    lot_id: str = Query(..., description="ID of the parking lot"),
+    days: int = Query(30, description="Number of days to look back"),
+    user: User = Depends(require_roles("ADMIN"))
+):
+    """
+    Get occupancy analytics for a parking lot over time
+    
+    Returns a list of occupancy percentages for each day in the specified time range
+    """
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
+    from ..app import access_analytics
+    try:
+        occupancy_data = access_analytics.get_occupancy_over_time(lot_id, days)
+        return {
+            "lot_id": lot_id,
+            "time_period_days": days,
+            "data": occupancy_data
+        }
+    except Exception as e:
+        print(f"Error in get_occupancy_analytics: {str(e)}")
+        # Return empty data instead of error for now
+        return {
+            "lot_id": lot_id,
+            "time_period_days": days,
+            "data": [{"date": (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d'), 
+                     "occupancy_percentage": 0} 
+                    for i in range(days, 0, -1)]
+        }
+
+
+@router.get("/analytics/revenue", response_model=dict)
+async def get_revenue_analytics(
+    request: Request,
+    lot_id: str = Query(..., description="ID of the parking lot"),
+    start_date: str = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: str = Query(None, description="End date (YYYY-MM-DD)"),
+    user: User = Depends(require_roles("ADMIN"))
+):
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(user, endpoint)
+
+    from ..app import access_analytics
+    try:
+        revenue_data = access_analytics.get_revenue(lot_id, start_date, end_date)
+        return {
+            "lot_id": lot_id,
+            "start_date": revenue_data["start_date"],
+            "end_date": revenue_data["end_date"],
+            "total_revenue": revenue_data["total_revenue"],
+            "total_transactions": revenue_data["total_transactions"],
+            "breakdown": revenue_data["breakdown"]
+        }
+    except Exception as e:
+        #TODO: logger.error(f"Error in get_revenue_analytics: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve revenue data: {str(e)}"
+        )

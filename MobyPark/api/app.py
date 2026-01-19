@@ -24,6 +24,7 @@ from MobyPark.api.DataAccess import (
     AccessFreeParking,
     AccessDiscountCodes,
     AccessFeedback,
+    AccessAnalytics,
     Logger
 )
 
@@ -65,6 +66,7 @@ access_vehicles = AccessVehicles(conn=connection)
 access_free_parking = AccessFreeParking(connection=connection)
 access_discount_codes = AccessDiscountCodes(connection=connection)
 access_feedback = AccessFeedback(connection=connection)
+access_analytics = AccessAnalytics(conn=connection)
 
 log_path = os.path.join(DATA_DIR, "access.log")
 Logger = Logger(path=log_path)
