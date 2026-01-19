@@ -110,8 +110,10 @@ class CreateFeedback(BaseModel):
 
 def validate_license_plate(license_plate: str) -> str:
     """Helper to handle both license_plate and licenseplate fields."""
+    from MobyPark.api.app import Logger
     lp = license_plate
     if not lp or not isinstance(lp, str) or not lp.strip():
+        Logger.error("License plate validation failed: empty or invalid format")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="License plate is required"
@@ -119,9 +121,11 @@ def validate_license_plate(license_plate: str) -> str:
     return lp
 
 def _parse_dt(value: str) -> datetime:
+    from MobyPark.api.app import Logger
     try:
         return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
-    except Exception:
+    except Exception as e:
+        Logger.error(f"Failed to parse datetime '{value}': {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Invalid datetime format (expected YYYY-MM-DD HH:MM:SS)"
@@ -138,8 +142,13 @@ async def register(
     ):
     """Register a new user (admin only)."""
     from MobyPark.api.app import access_users
+    from MobyPark.api.app import Logger
+    endpoint = f"{request.method} {request.url.path}"
+    Logger.log(register_data, endpoint)
+
     # Check if username already exists
     if access_users.get_user_byusername(username=register_data.username):
+        Logger.error(f"Registration failed: Username '{register_data.username}' already exists")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Username already taken"
@@ -169,9 +178,7 @@ async def register(
     
     # Save user to database
     access_users.add_user(user=new_user)
-    from MobyPark.api.app import Logger
-    endpoint = f"{request.method} {request.url.path}"
-    Logger.log(new_user, endpoint)
+    
     return {"message": "User created"}
 
 # ============================================
@@ -185,13 +192,14 @@ async def login(
     ):
     """Authenticate user and return session token."""
     from MobyPark.api.app import access_users
-    user = access_users.get_user_byusername(username=login_data.username)
-
     from MobyPark.api.app import Logger
     endpoint = f"{request.method} {request.url.path}"
-    Logger.log(user, endpoint)
+    Logger.log(login_data, endpoint)
     
+    user = access_users.get_user_byusername(username=login_data.username)
+
     if not user:
+        Logger.error(f"Login failed: User '{login_data.username}' not found")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials"
@@ -201,6 +209,7 @@ async def login(
     if user.password.startswith("$2b$"):
         # Bcrypt hash
         if not bcrypt.checkpw(login_data.password.encode('utf-8'), user.password.encode('utf-8')):
+            Logger.error(f"Login failed: Invalid password for user '{login_data.username}'")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials"
@@ -209,6 +218,7 @@ async def login(
         # Legacy SHA256 hash (for testing)
         hashed_input = hashlib.sha256(login_data.password.encode('utf-8')).hexdigest()
         if hashed_input != user.password:
+            Logger.error(f"Login failed: Invalid password for user '{login_data.username}'")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials"
@@ -293,25 +303,30 @@ async def create_reservation(
 
     target_username = reservation_data.user or current_user.username
     if current_user.role != "ADMIN" and target_username != current_user.username:
+        Logger.error(f"Access denied: User {current_user.id} tried to create reservation for {target_username}")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     target_user = access_users.get_user_byusername(username=target_username)
     if not target_user:
+        Logger.error(f"User not found: {target_username}")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     parking_lot = access_parkinglots.get_parking_lot(id=reservation_data.parkinglot)
     if not parking_lot:
+        Logger.error(f"Parking lot not found: {reservation_data.parkinglot}")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parking lot not found")
 
     lp = reservation_data.license_plate or reservation_data.licenseplate
     lp = validate_license_plate(lp)
     vehicle = access_vehicles.get_vehicle_bylicenseplate(licenseplate=lp)
     if not vehicle:
+        Logger.error(f"Vehicle not found: {lp}")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vehicle not found")
 
     start_dt = _parse_dt(reservation_data.start_time)
     end_dt = _parse_dt(reservation_data.end_time)
     if end_dt <= start_dt:
+        Logger.error("Invalid reservation dates: end date must be after start date")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="End time must be after start time")
 
     reservation = Reservation(
@@ -352,6 +367,7 @@ async def start_session(
     # Get parking lot
     parking_lot = access_parkinglots.get_parking_lot(id=lid)
     if not parking_lot:
+        Logger.error(f"Parking lot not found: {lid}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Parking lot not found"
@@ -376,6 +392,7 @@ async def start_session(
     
     # Add session to database
     if access_sessions.get_pending_session_bylicenseplate(licenseplate=license_plate):
+        Logger.error(f"Session already started for license plate {license_plate}")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot start a session when another session for this license plate is already started."
@@ -403,6 +420,7 @@ async def stop_session(
     # Get parking lot
     parking_lot = access_parkinglots.get_parking_lot(id=lid)
     if not parking_lot:
+        Logger.error(f"Parking lot not found: {lid}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Parking lot not found"
@@ -416,6 +434,7 @@ async def stop_session(
     # Get active session
     session = access_sessions.get_pending_session_bylicenseplate(licenseplate=license_plate)
     if not session:
+        Logger.error(f"No active session found for license plate {license_plate}")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot stop a session when there is no active session for this license plate."
@@ -445,6 +464,7 @@ async def create_vehicle(
     from MobyPark.api.app import access_vehicles
     # Check if vehicle already exists
     if access_vehicles.get_vehicle_bylicenseplate(licenseplate=vehicle_data.licenseplate):
+        Logger.error(f"Vehicle already exists: {vehicle_data.licenseplate}")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Vehicle with this license plate already exists"
@@ -591,10 +611,10 @@ async def add_free_parking_plate(
             "created_at": free_parking.created_at.isoformat() if free_parking.created_at else None
         }
     except ValueError as e:
+        Logger.error(f"Failed to add free parking plate {request.license_plate}: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        # logger.log(f"Error adding free parking plate: {str(e)}")
-        
+        Logger.error(f"Error adding free parking plate {request.license_plate}: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
     
 

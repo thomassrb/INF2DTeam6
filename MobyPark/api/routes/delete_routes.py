@@ -24,12 +24,14 @@ async def delete_parking_lot(
     from MobyPark.api.app import access_parkinglots
     parking_lot = access_parkinglots.get_parking_lot(id=lid)
     if not parking_lot:
+        Logger.error(f"Parking lot not found with ID: {lid}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Parking lot not found"
         )
     
     if not access_parkinglots.delete_parking_lot(parkinglot=parking_lot):
+        Logger.error(f"Failed to delete parking lot {lid}: parking lot still has references")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Parkinglot still has references"
@@ -75,12 +77,14 @@ async def delete_reservation(
     from MobyPark.api.app import access_parkinglots
     reservation = access_reservations.get_reservation(id=rid)
     if not reservation:
+        Logger.error(f"Reservation not found with ID: {rid}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Reservation not found"
         )
 
     if user.role != "ADMIN" and user != reservation.user:
+        Logger.error(f"Access denied: User {user.id} tried to access reservation {rid} without permission")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied"
@@ -90,6 +94,7 @@ async def delete_reservation(
     if parking_lot.reserved > 0:
         parking_lot.reserved -= 1
     else:
+        Logger.error(f"Parking lot {parking_lot.id} reserved count is already zero")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Parking lot reserved count is already zero"
@@ -97,6 +102,7 @@ async def delete_reservation(
 
     access_parkinglots.update_parking_lot(parkinglot=parking_lot)
     if not access_reservations.delete_reservation(reservation=reservation):
+        Logger.error(f"Failed to delete reservation {rid}: parking lot still has references")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Parkinglot still has references"
@@ -131,6 +137,7 @@ async def delete_all_reservations(
     else:
         user_reservations = access_reservations.get_reservations_by_user(user=user)
         if not user_reservations:
+            Logger.error(f"No reservations found for user {user.id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="No reservations found for this user"
@@ -163,18 +170,21 @@ async def delete_vehicle(
     from MobyPark.api.app import access_vehicles
     vehicle = access_vehicles.get_vehicle(id=vid)
     if not vehicle:
+        Logger.error(f"Vehicle not found with ID: {vid}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Vehicle not found"
         )
 
     if user.role != "ADMIN" and user != vehicle.user:
+        Logger.error(f"Access denied: User {user.id} tried to access vehicle {vid} without permission")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied"
         )
 
     if not access_vehicles.delete_vehicle(vehicle=vehicle):
+        Logger.error(f"Failed to delete vehicle {vid}: vehicle still has references")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Vehicle still has references"
@@ -198,22 +208,25 @@ async def delete_session(
 
     from MobyPark.api.app import access_sessions
     if not sid.isnumeric():
+        Logger.error(f"Invalid session ID format: {sid}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid session ID"
+            detail="Session ID must be a number"
         )
 
     session = access_sessions.get_session(id=sid)
     if not session:
+        Logger.error(f"Session not found with ID: {sid}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Session not found"
         )
     
-    if not access_sessions.delete_session(session=session):
+    if not access_sessions.delete_session(session):
+        Logger.error(f"Failed to delete session {sid}")
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Session still has references"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete session"
         )
     
     return {"message": "Session deleted"}

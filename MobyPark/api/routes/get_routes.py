@@ -68,12 +68,14 @@ async def get_profile_by_id(
     target_user = access_users.get_user_byid(id=user_id)
     
     if not target_user:
+        Logger.error(f"User not found with ID: {user_id}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
     
     if current_user.role != "ADMIN" and str(current_user.id) != str(user_id):
+        Logger.error(f"Access denied: User {current_user.id} tried to access profile of user {user_id}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied. You can only view your own profile."
@@ -111,6 +113,7 @@ async def get_parking_lot_details(
     from MobyPark.api.app import access_parkinglots
     parking_lot = access_parkinglots.get_parking_lot(id=lid)
     if not parking_lot:
+        Logger.error(f"Parking lot not found with ID: {lid}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Parking lot not found"
@@ -148,12 +151,14 @@ async def get_reservation_details(
     from MobyPark.api.app import access_reservations
     reservation = access_reservations.get_reservation(id=rid)
     if not reservation:
+        Logger.error(f"Reservation not found with ID: {rid}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Reservation not found"
         )
     
     if user.role != "ADMIN" and user.id != reservation.user.id:
+        Logger.error(f"Access denied: User {user.id} tried to access reservation {rid} without permission")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied"
@@ -208,12 +213,14 @@ async def get_payment_details(
     from MobyPark.api.app import access_payments
     payment = access_payments.get_payment(id=pid)
     if not payment:
+        Logger.error(f"Payment not found with ID: {pid}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Payment not found"
         )
     
     if user.role != "ADMIN" and payment.user.id != user.id:
+        Logger.error(f"Access denied: User {user.id} tried to access payment {pid} without permission")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied"
@@ -252,6 +259,7 @@ async def get_user_billing(
     from MobyPark.api.app import access_sessions
     target_user = access_users.get_user_byusername(username=username)
     if not target_user:
+        Logger.error(f"User not found with username: {username}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
@@ -322,9 +330,9 @@ async def list_free_parking_plates(
             for plate in plates
         ]
     except Exception as e:
-        #TODO: logger.log(f"Error listing free parking plates: {str(e)}", level="error")
+        Logger.error(f"Error listing free parking plates: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
-    
+
 
 @router.get("/discount-codes", response_model=List[DiscountCodeResponse])
 async def list_discount_codes(
@@ -343,7 +351,7 @@ async def list_discount_codes(
             return codes  # Already in the correct format for Pydantic
         return [code.to_dict() for code in codes]
     except Exception as e:
-        #TODO: logger.error(f"Error listing discount codes: {str(e)}")
+        Logger.error(f"Error listing discount codes: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to retrieve discount codes")
 
 
@@ -364,14 +372,17 @@ async def get_discount_code(
     try:
         code = access_discount_codes.get_discount_code_by_id(code_id)
         if not code:
+            Logger.error(f"Discount code not found with ID: {code_id}")
             raise HTTPException(status_code=404, detail="Discount code not found")
             
         if hasattr(code, 'to_dict'):
             return code.to_dict()
         return code
         
+    except HTTPException:
+        raise
     except Exception as e:
-        #TODO: logger.error(f"Error getting discount code: {str(e)}")
+        Logger.error(f"Error getting discount code {code_id}: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to retrieve discount code")
 
 
@@ -418,7 +429,7 @@ async def get_occupancy_analytics(
             "data": occupancy_data
         }
     except Exception as e:
-        print(f"Error in get_occupancy_analytics: {str(e)}")
+        Logger.error(f"Error in get_occupancy_analytics: {str(e)}")
         # Return empty data instead of error for now
         return {
             "lot_id": lot_id,
