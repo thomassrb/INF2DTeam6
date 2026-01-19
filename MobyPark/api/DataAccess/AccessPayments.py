@@ -162,6 +162,10 @@ class AccessPayments:
         DELETE FROM t_data
         WHERE id = :id;
         """
-        self.cursor.execute(tdata_query, payment.__dict__)
-        self.cursor.execute(query, payment.__dict__)
-        self.conn.commit()
+        try:
+            self.cursor.execute(tdata_query, payment.__dict__)
+            self.cursor.execute(query, payment.__dict__)
+            self.conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False

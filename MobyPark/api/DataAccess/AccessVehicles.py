@@ -12,6 +12,7 @@ class AccessVehicles:
         self.conn = conn.connection
         self.accessusers = AccessUsers(conn=conn)
 
+
     def map_vehicle(self, vehicle):
         if vehicle is None:
             return None
@@ -83,8 +84,9 @@ class AccessVehicles:
             self.cursor.execute(query, vehicle_dict)
             vehicle.id = self.cursor.fetchone()[0]
             self.conn.commit()
+            return True
         except sqlite3.IntegrityError as e:
-            raise e
+            return False
 
 
     def update_vehicle(self, vehicle):
@@ -110,5 +112,9 @@ class AccessVehicles:
         DELETE FROM vehicles
         WHERE id = :id;
         """
-        self.cursor.execute(query, vehicle.__dict__)
-        self.conn.commit()
+        try:
+            self.cursor.execute(query, vehicle.__dict__)
+            self.conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False

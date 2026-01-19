@@ -122,6 +122,10 @@ class AccessReservations:
         DELETE FROM reservations
         WHERE id = :id;
         """
-        self.cursor.execute(query, reservation.__dict__)
-        self.conn.commit()
+        try:
+            self.cursor.execute(query, reservation.__dict__)
+            self.conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
         

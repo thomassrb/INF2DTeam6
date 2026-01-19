@@ -62,8 +62,9 @@ class AccessUsers:
             self.cursor.execute(query, user.__dict__)
             user.id = self.cursor.fetchone()[0]
             self.conn.commit()
+            return True
         except sqlite3.IntegrityError as e:
-            print(e)
+            return False
 
 
     def delete_user(self, user: User):
@@ -71,8 +72,12 @@ class AccessUsers:
         DELETE FROM users
         WHERE id = ?;
         """
-        self.cursor.execute(query, [user.id])
-        self.conn.commit()
+        try:
+            self.cursor.execute(query, [user.id])
+            self.conn.commit()
+            return False
+        except sqlite3.IntegrityError:
+            return True
 
     
     def update_user(self, user: User):

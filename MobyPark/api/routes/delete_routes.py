@@ -29,9 +29,14 @@ async def delete_parking_lot(
             detail="Parking lot not found"
         )
     
-    access_parkinglots.delete_parking_lot(parkinglot=parking_lot)
+    if not access_parkinglots.delete_parking_lot(parkinglot=parking_lot):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Parkinglot still has references"
+        )
     # Audit log would be handled by middleware or logging system
     return {"message": f"Parking lot {lid} deleted"}
+
 
 @router.delete("/parkinglots/", status_code=status.HTTP_200_OK)
 async def delete_all_parking_lots(
@@ -91,7 +96,11 @@ async def delete_reservation(
         )
 
     access_parkinglots.update_parking_lot(parkinglot=parking_lot)
-    access_reservations.delete_reservation(reservation=reservation)
+    if not access_reservations.delete_reservation(reservation=reservation):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Parkinglot still has references"
+        )
     return {"status": "Deleted"}
 
 
@@ -132,6 +141,7 @@ async def delete_all_reservations(
             parking_lot.reserved -= 1
             access_parkinglots.update_parking_lot(parkinglot=parking_lot)
             access_reservations.delete_reservation(reservation=reservation)
+            access_reservations
         
         return {"status": "All user reservations deleted"}
 
@@ -164,7 +174,11 @@ async def delete_vehicle(
             detail="Access denied"
         )
 
-    access_vehicles.delete_vehicle(vehicle=vehicle)
+    if not access_vehicles.delete_vehicle(vehicle=vehicle):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Vehicle still has references"
+        )
     return {"status": "Deleted"}
 
 
@@ -196,5 +210,10 @@ async def delete_session(
             detail="Session not found"
         )
     
-    access_sessions.delete_session(session=session)
+    if not access_sessions.delete_session(session=session):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Session still has references"
+        )
+    
     return {"message": "Session deleted"}

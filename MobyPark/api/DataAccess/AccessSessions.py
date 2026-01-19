@@ -137,5 +137,9 @@ class AccessSessions:
         DELETE FROM sessions
         WHERE id = :id;
         """
-        self.cursor.execute(query, session.__dict__)
-        self.conn.commit()
+        try:
+            self.cursor.execute(query, session.__dict__)
+            self.conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False

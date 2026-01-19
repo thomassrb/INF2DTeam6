@@ -53,9 +53,13 @@ class AccessParkingLots:
         DELETE FROM parking_lots_coordinates
         WHERE id = :id;
         """
-        self.cursor.execute(coordinate_query, parkinglot.__dict__)
-        self.cursor.execute(query, parkinglot.__dict__)
-        self.conn.commit()
+        try:
+            self.cursor.execute(coordinate_query, parkinglot.__dict__)
+            self.cursor.execute(query, parkinglot.__dict__)
+            self.conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
 
 
     def add_parking_lot(self, parkinglot: ParkingLot):
@@ -82,7 +86,6 @@ class AccessParkingLots:
             return True
         except sqlite3.IntegrityError as e:
             return False
-            print(e)
 
 
     def update_parking_lot(self, parkinglot: ParkingLot):
